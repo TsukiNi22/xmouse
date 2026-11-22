@@ -38,7 +38,7 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 | Rights | Per member, decided on each device only: mouse, keyboard, clipboard, files; **private mode** refuses every foreign cursor (they stay at the edge) |
 | Clipboard | Text and images (PNG) copied on a member land in the clipboard of the others (their rights decide), no echo back |
 | Interfaces | Qt panel (Network, Layout, Activity, Settings, tray, Auto / Light / Dark) or terminal panel (`--tty`, automatic without display: status, code, members, join / accept / private / place commands) |
-| Platforms | Linux Wayland (GNOME, KDE: portal InputCapture + libei, uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (planned v0.4) |
+| Platforms | Linux Wayland (GNOME: the xmouse GNOME Shell extension, no dialog; else the portal InputCapture + libei, as on KDE; uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (planned v0.4) |
 
 ## Security
 
@@ -98,13 +98,17 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 # Linux / macOS: dependencies + libutils + build + ~/.local/bin/xmouse + menu entry
 git clone https://github.com/TsukiNi22/xmouse.git && cd xmouse
 scripts/install.sh --deps --uinput   # --uinput: the other devices can click / type here on Wayland
+scripts/install.sh --gnome           # GNOME Wayland: the xmouse extension (no input capture dialog, active after a new login)
 scripts/install.sh --autostart       # xmouse at login (tray)
 scripts/install.sh --uninstall
 ```
 
 | Script | Effect |
 | ------ | ------ |
-| `scripts/install.sh` | `--deps` (dnf / apt / pacman / brew + libutils), `--uinput` (udev `uaccess` rule on `/dev/uinput`), `--autostart`, `--prefix DIR`, `--uninstall` |
+| `scripts/install.sh` | `--deps` (dnf / apt / pacman / brew + libutils), `--uinput` (udev `uaccess` rule on `/dev/uinput`), `--gnome` (GNOME Shell extension), `--autostart`, `--prefix DIR`, `--uninstall` |
+
+> [!TIP]
+> GNOME Wayland: the extension `xmouse@tsukini22.github.io` puts the barriers on the edges and captures the input itself: no dialog of the input capture portal (GNOME 50 asks it at every start of xmouse otherwise), and the real pointer goes back where it was after a foreign click. Only the `xmouse` program may use it, the events go to it only, Ctrl + Alt + Shift gives the input back even if xmouse does not answer. Without the extension (or disabled), xmouse uses the portal.
 
 ## Packages
 
@@ -262,9 +266,10 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 | `src/xmouse/core/` | `Hub` (the device in the network), `Layout` (screens in the global space), `State` (replicated, last writer wins), `Config`, `AuditLog` |
 | `src/xmouse/net/` | `Mesh` (links to every member, LAN discovery), `Peer` (one authenticated link), `Server` / `WebSocket` (TLS), `Exposure` (LAN, Tailscale, UPnP, tunnels), `Protocol` |
 | `src/xmouse/security/` | `Group` (network key, proofs), `Crypto` (Argon2id, HMAC, TLS), `Certificate`, `PairingCode` |
-| `src/xmouse/platform/` | Edge capture (`PortalCapture` Wayland, `HookCapture` Windows, `GrabCapture` X11 / macOS), injection (`UInputInjector`, `XTestInjector`, `SendInputInjector`), `Clipboard`, `Keymap` |
+| `src/xmouse/platform/` | Edge capture (`ShellCapture` GNOME extension, `PortalCapture` Wayland, `HookCapture` Windows, `GrabCapture` X11 / macOS), injection (`UInputInjector`, `XTestInjector`, `SendInputInjector`), `Clipboard`, `Keymap` |
 | `src/xmouse/ui/` | `gui/` (`MainWindow`, `LayoutView`, `Overlay`, `Theme`), `tty/` (`Tui`) |
 | `third_party/` | `qrcodegen` (MIT), `libei/libei.h` (MIT, libei is loaded at run time) |
+| `gnome-extension/` | GNOME Shell extension `xmouse@tsukini22.github.io` (barriers, capture, pointer position over D-Bus) |
 | `include/xmouse/` | Public headers |
 | `tests/xmouse/` | Unit tests (one file per module) |
 | `cmake/config/exceptions/*.json` | Project exception codes (`utils::exception::ExternalCode`) |
@@ -281,7 +286,7 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 ## Known limits
 
 > [!WARNING]
-> - Wayland (GNOME): the desktop asks to allow the input capture (portal dialog) once per run of xmouse, only when an edge opens on a device online (GNOME 50 implements the version 1 of the portal: no restore token; remembered on the portals >= v2); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
+> - Wayland without the GNOME extension (or on KDE / wlroots): the desktop asks to allow the input capture (portal dialog) once per run of xmouse, only when an edge opens on a device online (GNOME 50 implements the version 1 of the portal: no restore token; remembered on the portals >= v2); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
 > - Wayland: the overlays run on Xwayland (no layer shell on GNOME): a fullscreen Wayland app may cover them.
 > - One real pointer and one keyboard focus per OS: two foreign cursors clicking at the same moment on one device take turns; the keyboard of a member types where its cursor clicked last.
 > - Windows: the screens must share one scale (the hooks see physical pixels); Ctrl + Alt + Del and the secure desktop end a capture; the MinGW build of Fedora ships OpenSSL 3.2 (no ML-KEM): its links are `X25519` until an OpenSSL >= 3.5 is bundled.
