@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.2-pre] - 2026-11-22
 ### Added
 - Android: **a home like the panel of a computer**, the app opens on it: the network of the phone with its **QR code** and its code (time left, new code, share the link), create / join (scan a QR code or paste a link) / **disconnect - connect** / leave, the members (remove), the touchpad and the screen lent, the touchpad of a paired computer, the **settings** (name, private mode of the screen, updates at every launch, check now); every phone is a member and a server of its network by default
 - Android: **updates from the xmouse website** (`app/version.json` + `app/xmouse.apk` on gh-pages, synced by the CI with the packages, the sha256 checked) and from the device, the newest one: a phone alone needs no computer to update
