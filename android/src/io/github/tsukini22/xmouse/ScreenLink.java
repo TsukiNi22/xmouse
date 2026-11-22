@@ -44,6 +44,10 @@ final class ScreenLink {
         void home();
         void insert(String text);
         void backspace();
+        void paste(); // the clipboard of the phone (the one of the computer, sent when its cursor comes) in the focused field
+        void copy();
+        void cut();
+        void selectAll();
     }
 
     private static final long TAP_TIME = 300; // ms: a shorter press is a tap, a longer one a long press
@@ -63,6 +67,7 @@ final class ScreenLink {
     private int _tries = 0;
     private boolean _stopped = false;
     private boolean _local = false; // the phone is a member: the events come from its node
+    private boolean _ctrl = false; // Ctrl held by the cursor on this screen (its shortcuts: paste, copy, cut, select all)
     private static volatile ScreenLink _active; // the screen lent now (the node gives it its events)
 
     // A foreign cursor on this screen
@@ -240,8 +245,19 @@ final class ScreenLink {
             case "wheel":
                 this.onWheel(id, o.optInt("dx"), o.optInt("dy"));
                 break;
-            case "key":
-                if (o.optBoolean("down")) this.onKey(o.optString("code"));
+            case "key": {
+                String code = o.optString("code");
+                if (code.startsWith("Control")) {this._ctrl = o.optBoolean("down"); break;}
+                if (o.optBoolean("down")) this.onKey(code, o.optString("char"));
+                break;
+            }
+            case "clip": // the clipboard of the computer, to paste here
+                try {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) this._context.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (clipboard != null) clipboard.setPrimaryClip(android.content.ClipData.newPlainText("xmouse", o.optString("text")));
+                } catch (Exception e) {
+                    // the clipboard refused (a work profile): nothing to paste
+                }
                 break;
             case "text":
                 if (this.actions() != null) this.actions().insert(o.optString("text"));
@@ -309,8 +325,20 @@ final class ScreenLink {
         this._actions.gesture(path, 120);
     }
 
-    private void onKey(String code) {
+    private void onKey(String code, String character) {
         if (this.actions() == null) return;
+        if (this._ctrl) {
+            // The letter of the layout of the computer (azerty Ctrl+A is the key KeyQ), else the one of the code
+            String letter = character.isEmpty() && code.startsWith("Key") ? code.substring(3) : character;
+            switch (letter.toLowerCase(java.util.Locale.ROOT)) {
+                case "v": this._actions.paste(); break;
+                case "c": this._actions.copy(); break;
+                case "x": this._actions.cut(); break;
+                case "a": this._actions.selectAll(); break;
+                default: break;
+            }
+            return;
+        }
         switch (code) {
             case "Escape": case "BrowserBack": this._actions.back(); break;
             case "MetaLeft": case "MetaRight": case "BrowserHome": this._actions.home(); break;

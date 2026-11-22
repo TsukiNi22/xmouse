@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- **Typing on a phone screen**: the keys of the computer arrive as the characters of its layout (azerty, Shift, AltGr read from the keyboard layout of the session, US otherwise) in the focused field; Ctrl+V / C / X / A paste, copy, cut and select all there (the letter of the layout); the special keys stay keys
+- **The clipboard to the phone screens**: its text is sent to a phone in touchpad mode when it changes and when a cursor enters its screen (to paste there)
+- `XkbLayout::character` (the character of a key on the layout, every key and level) with its unit tests
+
 ### Changed
 - **A granted access to the panel stays until Revoke**: the banner stays with a Revoke button; the clicks of the local person in the panel no longer end a request nor a granted access
 

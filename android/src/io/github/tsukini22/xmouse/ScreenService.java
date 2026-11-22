@@ -99,6 +99,31 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
         this.setText(node, current.subSequence(0, start).toString() + current.subSequence(end, current.length()), start);
     }
 
+    @Override
+    public void paste() {this.focused(AccessibilityNodeInfo.ACTION_PASTE);}
+
+    @Override
+    public void copy() {this.focused(AccessibilityNodeInfo.ACTION_COPY);}
+
+    @Override
+    public void cut() {this.focused(AccessibilityNodeInfo.ACTION_CUT);}
+
+    @Override
+    public void selectAll() {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        Bundle selection = new Bundle();
+        if (node == null || node.getText() == null) return;
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0);
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, node.getText().length());
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection);
+    }
+
+    // An action on the focused field (paste, copy, cut)
+    private void focused(int action) {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node != null) node.performAction(action);
+    }
+
     private void setText(AccessibilityNodeInfo node, String text, int cursor) {
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
