@@ -954,7 +954,9 @@ void xmouse::core::Hub::onBinary_(const QString& id, const QByteArray& data)
         }
         case net::Binary::Key: {
             const bool down = r.u8() != 0;
-            const QString code = r.text8();
+            QString code = r.text8();
+            const QString character = r.remaining() > 0 ? r.text8() : QString(); // a shortcut of a phone: its letter
+            if (!character.isEmpty() && this->_injector && !this->_injector->codeOf(character).isEmpty()) code = this->_injector->codeOf(character);
             if (r.ok() && !code.isEmpty()) this->foreignKey_(id, code, down);
             break;
         }

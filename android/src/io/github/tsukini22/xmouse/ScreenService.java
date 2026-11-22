@@ -120,9 +120,10 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     }
 
     @Override
-    public void enter() {
+    public void enter(boolean newLine) {
         AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         if (node == null) {this.global("center"); return;} // no text field: the d-pad center (Android 13+) clicks what has the focus
+        if (newLine && node.isEditable()) {this.insert("\n"); return;} // Shift + Enter: a new line, never the send of a chat
         // The action of the keyboard of the field (Android 11+): send, search, go, next; else a new line where it fits
         if (Build.VERSION.SDK_INT >= 30 && node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())) return;
         if (node.isMultiLine()) this.insert("\n");
@@ -141,9 +142,9 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     }
 
     @Override
-    public void nextField() {
+    public void nextField(boolean back) {
         AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        AccessibilityNodeInfo next = node == null ? null : node.focusSearch(android.view.View.FOCUS_FORWARD);
+        AccessibilityNodeInfo next = node == null ? null : node.focusSearch(back ? android.view.View.FOCUS_BACKWARD : android.view.View.FOCUS_FORWARD);
         if (next != null) next.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
     }
 

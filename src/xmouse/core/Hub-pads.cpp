@@ -433,7 +433,8 @@ void xmouse::core::Hub::deliverBinaryToPad_(const QString& pad, const QString& f
         case net::Binary::Key: {
             const bool down = r.u8() != 0;
             const QString code = r.text8();
-            const QString character = this->_injector ? this->_injector->characterOf(code, false, false) : QString(); // Ctrl + the letter of the layout (azerty Ctrl+A is KeyQ)
+            QString character = r.remaining() > 0 ? r.text8() : QString(); // the letter on the layout of the sender
+            if (character.isEmpty() && this->_injector) character = this->_injector->characterOf(code, false, false); // Ctrl + the letter of the layout (azerty Ctrl+A is KeyQ)
             if (r.ok()) send_json(p.display, QJsonObject{{"t", "key"}, {"id", from}, {"code", code}, {"down", down}, {"char", character}});
             break;
         }

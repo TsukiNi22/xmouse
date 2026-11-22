@@ -48,9 +48,9 @@ final class ScreenLink {
         void copy();
         void cut();
         void selectAll();
-        void enter(); // the action of the keyboard of the field (send, search, next), a new line in a multi-line one
+        void enter(boolean newLine); // the action of the keyboard of the field (send, search, next); Shift: a new line
         void deleteForward();
-        void nextField(); // Tab
+        void nextField(boolean back); // Tab, Shift + Tab
         void moveCaret(int delta); // Left / Right (outside a text field: the d-pad of Android 13+)
         void caretEdge(boolean end); // Home / End
         void select(int delta); // Shift + Left / Right: the selection grows or shrinks
@@ -394,8 +394,8 @@ final class ScreenLink {
             case "MetaLeft": case "MetaRight": case "BrowserHome": this._actions.home(); break;
             case "Backspace": this._actions.backspace(); break;
             case "Delete": this._actions.deleteForward(); break;
-            case "Enter": case "NumpadEnter": this._actions.enter(); break;
-            case "Tab": if (this._alt) this._actions.global("recents"); else this._actions.nextField(); break;
+            case "Enter": case "NumpadEnter": this._actions.enter(this._shift); break;
+            case "Tab": if (this._alt) this._actions.global("recents"); else this._actions.nextField(this._shift); break;
             case "ArrowLeft": if (this._shift) this._actions.select(-1); else this._actions.moveCaret(-1); break;
             case "ArrowRight": if (this._shift) this._actions.select(1); else this._actions.moveCaret(1); break;
             case "ArrowUp": this._actions.global("up"); break;

@@ -632,7 +632,7 @@ public class MainActivity extends Activity {
                 case "move": node.move(o.optDouble("dx"), o.optDouble("dy")); break;
                 case "button": node.button(o.optInt("b"), o.optBoolean("down")); break;
                 case "wheel": node.wheel(o.optInt("dx"), o.optInt("dy")); break;
-                case "key": node.key(o.optString("code"), o.optBoolean("down")); break;
+                case "key": node.key(o.optString("code"), o.optBoolean("down"), o.optString("char")); break;
                 case "text": node.text(o.optString("text")); break;
                 case "home": node.home(); break;
                 case "ping": node.ping(); break;

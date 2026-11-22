@@ -150,7 +150,7 @@ void xmouse::core::Hub::switchTarget_(const QString& device)
     for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
         if (this->_buttonsDown & (1 << b)) this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
     for (const QString& code: this->_keysDown)
-        this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Key).u8(0).text8(code).data());
+        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false)); // with its letter: the key pressed there is the one released
     this->_buttonsDown = 0;
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
     this->_target = device;
@@ -228,7 +228,7 @@ void xmouse::core::Hub::goHome_(const QPoint& global)
     for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
         if (this->_buttonsDown & (1 << b)) this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
     for (const QString& code: this->_keysDown)
-        this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Key).u8(0).text8(code).data());
+        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false)); // with its letter: the key pressed there is the one released
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
     this->_away = false;
     this->_target.clear();
@@ -295,6 +295,7 @@ void xmouse::core::Hub::onKey_(const QString& code, const bool down)
 
     // A phone types characters, not keys: a key of the layout of this device becomes its character (azerty, Shift,
     // AltGr), the special keys and the shortcuts stay keys
+    if (this->_slowTarget && down && code == "CapsLock") this->_capsLock = !this->_capsLock;
     if (this->_slowTarget && !down && this->_textKeys.remove(code)) return; // its character went at the press
     if (this->_slowTarget && down) {
         const QString text = this->keyText_(code);
@@ -304,7 +305,20 @@ void xmouse::core::Hub::onKey_(const QString& code, const bool down)
             return;
         }
     }
-    this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Key).u8(down ? 1 : 0).text8(code).data());
+    this->sendBinaryTo_(this->_target, this->keyPacket_(code, down));
+}
+
+QByteArray xmouse::core::Hub::keyPacket_(const QString& code, const bool down) const
+{
+    net::ByteWriter w(net::Binary::Key);
+    QString letter = this->_injector ? this->_injector->characterOf(code, false, false) : QString();
+
+    // A letter key: the letter it types on the layout of this device goes after the code (azerty Ctrl + A is the key
+    // KeyQ): the other side presses the key of that letter on its own layout, never Ctrl + Q (older ones read the code)
+    if (letter.isEmpty()) letter = us_character(code, false);
+    w.u8(down ? 1 : 0).text8(code);
+    if (letter.size() == 1 && letter.front().unicode() < 128 && letter.front().isLetter()) w.text8(letter.toLower());
+    return w.data();
 }
 
 QString xmouse::core::Hub::keyText_(const QString& code) const
@@ -318,6 +332,7 @@ QString xmouse::core::Hub::keyText_(const QString& code) const
     if (this->_injector) text = this->_injector->characterOf(code, shift, altgr);
     if (text.isEmpty() && !altgr) text = us_character(code, shift);
     if (text.isEmpty() || !text.front().isPrint()) return ""; // Enter, Tab, Backspace...: keys
+    if (this->_capsLock && text.size() == 1 && text.front().isLetter()) text = shift ? text.toLower() : text.toUpper();
     return text;
 }
 

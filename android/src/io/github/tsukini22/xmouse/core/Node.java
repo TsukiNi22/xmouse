@@ -606,7 +606,8 @@ public final class Node implements Link.Context, Mesh.Events {
             case KEY: {
                 boolean down = r.u8() != 0;
                 String code = r.text8();
-                if (r.ok && this._onScreen.contains(id)) this._listener.screen(Json.obj("t", "key", "id", id, "code", code, "down", down));
+                String character = r.ok && r.remaining() > 0 ? r.text8() : ""; // the letter on the layout of the sender (azerty Ctrl+A: KeyQ + "a")
+                if (r.ok && this._onScreen.contains(id)) this._listener.screen(Json.obj("t", "key", "id", id, "code", code, "down", down, "char", character));
                 return;
             }
             case TEXT:
@@ -790,12 +791,18 @@ public final class Node implements Link.Context, Mesh.Events {
         });
     }
 
-    public void key(String code, boolean down) {
+    public void key(String code, boolean down) {this.key(code, down, "");}
+
+    // character: the letter of a shortcut (Ctrl + a): the device presses the key of that letter on its own layout
+    // (azerty Ctrl + a is its KeyQ); after the code, read by the devices that know it, ignored by the others
+    public void key(String code, boolean down, String character) {
         this._loop.execute(() -> {
-            if (!this._away) {this._listener.screen(Json.obj("t", "key", "id", this._net.self(), "code", code, "down", down)); return;}
+            if (!this._away) {this._listener.screen(Json.obj("t", "key", "id", this._net.self(), "code", code, "down", down, "char", character)); return;}
             if (down) this._keys.add(code);
             else this._keys.remove(code);
-            this._mesh.sendBinary(this._target, new Writer(KEY).u8(down ? 1 : 0).text8(code).bytes());
+            Writer w = new Writer(KEY).u8(down ? 1 : 0).text8(code);
+            if (!character.isEmpty()) w.text8(character);
+            this._mesh.sendBinary(this._target, w.bytes());
         });
     }
 
