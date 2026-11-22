@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#0f1214">
+    <title>xmouse pad</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/pad.css">
+</head>
+<body>
+    <!-- Pairing: the code of the device (in the link of its QR code), then the person accepts the pad there -->
+    <main id="pairView" hidden>
+        <header class="top">
+            <img src="/icon.svg" alt="" width="34" height="34">
+            <div>
+                <h1>xmouse pad</h1>
+                <p class="muted" id="pairDevice">Drive a device of the network from this screen</p>
+            </div>
+        </header>
+        <section class="card">
+            <label class="label" for="pairCode">Code shown on the device</label>
+            <input id="pairCode" class="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7F-29Q-XM4">
+            <label class="label" for="pairName">Name of this pad</label>
+            <input id="pairName" maxlength="64" placeholder="Phone">
+            <button class="btn primary" id="pairButton" type="button">Pair</button>
+            <p class="muted" id="pairStatus"></p>
+        </section>
+        <p class="muted small">The code works once. The device asks its person to accept this pad, then it remembers it (nothing to type next time).</p>
+    </main>
+
+    <!-- Pad: the touchpad, the buttons, the keyboard, the map -->
+    <main id="padView" hidden>
+        <header class="bar">
+            <span class="dot" id="link" title="link"></span>
+            <span id="where" class="where">...</span>
+            <button class="icon" id="mapToggle" type="button" title="Map">Map</button>
+            <button class="icon" id="menuToggle" type="button" title="More">...</button>
+        </header>
+        <nav class="menu" id="menu" hidden>
+            <button type="button" id="ping">Look here</button>
+            <button type="button" id="laser">Laser</button>
+            <button type="button" id="home">Cursor back home</button>
+            <button type="button" id="sendLink">Send a link</button>
+            <label class="slider">Speed <input type="range" id="speed" min="0.5" max="4" step="0.1" value="1.6"></label>
+            <button type="button" id="lendScreen" hidden>This screen in the layout</button>
+            <button type="button" id="appUpdate" hidden>Check for updates</button>
+            <button type="button" id="changeDevice" hidden>Another device</button>
+            <button type="button" id="unpair" class="danger">Forget this device</button>
+        </nav>
+        <canvas id="map" hidden></canvas>
+        <div id="surface" class="surface">
+            <p class="hint" id="hint">1 finger: move · tap: click · 2 fingers: scroll / right click · 3 fingers: middle · tap then hold: drag</p>
+        </div>
+        <div class="buttons">
+            <button type="button" data-button="0">Left</button>
+            <button type="button" data-button="1">Middle</button>
+            <button type="button" data-button="2">Right</button>
+            <button type="button" id="keyboardToggle" class="accent">Keyboard</button>
+        </div>
+        <div class="keys" id="keys" hidden>
+            <div class="row" id="mods">
+                <button type="button" data-mod="ControlLeft">Ctrl</button>
+                <button type="button" data-mod="AltLeft">Alt</button>
+                <button type="button" data-mod="ShiftLeft">Shift</button>
+                <button type="button" data-mod="MetaLeft">Super</button>
+                <button type="button" data-key="Escape">Esc</button>
+                <button type="button" data-key="Tab">Tab</button>
+                <button type="button" data-key="Delete">Del</button>
+            </div>
+            <div class="row">
+                <button type="button" data-key="Home">Home</button>
+                <button type="button" data-key="ArrowLeft">&#8592;</button>
+                <button type="button" data-key="ArrowUp">&#8593;</button>
+                <button type="button" data-key="ArrowDown">&#8595;</button>
+                <button type="button" data-key="ArrowRight">&#8594;</button>
+                <button type="button" data-key="End">End</button>
+                <button type="button" data-key="PageUp">PgUp</button>
+                <button type="button" data-key="PageDown">PgDn</button>
+            </div>
+            <div class="row">
+                <button type="button" data-combo="ControlLeft+KeyC">Copy</button>
+                <button type="button" data-combo="ControlLeft+KeyV">Paste</button>
+                <button type="button" data-combo="ControlLeft+KeyZ">Undo</button>
+                <button type="button" data-combo="ControlLeft+KeyA">All</button>
+                <button type="button" data-combo="AltLeft+Tab">Alt Tab</button>
+                <button type="button" id="fkeysToggle">F1-F12</button>
+            </div>
+            <div class="row" id="fkeys" hidden></div>
+            <textarea id="typing" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Type here: it goes where the cursor clicked"></textarea>
+            <div class="row">
+                <button type="button" data-key="Backspace">&#9003; Backspace</button>
+                <button type="button" data-key="Enter">Enter &#8629;</button>
+            </div>
+        </div>
+    </main>
+    <script src="/pad.js"></script>
+</body>
+</html>

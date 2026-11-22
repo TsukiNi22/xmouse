@@ -59,13 +59,14 @@
             },
             {
                 id: "android", name: "Android", tag: "Phone · tablet", available: deviceApk !== null || asset("apk") !== null,
-                text: "The app: touchpad, keyboard, your cursor on every screen of the network. It updates itself from the devices of the network.",
+                text: "The app: touchpad, keyboard, and its screen in the layout (the cursors of the network go on it, Accessibility service). It updates itself from the devices of the network.",
                 buttons: deviceApk ? [Object.assign(deviceApk, {primary: true})] : [{label: "Install the app (.apk)", file: "apk", primary: true}],
             },
             {
-                id: "macos", name: "macOS", tag: "Planned", available: false,
-                text: "The macOS version comes after Android (v0.4 of the roadmap). Meanwhile, the sources build on macOS without the edges.",
-                buttons: [{label: "Not available yet", file: "none"}],
+                id: "macos", name: "macOS", tag: "macOS 13+ · Homebrew", available: true,
+                text: "Built from the sources with Homebrew (Qt 6, OpenSSL): the edges, the clicks and the keys of the other devices go through the Accessibility permission (asked at the first start).",
+                command: SOURCES_COMMAND,
+                buttons: [{label: "Read the README", href: REPOSITORY + "#quick-setup---0-scripts"}],
             },
             {
                 id: "ios", name: "iPhone · iPad", tag: "Not available", available: false,
@@ -180,6 +181,7 @@
         $("codeCard").hidden = false;
     }
     $("address").textContent = location.host;
+    $("padLink").href = "/pad" + (code !== "" ? "?code=" + encodeURIComponent(code) : ""); // the code of the link pairs the pad
     $("copyLink").addEventListener("click", () => {
         navigator.clipboard.writeText(location.href).then(() => {
             $("copyLink").textContent = "Copied";
