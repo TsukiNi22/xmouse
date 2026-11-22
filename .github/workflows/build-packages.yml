@@ -206,13 +206,15 @@ jobs:
           [ "$PACKAGE_DEV" = "ON" ] && check "$DEV" "$DEV-*-win64-headers.@ext@"
           check "$BASE" "$BASE-*-win64.@ext@"
 
-      - name: Bundle the Windows zip (xmouse.exe + its dll, install.ps1)
+      - name: Bundle the Windows zip and installer (xmouse.exe + its dll, install.ps1, setup)
         run: |
           set -euo pipefail
           command -v zip > /dev/null || dnf install -y zip
-          scripts/bundle_windows.sh --no-build
+          command -v makensis > /dev/null || dnf install -y mingw32-nsis
+          scripts/bundle_windows.sh --no-build --installer
           test -f dist/xmouse-windows-x64.zip
-          echo "✓ dist/xmouse-windows-x64.zip ($(du -h dist/xmouse-windows-x64.zip | cut -f1))"
+          test -f dist/xmouse-windows-x64-setup.exe
+          echo "✓ dist/xmouse-windows-x64.zip ($(du -h dist/xmouse-windows-x64.zip | cut -f1)), dist/xmouse-windows-x64-setup.exe ($(du -h dist/xmouse-windows-x64-setup.exe | cut -f1))"
 
       - name: Upload compiled packages
         uses: actions/upload-artifact@v6
@@ -222,6 +224,7 @@ jobs:
             build/*.rpm
             build/*.deb
             dist/xmouse-windows-x64.zip
+            dist/xmouse-windows-x64-setup.exe
           retention-days: 1
 
   # >>> gh-pages >>> (removed by setup.sh without the gh-pages option: the packages stay as artifacts of the run)
