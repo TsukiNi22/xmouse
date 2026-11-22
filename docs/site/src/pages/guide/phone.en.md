@@ -34,7 +34,7 @@ Like a computer, the phone creates a network (it is then its first device: compu
 | Three fingers to the right / left | Back / forward (the side buttons of a mouse) |
 | Tap, then hold | Drag |
 
-The keyboard of the touchpad has sticky modifiers, the special keys and the F-keys. A shortcut keeps its letter on every layout: <kbd>Ctrl</kbd> + <kbd>A</kbd> typed on an AZERTY computer is <kbd>Ctrl</kbd> + <kbd>A</kbd> on a QWERTY one or on a phone, never <kbd>Ctrl</kbd> + <kbd>Q</kbd>. On a phone screen, <kbd>Shift</kbd> + <kbd>Enter</kbd> is a new line and <kbd>Shift</kbd> + <kbd>Tab</kbd> the previous field; while a cursor of a computer is on it, the phone screen stays on (5 minutes after its last move). Any browser can be a touchpad too: on the computer, **Network** > **Pair a phone or a browser**, then open its QR code (`https://<address>:47900/pad`).
+The keyboard of the touchpad has sticky modifiers that add up (<kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Shift</kbd>, <kbd>Super</kbd>, <kbd>AltGr</kbd>: <kbd>Ctrl</kbd> then <kbd>Shift</kbd> then a key is <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+that key), the special keys (<kbd>Esc</kbd>, <kbd>Tab</kbd>, <kbd>Del</kbd>, <kbd>Ins</kbd>, the arrows, <kbd>Home</kbd> / <kbd>End</kbd>, <kbd>PgUp</kbd> / <kbd>PgDn</kbd>, <kbd>Super</kbd>, <kbd>Menu</kbd>, <kbd>PrtSc</kbd>), <kbd>F1</kbd> to <kbd>F24</kbd>, the media and volume keys, and the usual shortcuts (copy, cut, paste, undo, redo, all, reload, find, save, new tab, close tab, <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd>). A key button held repeats like a key of a keyboard. A shortcut keeps its letter on every layout: <kbd>Ctrl</kbd> + <kbd>A</kbd> typed on an AZERTY computer is <kbd>Ctrl</kbd> + <kbd>A</kbd> on a QWERTY one or on a phone, never <kbd>Ctrl</kbd> + <kbd>Q</kbd>. While a cursor of a computer is on a phone screen, it stays on (5 minutes after its last move). Any browser can be a touchpad too: on the computer, **Network** > **Pair a phone or a browser**, then open its QR code (`https://<address>:47900/pad`).
 
 ## The screen in the layout {#screen}
 
@@ -48,17 +48,32 @@ The keyboard of the touchpad has sticky modifiers, the special keys and the F-ke
 > [!IMPORTANT]
 > Android lets an app click in the others **only through an Accessibility service**. **Let them touch** opens the steps: Accessibility > Installed apps > xmouse screen > on. Greyed out ("Restricted setting")? App info > the menu at the top right > **Allow restricted settings**, then again. Then App info > **Battery** > **Unrestricted**: else Android stops the service now and then, and the clicks do nothing until it comes back.
 
-With **Let them touch**, the keys typed on a computer arrive as the characters of **its** keyboard layout (azerty included), and the clipboard of the computer is sent to the phone when it changes.
+With **Let them touch**, a cursor of a computer **is a finger** on the phone: the left button puts it down and lifts it, a drag follows the cursor as it moves (never replayed at the end), a long press lasts what the button is held; the wheel moves the content as it turns, the right button is a long press (the menu of Android). The clipboard of the computer is sent to the phone when it changes.
 
-| Key / button of the computer | On the phone |
-| ---------------------------- | ------------ |
-| <kbd>Enter</kbd> | The action of the field (send, search, next); a new line in a multi-line field |
-| <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>A</kbd> | Paste, copy, cut, select all |
-| Arrows, <kbd>Home</kbd> / <kbd>End</kbd> (with <kbd>Shift</kbd>: select) | Move in the text; outside a text field, ↑ ↓ ← → move the focus (Android 13+) |
-| <kbd>Backspace</kbd> / <kbd>Delete</kbd>, <kbd>Tab</kbd> | Delete, next field |
-| <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | Scroll a page |
-| <kbd>Esc</kbd> or the back button of the mouse, <kbd>Super</kbd> | Back, home |
-| <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Print Screen</kbd>, play / pause | Recent apps, screenshot, media |
+## Keys on the phone screen {#keys}
+
+In a focused text field (Android 13+), the keys arrive as the **real key events** of a keyboard: every key and every shortcut of the app works there, as with a Bluetooth keyboard (<kbd>Ctrl</kbd>+arrows by word, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+arrows to select, <kbd>Ctrl</kbd>+<kbd>Backspace</kbd>, <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Y</kbd>, <kbd>Home</kbd> / <kbd>End</kbd>, <kbd>Ctrl</kbd>+<kbd>R</kbd> or <kbd>F5</kbd> in a browser...). The characters are the ones of the layout of the computer (AZERTY included). Elsewhere, and on Android 12 and older, the keys become the actions of the phone:
+
+| Keys of the computer | On the phone |
+| -------------------- | ------------ |
+| Arrows (<kbd>Ctrl</kbd>: by word, <kbd>Shift</kbd>: select), <kbd>Home</kbd> / <kbd>End</kbd> (<kbd>Ctrl</kbd>: the whole text) | Move in the text; outside a field the arrows move the focus (Android 13+), <kbd>Home</kbd> / <kbd>End</kbd> go to the top / bottom of the list under the cursor |
+| <kbd>Backspace</kbd> / <kbd>Delete</kbd> (<kbd>Ctrl</kbd>: a word), <kbd>Enter</kbd> (<kbd>Shift</kbd>: a new line), <kbd>Tab</kbd> (<kbd>Shift</kbd>: back) | Delete, the action of the field (send, search, next), the next field |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd>, <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+<kbd>Insert</kbd>, <kbd>Shift</kbd>+<kbd>Delete</kbd> | Select all, copy, cut, paste |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo, redo (what the computers typed there) |
+| <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | The list under the cursor by a page |
+| <kbd>F5</kbd>, <kbd>Ctrl</kbd>+<kbd>R</kbd>, the reload key | Reload: a pull down at the cursor (the apps that reload by a pull, at the top of their content) |
+| <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>-</kbd>, <kbd>Ctrl</kbd>+wheel | Zoom where the cursor is (a pinch) |
+| <kbd>Esc</kbd>, <kbd>Alt</kbd>+<kbd>←</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd>, the back button of the mouse | Back |
+| <kbd>Super</kbd> alone, <kbd>Ctrl</kbd>+<kbd>Esc</kbd> | All the apps (Android 12+) |
+| <kbd>Super</kbd>+<kbd>D</kbd> / <kbd>H</kbd> / <kbd>Enter</kbd>, <kbd>Alt</kbd>+<kbd>Home</kbd> | Home |
+| <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Super</kbd>+<kbd>Tab</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd> | Recent apps |
+| <kbd>Super</kbd>+<kbd>N</kbd> / <kbd>A</kbd> / <kbd>L</kbd> / <kbd>X</kbd> / <kbd>I</kbd> | Notifications, quick settings, lock, power menu, settings |
+| <kbd>Print Screen</kbd>, <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Screenshot |
+| <kbd>Super</kbd>+<kbd>B</kbd> / <kbd>C</kbd> / <kbd>E</kbd> / <kbd>K</kbd> / <kbd>M</kbd> / <kbd>P</kbd> / <kbd>S</kbd> / <kbd>U</kbd> | Browser, contacts, files, calendar, maps, music, messages, calculator |
+| <kbd>Menu</kbd>, <kbd>Shift</kbd>+<kbd>F10</kbd>, the right button | Long press (the menu of Android) |
+| Media keys, volume keys | The player of the phone, its volume |
+
+A key held repeats (<kbd>Backspace</kbd>, the arrows, a letter). <kbd>Caps Lock</kbd> and <kbd>Num Lock</kbd> follow the keyboard of the computer: the numpad types its digits with <kbd>Num Lock</kbd>, else it is its arrows, <kbd>Home</kbd>, <kbd>End</kbd>... The other F-keys do nothing outside a text field: Android has no action for them.
 
 ## Updates {#updates}
 
