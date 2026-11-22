@@ -130,6 +130,13 @@ jobs:
           [ "$PACKAGE_DEV" = "ON" ] && check "$DEV" any
           check "$BASE" any
 
+      - name: Bundle the Linux tarball (bin/xmouse, menu entry, icon, GNOME extension)
+        run: |
+          set -euo pipefail
+          scripts/bundle_linux.sh --no-build
+          test -f dist/xmouse-linux-x86_64.tar.gz
+          echo "✓ dist/xmouse-linux-x86_64.tar.gz ($(du -h dist/xmouse-linux-x86_64.tar.gz | cut -f1))"
+
       - name: Upload compiled packages
         uses: actions/upload-artifact@v6
         with:
@@ -138,6 +145,7 @@ jobs:
             build/*.rpm
             build/*.deb
             build/*.pkg.tar.zst
+            dist/xmouse-linux-x86_64.tar.gz
           retention-days: 1
 
   build-packages-windows:
