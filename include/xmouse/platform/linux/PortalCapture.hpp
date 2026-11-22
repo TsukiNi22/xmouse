@@ -73,6 +73,7 @@ class PortalCapture final: public IInputCapture, protected QDBusContext {
         bool _started = false; // session ready
         bool _requested = false; // session asked (once per run: GNOME has no restore token, every session is a dialog)
         qint64 _recoveredAt = 0; // ms, last time a capture kept by the compositor was taken back
+        int _recoveries = 0; // in a row: a Release first, then the capture disabled and armed again
         QPoint _frameDiscrete; // wheel notches of the current libei frame (1/120)
         QPointF _frameSmooth; // smooth scroll of the current frame (used only without notches)
         QHash<QString, std::function<void(const unsigned int, const QVariantMap&)>> _requests; // request path -> callback

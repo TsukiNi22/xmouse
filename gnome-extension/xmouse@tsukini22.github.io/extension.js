@@ -309,6 +309,9 @@ class XmouseService {
         const push = {[SIDE_LEFT]: [-1, 0], [SIDE_RIGHT]: [1, 0], [SIDE_TOP]: [0, -1], [SIDE_BOTTOM]: [0, 1]}[side];
 
         if (this._grab !== null || this._owner === null || Main.sessionMode.isLocked) return;
+        // A screen of GNOME holds the input (the screenshot tool, the overview, a dialog): never taken from it, the
+        // edge stays a border until it closes
+        if (Main.modalCount > 0) return;
         // A window being dragged: given to xmouse (switch on), else the usual border of the screen; never a capture
         if (this._dragged !== null) {
             if (this._windowMove && this._sent !== this._dragged) {
@@ -404,13 +407,18 @@ class XmouseService {
     _release(x, y) {
         if (this._watchdog !== 0) GLib.source_remove(this._watchdog);
         this._watchdog = 0;
+        // The pointer is shown again first, whatever happens next: never a hidden pointer left behind
+        if (this._cursorHidden) global.backend.get_cursor_tracker().uninhibit_cursor_visibility();
+        this._cursorHidden = false;
         if (this._grab === null) return;
-        Main.popModal(this._grab);
+        try {
+            Main.popModal(this._grab);
+        } catch (e) {
+            logError(e, "xmouse: the grab was already given back"); // GNOME took it back meanwhile
+        }
         this._grab = null;
         if (this._actor !== null) this._actor.destroy();
         this._actor = null;
-        if (this._cursorHidden) global.backend.get_cursor_tracker().uninhibit_cursor_visibility();
-        this._cursorHidden = false;
         global.backend.get_default_seat().warp_pointer(x, y);
     }
 

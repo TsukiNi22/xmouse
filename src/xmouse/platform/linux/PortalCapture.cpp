@@ -55,6 +55,7 @@ File Description:
 #define SMOOTH_SCROLL_FACTOR 8.0 // libei smooth scroll (logical pixels) -> 1/120 of a notch
 #define RECOVER_INTERVAL 300 // ms between two recoveries of a capture kept by the compositor
 #define RECOVER_REARM 150 // ms between the Disable and the Enable of a recovery
+#define RECOVER_SERIES 1500 // ms: a recovery within this delay of the last one is the next step of the same series
 
 //----------------------------------------------------------------//
 /* STRUCT */
@@ -517,7 +518,20 @@ void xmouse::platform::PortalCapture::recover_(void)
     // activation): the person would have a dead mouse and keyboard. Disable ends every capture of the session (the
     // pointer comes back to the desktop), the barriers are armed again just after
     if (now - this->_recoveredAt < RECOVER_INTERVAL || this->_session.isEmpty()) return;
+    this->_recoveries = now - this->_recoveredAt < RECOVER_SERIES ? this->_recoveries + 1 : 1;
     this->_recoveredAt = now;
+
+    // First a Release of the last activation (the way the compositor expects to end it: the pointer shown again where
+    // it was); only when the input still comes, the capture disabled and armed again
+    if (this->_recoveries == 1) {
+        QDBusMessage call = QDBusMessage::createMethodCall(PORTAL_SERVICE, PORTAL_PATH, PORTAL_INPUT_CAPTURE, "Release");
+        QVariantMap options;
+        options.insert("activation_id", this->_activation);
+        options.insert("cursor_position", double2(this->_position.x(), this->_position.y()));
+        call.setArguments({QVariant::fromValue(QDBusObjectPath(this->_session)), options});
+        (void)QDBusConnection::sessionBus().call(call, QDBus::NoBlock);
+        return;
+    }
     this->_enabled = true; // the Disable is sent whatever the state known here
     this->setEnabled_(false);
     QTimer::singleShot(RECOVER_REARM, this, [this]() {if (!this->_barriers.isEmpty() && !this->_enabled) this->setEnabled_(true);});
