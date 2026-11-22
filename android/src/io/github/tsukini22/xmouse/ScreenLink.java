@@ -160,7 +160,7 @@ final class ScreenLink {
             @Override public void onClose(String reason) {
                 ScreenLink.this._ui.post(() -> {
                     ScreenLink.this._cursors.clear();
-                    if (ScreenLink.this._view != null) ScreenLink.this._view.invalidate();
+                    if (ScreenLink.this._view != null) ScreenLink.this._view.postInvalidateOnAnimation();
                     if (ScreenLink.this._stopped) return;
                     long wait = RECONNECT[Math.min(ScreenLink.this._tries++, RECONNECT.length - 1)];
                     ScreenLink.this._ui.postDelayed(ScreenLink.this::connect, wait);
@@ -249,7 +249,7 @@ final class ScreenLink {
             default:
                 break;
         }
-        if (this._view != null) this._view.invalidate();
+        if (this._view != null) this._view.postInvalidateOnAnimation();
     }
 
     // ---------------------------------------------------------------- //

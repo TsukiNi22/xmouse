@@ -554,8 +554,8 @@ public class MainActivity extends Activity {
     }
 
     private String screenLabel() {
-        boolean lent = ScreenService.running() || OverlayService.running();
-        return this.tr("This screen in the layout", "Cet écran dans la disposition") + (lent ? this.tr(": on", " : activé") : this.tr(": off", " : désactivé"));
+        String state = ScreenService.running() ? this.tr(": touch", " : toucher") : OverlayService.running() ? this.tr(": cursors shown", " : curseurs affichés") : this.tr(": off", " : désactivé");
+        return this.tr("This screen in the layout", "Cet écran dans la disposition") + state;
     }
 
     private void phoneCard(LinearLayout box) {
@@ -798,9 +798,13 @@ public class MainActivity extends Activity {
 
     private void lendScreenDialog() {
             MainActivity.this._ui.post(() -> {
+                String now = ScreenService.running() ? MainActivity.this.tr("Now: the cursors touch this phone (Accessibility).\n\n", "Maintenant : les curseurs touchent ce téléphone (Accessibilité).\n\n")
+                    : OverlayService.running() ? MainActivity.this.tr("Now: the cursors are only shown - their clicks do nothing here (Android lets an app touch other apps only through the Accessibility service: Let them touch).\n\n",
+                        "Maintenant : les curseurs sont seulement affichés - leurs clics ne font rien ici (Android ne laisse une appli toucher les autres que par le service d'Accessibilité : Les laisser toucher).\n\n")
+                    : MainActivity.this.tr("Now: this screen is not in the layout.\n\n", "Maintenant : cet écran n'est pas dans la disposition.\n\n");
                 AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this)
                     .setTitle(MainActivity.this.tr("This screen in the layout", "Cet écran dans la disposition"))
-                    .setMessage(MainActivity.this.tr(
+                    .setMessage(now + MainActivity.this.tr(
                         "Show the cursors: the cursors of the network come on this phone and are drawn over the apps with their name (\"Display over other apps\").\n\nLet them touch: their clicks, drags, scrolls and text also act here (the Accessibility service \"xmouse screen\"; after an install from the browser, Settings > Apps > xmouse > Allow restricted settings first).",
                         "Afficher les curseurs : les curseurs du réseau viennent sur ce téléphone, dessinés par-dessus les applis avec leur nom (« Afficher par-dessus les autres applis »).\n\nLes laisser toucher : leurs clics, glisser, défilements et textes agissent aussi ici (le service d'Accessibilité « xmouse screen » ; après une installation depuis le navigateur : Paramètres > Applis > xmouse > Autoriser les paramètres restreints d'abord)."))
                     .setPositiveButton(MainActivity.this.tr("Show the cursors", "Afficher les curseurs"), (d, w) -> MainActivity.this.lendPhantom())
