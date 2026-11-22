@@ -79,7 +79,9 @@ class TlsServer final: public QSslServer {
  *  /<file>          -> qrc :/web/<file>
  *  /app/xmouse.apk   -> android application (qrc :/android/xmouse.apk, or <data>/xmouse.apk)
  *  /api/info        -> {"name", "version", "apk": version, "fingerprint", "pq": true}
- *  /ws              -> websocket upgrade (newSocket)
+ *  /ws              -> websocket upgrade of a member (newSocket)
+ *  /pad             -> the touchpad page (qrc :/web/pad.html)
+ *  /padws           -> websocket upgrade of a phone / web pad (newPad)
  * Every answer has strict security headers (CSP self, no-store, nosniff, frame-ancestors none)
 */
 class Server: public QObject {
@@ -116,6 +118,7 @@ class Server: public QObject {
     signals:
         void newSocket(xmouse::net::WebSocket* socket, const QString& userAgent); // owned by the receiver
         void newLane(xmouse::net::WebSocket* socket); // /lane: an extra socket of a session's video (owned by the receiver, not authenticated yet)
+        void newPad(xmouse::net::WebSocket* socket, const QString& userAgent); // /padws: a phone / web pad (owned by the receiver, not authenticated yet)
 };
 
 } // namespace end

@@ -245,7 +245,7 @@ void xmouse::net::Server::onRequest_(QSslSocket* socket)
     if (path.contains("..") || path.contains('\\') || !path.startsWith('/')) {this->answer_(socket, 400, "text/plain", "Bad path"); return;}
 
     // Websocket upgrade: the socket leaves the http server
-    if (path == "/ws" || path == "/lane") {
+    if (path == "/ws" || path == "/lane" || path == "/padws") {
         const QByteArray key = headers.value("sec-websocket-key");
         if (key.isEmpty() || !headers.value("upgrade").toLower().contains("websocket") || headers.value("sec-websocket-version") != "13") {
             this->answer_(socket, 400, "text/plain", "Websocket upgrade expected");
@@ -258,6 +258,7 @@ void xmouse::net::Server::onRequest_(QSslSocket* socket)
         socket->disconnect(this);
         QObject::disconnect(socket, &QSslSocket::disconnected, socket, &QObject::deleteLater);
         if (path == "/lane") emit this->newLane(new WebSocket(socket, true, rest));
+        else if (path == "/padws") emit this->newPad(new WebSocket(socket, true, rest), QString::fromUtf8(headers.value("user-agent")));
         else emit this->newSocket(new WebSocket(socket, true, rest), QString::fromUtf8(headers.value("user-agent")));
         return;
     }
@@ -277,6 +278,7 @@ void xmouse::net::Server::onRequest_(QSslSocket* socket)
 
     // Web client
     if (path == "/") path = "/index.html";
+    if (path == "/pad") path = "/pad.html";
     QFile file(":/web" + path);
     if (!file.open(QIODevice::ReadOnly)) {this->answer_(socket, 404, "text/plain", "Not found"); return;}
     this->answer_(socket, 200, content_type(path), file.readAll(), false);
