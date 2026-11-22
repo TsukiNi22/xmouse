@@ -21,7 +21,57 @@ env:
   PACKAGE_DEV: "OFF"
 
 jobs:
+  # The android app (touchpad, screen lent to the network): embedded in every binary (each device serves it), attached to the release
+  build-apk:
+    runs-on: ${{ vars.RUNNER }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the build number of the app is the number of commits (a new apk of the same version is an update)
+
+      - name: Set up the Java compiler
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Signing key of the app (the same for every release, else the phones refuse the updates)
+        env:
+          KEYSTORE: ${{ secrets.XMOUSE_ANDROID_KEYSTORE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning title=No signing key::secret XMOUSE_ANDROID_KEYSTORE missing: a key of this run signs the app (its updates will not install over it)"
+            exit 0
+          fi
+          echo "$KEYSTORE" | base64 -d > android/release.jks
+
+      - name: Build the android app (aapt2, javac, d8, apksigner)
+        env:
+          XMOUSE_KEYSTORE_PASS: ${{ secrets.XMOUSE_ANDROID_KEYSTORE_PASS }}
+        run: |
+          set -euo pipefail
+          [ -n "${XMOUSE_KEYSTORE_PASS:-}" ] || unset XMOUSE_KEYSTORE_PASS
+          scripts/build_apk.sh
+          test -f android/build/xmouse.apk
+          echo "✓ android/build/xmouse.apk $(cat android/build/version.txt) ($(du -h android/build/xmouse.apk | cut -f1))"
+
+      - name: Upload the android app
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-app
+          path: |
+            android/build/xmouse.apk
+            android/build/version.txt
+          retention-days: 1
+
   build-packages:
+    needs: build-apk
     runs-on: ${{ vars.RUNNER }}
     defaults:
       run:
@@ -52,6 +102,12 @@ jobs:
 
       - name: Install the xmouse dependencies (Qt 6, OpenSSL, XTest)
         run: dnf install -y qt6-qtbase-devel openssl-devel libXtst-devel
+
+      - name: Get the android app (embedded in the binary)
+        uses: actions/download-artifact@v5
+        with:
+          name: android-app
+          path: android/build
 
       - name: Cache ccache
         uses: actions/cache@v5
@@ -146,9 +202,11 @@ jobs:
             build/*.deb
             build/*.pkg.tar.zst
             dist/xmouse-linux-x86_64.tar.gz
+            android/build/xmouse.apk
           retention-days: 1
 
   build-packages-windows:
+    needs: build-apk
     runs-on: ${{ vars.RUNNER }}
     defaults:
       run:
@@ -165,6 +223,12 @@ jobs:
 
       - name: Install the xmouse dependencies (Qt 6, OpenSSL)
         run: dnf install -y mingw64-qt6-qtbase mingw64-openssl
+
+      - name: Get the android app (embedded in the binary)
+        uses: actions/download-artifact@v5
+        with:
+          name: android-app
+          path: android/build
 
       - name: Cache ccache
         uses: actions/cache@v5

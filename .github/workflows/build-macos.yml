@@ -1,0 +1,48 @@
+name: Build - macOS (CI)
+
+# The macOS backends (event tap, CGEvent) only build on a Mac: Qt and OpenSSL from Homebrew, libutils from its sources
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'web/**'
+      - 'android/**'
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Install the dependencies (Qt 6, OpenSSL 3)
+        run: brew install qt openssl@3
+
+      - name: Build and install libutils (sources)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/TsukiNi22/libutils.git "$RUNNER_TEMP/libutils"
+          cmake -S "$RUNNER_TEMP/libutils" -B "$RUNNER_TEMP/libutils/build" -DCMAKE_BUILD_TYPE=Optimized -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+          cmake --build "$RUNNER_TEMP/libutils/build" --parallel 3
+          cmake --install "$RUNNER_TEMP/libutils/build"
+
+      - name: Build xmouse (macOS backends)
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Optimized -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix openssl@3);$HOME/.local"
+          cmake --build build --parallel 3
+          QT_QPA_PLATFORM=offscreen ./xmouse --version
