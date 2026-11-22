@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GNOME Shell extension `xmouse@tsukini22.github.io` and its backend `ShellCapture`: barriers and input capture on GNOME Wayland without the portal dialog, the pointer position (the real pointer goes back after a foreign click on Wayland too); only `xmouse` may call it (sender checked), unicast signals, released when xmouse stops, Ctrl + Alt + Shift and a watchdog give the input back; the portal stays the fallback
 - `scripts/install.sh --gnome`, the extension installed by the packages in `share/gnome-shell/extensions`
+- Network page in the way of the overview of xdesk: connection code card (countdown bar, identity, `Copy` / `QR code` / `New code`), status card (edges, input, encryption, members), `Who can reach this device` with `Open to` (LAN only, Tailscale, UPnP, bore, ngrok, manual: applied at once) and a row per address (copy, QR code), then `Connect to a network`; the QR code in its own window with the choice of the address
+- The addresses of a member through a tunnel (`host:port`) are published and dialed
 - Network switch at the bottom of the sidebar (like the sharing switch of xdesk): red `Leave the network` (the others stay linked, there is no server), green `Create or join`
 
 ### Fixed
