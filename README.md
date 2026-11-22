@@ -3,7 +3,7 @@
 ![Linux](https://img.shields.io/badge/Linux-ready-2ea44f) ![Windows](https://img.shields.io/badge/Windows-ready-2ea44f) ![Android](https://img.shields.io/badge/Android-ready-2ea44f) ![Browser pad](https://img.shields.io/badge/Browser%20pad-ready-2ea44f) ![macOS](https://img.shields.io/badge/macOS-soon-orange)
 
 > [!TIP]
-> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v1.0.2): technical documentation (coming soon) and the interactive project graph.
+> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v1.0.3): technical documentation (coming soon) and the interactive project graph.
 
 A network of screens: link your devices once (one time code or QR code, like [xdesk](https://github.com/TsukiNi22/xdesk)), place their screens on a shared layout, and **one cursor, one keyboard and one clipboard** go from one device to the other through the borders of the screens.
 Every member sees the cursors of the others on its screens, with their name (like a shared document); a foreign cursor clicks and types where it is, but never touches the panel of xmouse without an access request (60 s, refusable).

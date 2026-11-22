@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.3-pre] - 2026-11-22
 ### Added
 - Android: a crash is written down and shown at the next launch with its trace (Copy), the lent screen and the network of the phone turned off so that it cannot come back at every launch
 
