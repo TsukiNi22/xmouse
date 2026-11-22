@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.1-pre] - 2026-11-22
 ### Added
 - **The Android app as a member** (This phone in a network): it creates its own network or joins one with the code / QR code, computers join it with its link, approvals by dialog or notification, its touchpad drives its own cursor across every device, its screen lent to the layout, text of the clipboard and links of the members; the member core in plain Java (`android/src/.../core`: JSON, Argon2id, the link handshake, the replicated state, the layout, the mesh, the node), its identity in the Android KeyStore, a foreground service; `scripts/check_android_core.sh` checks it against xmouse
 - Foreign cursors: **pointer** mode (default: the cursor of a member moves the real pointer of the device) and **phantom** mode (drawn over the apps, the real pointer stays yours), `foreignMode` in the settings
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The map never recenters by itself; my cursor is followed live at home (10 Hz), an unknown position is not drawn
 
 ### Fixed
+- The cursors of the map (and of the pads, the waves) follow a device moved on the layout (kept on their device, no stale dot)
 - The buttons of the tables were cut (rows too low)
 - Two cursors of one member could fight with the crossing of an edge in pointer mode (the injected moves never cross)
 
