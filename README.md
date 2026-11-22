@@ -1,7 +1,7 @@
 # xmouse
 
 > [!TIP]
-> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v0.1.0): technical documentation (coming soon) and the interactive project graph.
+> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v0.1.1): technical documentation (coming soon) and the interactive project graph.
 
 A network of screens: link your devices once (one time code or QR code, like [xdesk](https://github.com/TsukiNi22/xdesk)), place their screens on a shared layout, and **one cursor, one keyboard and one clipboard** go from one device to the other through the borders of the screens.
 Every member sees the cursors of the others on its screens, with their name (like a shared document); a foreign cursor clicks and types where it is, but never touches the panel of xmouse without an access request (60 s, refusable).

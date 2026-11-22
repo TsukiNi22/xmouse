@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [pre-release]
+## [pre-release] (empty)
+
+## [v0.1.1-pre] - 2026-11-22
 ### Changed
 - **[MAJOR]** The links of a device are `https://host:port/?code=..&fp=..&net=..` (QR code, copied link, addresses shown), no more `xmouse://` (still accepted when joining); joining with a link checks that the device answering has the identity of the link
 - The paths of `Who can reach this device` only show once the device is in a network (like xdesk with the sharing off)
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Network switch at the bottom of the sidebar (like the sharing switch of xdesk): red `Leave the network` (the others stay linked, there is no server), green `Create or join`
 
 ### Fixed
+- Tailscale: the page on the tailnet name was refused by the browsers (`*.ts.net` is HSTS preloaded, the self-signed certificate has no exception): the Tailscale certificate is served to the browsers asking the name, the links use the address until it is there, the members (no SNI) keep the pinned certificate
 - The rows of `Who can reach this device` stayed highlighted (hover style of xdesk on rows that are not clickable)
 - The `setup.sh` options `--pre` and `--windows` never changed the package installed
 - Wayland: the input capture was never armed after the dialog (`session_handle` is an object path)
@@ -59,4 +62,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/install.sh` (`--deps`, `--uinput`, `--autostart`, `--uninstall`), the xmouse logo
 - Unit tests: replicated state, layout, group, the command line and real loopback links (join with the right / a wrong code, local refusal, member key, foreign key, removed member, messages)
 
+[v0.1.1-pre]: https://github.com/TsukiNi22/xmouse/compare/v0.1.0-pre...v0.1.1-pre
 [v0.1.0-pre]: https://github.com/TsukiNi22/xmouse/releases/tag/v0.1.0-pre
