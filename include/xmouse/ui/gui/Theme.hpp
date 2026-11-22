@@ -1,0 +1,87 @@
+/**************************************************************\
+
+ ██╗  ██╗ █████╗ ██████╗ ████████╗ █████╗ ███╗   ██╗██╗ █████╗
+ ╚██╗██╔╝██╔══██╗██╔══██╗╚══██╔══╝██╔══██╗████╗  ██║██║██╔══██╗
+  ╚███╔╝ ███████║██████╔╝   ██║   ███████║██╔██╗ ██║██║███████║
+  ██╔██╗ ██╔══██║██╔══██╗   ██║   ██╔══██║██║╚██╗██║██║██╔══██║
+ ██╔╝ ██╗██║  ██║██║  ██║   ██║   ██║  ██║██║ ╚████║██║██║  ██║
+ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝
+
+Edition:
+##  @date 05/11/2026 by @author Tsukini
+
+File Name:
+##  @file Theme.hpp
+
+File Description:
+##  Look of the Qt interface: light / dark tokens, style sheet, painted icons, terminal palette
+\**************************************************************/
+
+#ifndef THEME_H
+    #define THEME_H
+
+    //----------------------------------------------------------------//
+    /* INCLUDE */
+
+    /* type */
+    #define _Attribute
+    #include <utils/utils.hpp>   // _cold, _nodiscard
+    #include <QAbstractItemView> // QAbstractItemView
+    #include <QApplication>      // QApplication
+    #include <functional>        // std::function
+    #include <QPixmap>           // QPixmap
+    #include <QWidget>           // QWidget
+    #include <QString>           // QString
+    #include <QColor>            // QColor
+    #include <QIcon>             // QIcon
+
+namespace xmouse::ui::gui { // namespace start
+//----------------------------------------------------------------//
+/* STRUCT */
+
+struct Palette {
+    bool dark = true;
+    QColor window; // background of the window
+    QColor sidebar; // navigation
+    QColor surface; // cards
+    QColor surfaceAlt; // inputs, table rows
+    QColor border;
+    QColor text;
+    QColor muted; // secondary text
+    QColor accent; // primary actions, selection
+    QColor accentText; // text on the accent
+    QColor success;
+    QColor warning;
+    QColor danger;
+    QColor terminalBg;
+    QColor terminalFg;
+};
+
+//----------------------------------------------------------------//
+/* CLASS */
+
+/*
+ * Object names / properties used by the style sheet:
+ *  #sidebar, #card (+ [accent="true"]), #title, #subtitle, #muted, #mono, #code, #banner, #badge, #version, #rule, #segmented
+ *  QPushButton[kind="primary" | "danger" | "ghost"], QLabel[tone="success" | "warning" | "danger" | "accent" | "muted"]
+*/
+class Theme {
+    public:
+        // ---------- Pre-Function -------- //
+        _cold static void apply(QApplication& app, const QString& setting); // system | dark | light
+        _cold static void keyboard(QApplication& app); // Enter clicks the focused button, arrows move along a toolbar / segmented control
+        _cold _nodiscard static const Palette& palette(void);
+        _cold _nodiscard static const QString& setting(void); // system | dark | light (as applied)
+        _cold _nodiscard static QWidget* switcher(const std::function<void(const QString&)>& saved, QWidget* parent = nullptr); // Auto | Light | Dark segmented control (applies, then saved(setting))
+        _cold _nodiscard static QIcon icon(const QString& name, const QColor& color = QColor()); // overview, sessions, devices, logs, settings, copy, refresh, shield, terminal, power, screen, control, fullscreen, fit, keyboard
+        _cold _nodiscard static QPixmap logo(const int size); // xmouse mark
+        _cold _nodiscard static QColor terminalColor(const int index); // xterm 256 colors (0 - 15 from the theme)
+        _cold _nodiscard static QString monospaceFamily(void);
+        _cold static void decorate(QAbstractItemView* view); // tables / trees: no focus frame on a cell, accent bar at the start of the selected row, columns wide enough for the cell padding
+
+        // ---------- Constructor --------- //
+        Theme() = delete;
+};
+
+} // namespace end
+#endif /* THEME_H */
