@@ -15,7 +15,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'kill $(jobs -p) 2> /dev/null || true; rm -rf "$WORK"' EXIT
+PIDS=() # every process started here, stopped at the end whatever happens
+cleanup() {
+    for pid in "${PIDS[@]}"; do kill -KILL "$pid" 2> /dev/null || true; done
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
 
 die() { echo "check_android_core: $*" >&2; exit 1; }
 [[ -x "$ROOT/xmouse" ]] || die "xmouse not built at the root"
@@ -32,6 +37,7 @@ run_xmouse() { # <name> <port>
     exec {fd}<> "$WORK/$1.in"
     # DISPLAY set: the terminal panel runs a QApplication (offscreen: one virtual screen, nothing captured or shown)
     DISPLAY="${DISPLAY:-:99}" XMOUSE_HOME="$WORK/$1" QT_QPA_PLATFORM=offscreen "$ROOT/xmouse" --tty --port "$2" --name "$1" < "$WORK/$1.in" > "$WORK/$1.log" 2>&1 &
+    PIDS+=("$!")
     sleep 2
 }
 say() { echo "$2" > "$WORK/$1.in"; }
@@ -43,6 +49,7 @@ sleep 2
 LINK="$(grep -E '^link' "$WORK/desk.log" | tail -1 | awk '{print $2}' | sed -E 's#https://[^:/]+:#https://127.0.0.1:#')"
 java -cp "$WORK/classes" NodeCheck join "$LINK" "$WORK/phone.p12" > "$WORK/phone1.log" 2>&1 &
 PHONE=$!
+PIDS+=("$PHONE")
 for _ in $(seq 1 30); do grep -q "gave the right code" "$WORK/desk.log" && break; sleep 1; done
 say desk "accept"
 wait "$PHONE" || true
@@ -55,6 +62,7 @@ grep -q "^JOIN OK" "$WORK/phone1.log" || die "the phone could not join (phone1.l
 echo "== 2. the phone creates its network, an xmouse joins it, the cursor of the phone goes there"
 java -cp "$WORK/classes" NodeCheck host "$WORK/phone.p12" > "$WORK/phone2.log" 2>&1 &
 PHONE=$!
+PIDS+=("$PHONE")
 for _ in $(seq 1 20); do grep -q "^LINK" "$WORK/phone2.log" && break; sleep 1; done
 PLINK="$(grep '^LINK' "$WORK/phone2.log" | awk '{print $2}')"
 run_xmouse laptop 47963
