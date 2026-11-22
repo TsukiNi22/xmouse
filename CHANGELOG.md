@@ -18,7 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [pre-release] (empty)
+## [pre-release]
+### Fixed
+- The `setup.sh` options `--pre` and `--windows` never changed the package installed
+- Wayland: the input capture was never armed after the dialog (`session_handle` is an object path); the permission is now asked once (`CreateSession2` + `Start` with `persist_mode` 2 and a restore token in `<data>/portal-input-capture.token`)
+- Flood of `QPixmap::fill` warnings on every refresh of the members
+- Windows: the links failed with the OpenSSL 3.2 of the MinGW build (no ML-KEM): `X25519` fallback, the devices tell `pq` in the network and are dialed with the compatible groups
+- Unit tests: a lone test crashed at exit (static `QCoreApplication`), the unix rights checked on Windows
 
 ## [v0.1.0-pre] - 2026-11-22
 ### Added
