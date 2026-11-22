@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
     private FrameLayout _root;
     private WebView _web;
     private String _pendingCode = ""; // code of a link, given to the pad page once
-    private boolean _updateChecked = false;
+    private long _lastUpdateCheck = 0; // ms: checked at every launch / return to the app (10 min at most between two)
 
     // ---------------------------------------------------------------- //
     // Life cycle
@@ -264,10 +264,40 @@ public class MainActivity extends Activity {
         this._root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         web.loadUrl(origin + "/pad" + (this._pendingCode.isEmpty() ? "" : "?code=" + Uri.encode(this._pendingCode)));
         this._pendingCode = "";
-        if (!this._updateChecked) {
-            this._updateChecked = true;
-            this.checkUpdate(false);
+        this.autoUpdate();
+        this.resumeScreen();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (this._web != null && !this.host().isEmpty()) {
+            this.autoUpdate();
+            this.resumeScreen(); // back from the overlay permission: the screen is lent at once
         }
+    }
+
+    // Every launch / return to the app: the device is asked for a newer app (a dialog only when there is one)
+    private void autoUpdate() {
+        long now = System.currentTimeMillis();
+        if (now - this._lastUpdateCheck < 10 * 60 * 1000) return;
+        this._lastUpdateCheck = now;
+        this.checkUpdate(false);
+    }
+
+    // The screen stays lent (phantom) as long as the person wants it and the overlay is allowed
+    private void resumeScreen() {
+        if (this._prefs.getBoolean("lend", false) && !this._prefs.getString("token", "").isEmpty()) OverlayService.start(this);
+    }
+
+    private void lendPhantom() {
+        this._prefs.edit().putBoolean("lend", true).apply();
+        if (OverlayService.start(this)) {
+            Toast.makeText(this, this.tr("This screen is in the layout of the network", "Cet écran est dans la disposition du réseau"), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // Allowed once in the settings ("Display over other apps"), then the screen is lent when the app comes back
+        this.startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + this.getPackageName())));
     }
 
     // What the pad page may ask the app (its token, the screen lent to the network)
@@ -280,16 +310,24 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public String version() {return MainActivity.this.version();}
 
-        @JavascriptInterface public boolean screenLent() {return ScreenService.running();}
+        @JavascriptInterface public boolean screenLent() {return ScreenService.running() || OverlayService.running();}
 
+        // Phantom (the cursors drawn, "Display over other apps") or touch (Accessibility: their clicks become touches)
         @JavascriptInterface public void lendScreen() {
-            MainActivity.this._ui.post(() -> new AlertDialog.Builder(MainActivity.this)
-                .setTitle(MainActivity.this.tr("This screen in the layout", "Cet écran dans la disposition"))
-                .setMessage(MainActivity.this.tr("Turn on \"xmouse screen\" in the Accessibility settings: the cursors of the network come on this phone, their clicks become touches. Turn it off there at any time.",
-                    "Activez « xmouse screen » dans les réglages d'Accessibilité : les curseurs du réseau viennent sur ce téléphone, leurs clics deviennent des touchers. Désactivable à tout moment."))
-                .setPositiveButton(MainActivity.this.tr("Open the settings", "Ouvrir les réglages"), (d, w) -> MainActivity.this.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
-                .setNegativeButton(MainActivity.this.tr("Cancel", "Annuler"), null)
-                .show());
+            MainActivity.this._ui.post(() -> {
+                AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this)
+                    .setTitle(MainActivity.this.tr("This screen in the layout", "Cet écran dans la disposition"))
+                    .setMessage(MainActivity.this.tr(
+                        "Show the cursors: the cursors of the network come on this phone and are drawn over the apps with their name (\"Display over other apps\").\n\nLet them touch: their clicks, drags, scrolls and text also act here (the Accessibility service \"xmouse screen\"; after an install from the browser, Settings > Apps > xmouse > Allow restricted settings first).",
+                        "Afficher les curseurs : les curseurs du réseau viennent sur ce téléphone, dessinés par-dessus les applis avec leur nom (« Afficher par-dessus les autres applis »).\n\nLes laisser toucher : leurs clics, glisser, défilements et textes agissent aussi ici (le service d'Accessibilité « xmouse screen » ; après une installation depuis le navigateur : Paramètres > Applis > xmouse > Autoriser les paramètres restreints d'abord)."))
+                    .setPositiveButton(MainActivity.this.tr("Show the cursors", "Afficher les curseurs"), (d, w) -> MainActivity.this.lendPhantom())
+                    .setNeutralButton(MainActivity.this.tr("Let them touch", "Les laisser toucher"), (d, w) -> MainActivity.this.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+                if (OverlayService.running()) dialog.setNegativeButton(MainActivity.this.tr("Stop", "Arrêter"), (d, w) -> {
+                    MainActivity.this._prefs.edit().putBoolean("lend", false).apply();
+                    OverlayService.stop(MainActivity.this);
+                });
+                dialog.show();
+            });
         }
 
         @JavascriptInterface public void checkUpdate() {MainActivity.this._ui.post(() -> MainActivity.this.checkUpdate(true));}
