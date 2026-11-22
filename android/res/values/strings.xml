@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">xmouse</string>
+    <string name="service_name">xmouse screen</string>
+    <string name="service_description">Puts the screen of this phone in the layout of your xmouse network: the cursors of the other devices are drawn over the apps and their clicks, scrolls and text become touches here. Nothing is read or sent except where they click. Turn it off at any time.</string>
+</resources>
