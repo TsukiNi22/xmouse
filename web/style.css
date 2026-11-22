@@ -125,8 +125,11 @@ li { margin-bottom: 8px; }
     border: 1px solid var(--border);
     border-radius: 3px;
     padding: 8px 10px;
-    overflow: hidden;
-    text-overflow: ellipsis; /* the whole command: its tooltip and the copy */
+    overflow-x: auto; /* the whole command, scrolled */
     white-space: nowrap;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
 }
 .command .btn { padding: 6px 12px; }
+.btn.off { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+.btn .size { font-weight: 400; opacity: 0.8; }
