@@ -9,6 +9,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.res.Configuration;
 import android.graphics.Path;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
@@ -115,6 +116,104 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
         if (node == null || node.getText() == null) return;
         selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0);
         selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, node.getText().length());
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection);
+    }
+
+    @Override
+    public void enter() {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null) {this.global("center"); return;} // no text field: the d-pad center (Android 13+) clicks what has the focus
+        // The action of the keyboard of the field (Android 11+): send, search, go, next; else a new line where it fits
+        if (Build.VERSION.SDK_INT >= 30 && node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())) return;
+        if (node.isMultiLine()) this.insert("\n");
+    }
+
+    @Override
+    public void deleteForward() {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null || !node.isEditable() || node.getText() == null || node.isShowingHintText()) return;
+        CharSequence current = node.getText();
+        int start = Math.max(0, Math.min(node.getTextSelectionStart(), current.length()));
+        int end = Math.max(start, Math.min(node.getTextSelectionEnd(), current.length()));
+        if (node.getTextSelectionStart() < 0) {start = current.length(); end = current.length();}
+        if (start == end && end < current.length()) end += 1;
+        this.setText(node, current.subSequence(0, start).toString() + current.subSequence(end, current.length()), start);
+    }
+
+    @Override
+    public void nextField() {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        AccessibilityNodeInfo next = node == null ? null : node.focusSearch(android.view.View.FOCUS_FORWARD);
+        if (next != null) next.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+    }
+
+    @Override
+    public void moveCaret(int delta) {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null || !node.isEditable()) {this.global(delta < 0 ? "left" : "right"); return;} // no text field: the d-pad
+        if (node.getText() == null || node.isShowingHintText()) return;
+        int length = node.getText().length();
+        int at = node.getTextSelectionStart() < 0 ? length : node.getTextSelectionStart();
+        this.caretTo(node, Math.max(0, Math.min(length, at + delta)));
+    }
+
+    @Override
+    public void caretEdge(boolean end) {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null || node.getText() == null || node.isShowingHintText()) return;
+        this.caretTo(node, end ? node.getText().length() : 0);
+    }
+
+    @Override
+    public void select(int delta) {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null || node.getText() == null || node.isShowingHintText()) return;
+        int length = node.getText().length();
+        int start = node.getTextSelectionStart() < 0 ? length : node.getTextSelectionStart();
+        int end = node.getTextSelectionEnd() < 0 ? start : node.getTextSelectionEnd();
+        this.selectRange(node, start, Math.max(0, Math.min(length, end + delta)));
+    }
+
+    @Override
+    public void selectEdge(boolean end) {
+        AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (node == null || node.getText() == null || node.isShowingHintText()) return;
+        int length = node.getText().length();
+        int start = node.getTextSelectionStart() < 0 ? length : node.getTextSelectionStart();
+        this.selectRange(node, start, end ? length : 0);
+    }
+
+    // The actions of the whole phone a key may give: the d-pad (Android 13+), the recent apps, the notifications,
+    // a screenshot (Android 9+), play / pause of the media (Android 12+)
+    @Override
+    public void global(String name) {
+        int action;
+        switch (name) {
+            case "recents": action = GLOBAL_ACTION_RECENTS; break;
+            case "notifications": action = GLOBAL_ACTION_NOTIFICATIONS; break;
+            case "screenshot": if (Build.VERSION.SDK_INT < 28) return; action = GLOBAL_ACTION_TAKE_SCREENSHOT; break;
+            case "playPause": if (Build.VERSION.SDK_INT < 31) return; action = GLOBAL_ACTION_KEYCODE_HEADSETHOOK; break;
+            case "up": if (Build.VERSION.SDK_INT < 33) return; action = GLOBAL_ACTION_DPAD_UP; break;
+            case "down": if (Build.VERSION.SDK_INT < 33) return; action = GLOBAL_ACTION_DPAD_DOWN; break;
+            case "left": if (Build.VERSION.SDK_INT < 33) return; action = GLOBAL_ACTION_DPAD_LEFT; break;
+            case "right": if (Build.VERSION.SDK_INT < 33) return; action = GLOBAL_ACTION_DPAD_RIGHT; break;
+            case "center": if (Build.VERSION.SDK_INT < 33) return; action = GLOBAL_ACTION_DPAD_CENTER; break;
+            default: return;
+        }
+        this.performGlobalAction(action);
+    }
+
+    private void selectRange(AccessibilityNodeInfo node, int start, int end) {
+        Bundle selection = new Bundle();
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, start);
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end);
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection);
+    }
+
+    private void caretTo(AccessibilityNodeInfo node, int at) {
+        Bundle selection = new Bundle();
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, at);
+        selection.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, at);
         node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selection);
     }
 

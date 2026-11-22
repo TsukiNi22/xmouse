@@ -48,12 +48,22 @@ final class ScreenLink {
         void copy();
         void cut();
         void selectAll();
+        void enter(); // the action of the keyboard of the field (send, search, next), a new line in a multi-line one
+        void deleteForward();
+        void nextField(); // Tab
+        void moveCaret(int delta); // Left / Right (outside a text field: the d-pad of Android 13+)
+        void caretEdge(boolean end); // Home / End
+        void select(int delta); // Shift + Left / Right: the selection grows or shrinks
+        void selectEdge(boolean end); // Shift + Home / End
+        void global(String name); // up, down, recents, notifications, screenshot, playPause (actions of the whole phone)
     }
 
     private static final long TAP_TIME = 300; // ms: a shorter press is a tap, a longer one a long press
     private static final float TAP_MOVE = 12; // px a tap may move
     private static final float WHEEL_PIXELS = 0.8f; // px of swipe per 1/120 of a notch
     private static final long[] RECONNECT = {1000, 2000, 4000, 8000, 15000}; // ms
+    private static final long IDLE_HIDE = 3000; // ms a cursor stays drawn without moving
+    private static final long IDLE_FADE = 600; // ms of its fade out (a click alone never brings it back)
 
     private final Context _context;
     private final Actions _actions;
@@ -68,6 +78,8 @@ final class ScreenLink {
     private boolean _stopped = false;
     private boolean _local = false; // the phone is a member: the events come from its node
     private boolean _ctrl = false; // Ctrl held by the cursor on this screen (its shortcuts: paste, copy, cut, select all)
+    private boolean _shift = false; // Shift held: the arrows select
+    private boolean _alt = false; // Alt held: Alt + Tab shows the recent apps
     private static volatile ScreenLink _active; // the screen lent now (the node gives it its events)
 
     // A foreign cursor on this screen
@@ -79,6 +91,7 @@ final class ScreenLink {
         boolean down = false;
         int button = 0;
         long downAt = 0;
+        long moved = SystemClock.uptimeMillis(); // last move: a still cursor fades out
         final List<float[]> path = new ArrayList<>(); // its moves while a button is held (drag)
     }
 
@@ -226,6 +239,7 @@ final class ScreenLink {
                 c.x = o.optInt("x") * this._density;
                 c.y = o.optInt("y") * this._density;
                 this._cursors.put(id, c);
+                this.wakeFade();
                 break;
             }
             case "leave":
@@ -236,7 +250,9 @@ final class ScreenLink {
                 if (c == null) break;
                 c.x = o.optInt("x") * this._density;
                 c.y = o.optInt("y") * this._density;
+                c.moved = SystemClock.uptimeMillis();
                 if (c.down) c.path.add(new float[]{c.x, c.y});
+                this.wakeFade();
                 break;
             }
             case "button":
@@ -248,7 +264,9 @@ final class ScreenLink {
             case "key": {
                 String code = o.optString("code");
                 if (code.startsWith("Control")) {this._ctrl = o.optBoolean("down"); break;}
-                if (o.optBoolean("down")) this.onKey(code, o.optString("char"));
+                if (code.startsWith("Shift")) {this._shift = o.optBoolean("down"); break;}
+                if (code.startsWith("Alt")) {this._alt = o.optBoolean("down"); break;}
+                if (o.optBoolean("down")) this.onKey(id, code, o.optString("char"));
                 break;
             }
             case "clip": // the clipboard of the computer, to paste here
@@ -290,7 +308,7 @@ final class ScreenLink {
             return;
         }
         if (b == 3) {if (down) this._actions.back(); return;} // back button of the mouse
-        if (b == 1) return;
+        if (b == 1 || b == 4) return; // middle, forward: Android has none (never a tap by mistake)
         if (down) {
             c.down = true;
             c.button = b;
@@ -315,6 +333,33 @@ final class ScreenLink {
         this._actions.gesture(path, duration);
     }
 
+    // The view is drawn again when the next still cursor starts to fade (nothing else would redraw it)
+    private final Runnable _fadeWake = () -> {if (this._view != null) this._view.postInvalidateOnAnimation();};
+
+    private void wakeFade() {
+        this._ui.removeCallbacks(this._fadeWake);
+        this._ui.postDelayed(this._fadeWake, IDLE_HIDE + 16);
+    }
+
+    private static float idleAlpha(Cursor c, long now) {
+        long idle = now - c.moved;
+        if (c.down || idle < IDLE_HIDE) return 1f;
+        return Math.max(0f, 1f - (float) (idle - IDLE_HIDE) / IDLE_FADE);
+    }
+
+    // Page Up / Down: a swipe of most of the screen at the cursor (or the middle of the screen)
+    private void page(String id, int direction) {
+        Cursor c = this._cursors.get(id);
+        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
+        float x = c != null ? c.x : m.widthPixels / 2f;
+        float y = m.heightPixels / 2f;
+        float span = m.heightPixels * 0.35f * direction;
+        Path path = new Path();
+        path.moveTo(x, y + span);
+        path.lineTo(x, y - span);
+        this._actions.gesture(path, 250);
+    }
+
     private void onWheel(String id, int dx, int dy) {
         Cursor c = this._cursors.get(id);
         if (c == null || this.actions() == null) return;
@@ -325,7 +370,7 @@ final class ScreenLink {
         this._actions.gesture(path, 120);
     }
 
-    private void onKey(String code, String character) {
+    private void onKey(String id, String code, String character) {
         if (this.actions() == null) return;
         if (this._ctrl) {
             // The letter of the layout of the computer (azerty Ctrl+A is the key KeyQ), else the one of the code
@@ -343,8 +388,20 @@ final class ScreenLink {
             case "Escape": case "BrowserBack": this._actions.back(); break;
             case "MetaLeft": case "MetaRight": case "BrowserHome": this._actions.home(); break;
             case "Backspace": this._actions.backspace(); break;
-            case "Enter": case "NumpadEnter": this._actions.insert("\n"); break;
-            case "Tab": this._actions.insert("\t"); break;
+            case "Delete": this._actions.deleteForward(); break;
+            case "Enter": case "NumpadEnter": this._actions.enter(); break;
+            case "Tab": if (this._alt) this._actions.global("recents"); else this._actions.nextField(); break;
+            case "ArrowLeft": if (this._shift) this._actions.select(-1); else this._actions.moveCaret(-1); break;
+            case "ArrowRight": if (this._shift) this._actions.select(1); else this._actions.moveCaret(1); break;
+            case "ArrowUp": this._actions.global("up"); break;
+            case "ArrowDown": this._actions.global("down"); break;
+            case "Home": if (this._shift) this._actions.selectEdge(false); else this._actions.caretEdge(false); break;
+            case "End": if (this._shift) this._actions.selectEdge(true); else this._actions.caretEdge(true); break;
+            case "PageUp": this.page(id, -1); break;
+            case "PageDown": this.page(id, 1); break;
+            case "PrintScreen": this._actions.global("screenshot"); break;
+            case "MediaPlayPause": this._actions.global("playPause"); break;
+            case "ContextMenu": this._actions.global("notifications"); break;
             default: break;
         }
     }
@@ -383,9 +440,14 @@ final class ScreenLink {
             this.getLocationOnScreen(location); // the overlay may start below the status bar: cursors are in screen pixels
             this._border.setStrokeWidth(1.5f * s);
             this._text.setTextSize(12 * s);
+            long now = SystemClock.uptimeMillis();
+            boolean fading = false;
             for (Cursor c: ScreenLink.this._cursors.values()) {
+                float alpha = idleAlpha(c, now);
                 float x = c.x - location[0];
                 float y = c.y - location[1];
+                if (alpha <= 0f) continue;
+                fading = fading || alpha < 1f;
                 Path arrow = new Path();
                 arrow.moveTo(x, y);
                 arrow.lineTo(x, y + 17 * s);
@@ -396,6 +458,9 @@ final class ScreenLink {
                 arrow.lineTo(x + 12.6f * s, y + 12 * s);
                 arrow.close();
                 this._fill.setColor(c.color);
+                this._fill.setAlpha(Math.round(255 * alpha));
+                this._border.setAlpha(Math.round(255 * alpha));
+                this._text.setAlpha(Math.round(255 * alpha));
                 canvas.drawPath(arrow, this._fill);
                 canvas.drawPath(arrow, this._border);
                 if (c.down) canvas.drawCircle(x, y, 10 * s, this._border);
@@ -404,6 +469,7 @@ final class ScreenLink {
                 canvas.drawRoundRect(pill, 9 * s, 9 * s, this._fill);
                 canvas.drawText(c.name, pill.left + 7 * s, pill.bottom - 5 * s, this._text);
             }
+            if (fading) this.postInvalidateOnAnimation(); // the next frame of the fade
         }
     }
 }
