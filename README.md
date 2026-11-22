@@ -229,6 +229,13 @@ curl -fsSL https://raw.githubusercontent.com/TsukiNi22/xmouse/main/setup.sh | ba
 | `--windows` | Select the Windows packages (`mingw64-xmouse`, MinGW sysroot, rpm / deb only) |
 | `-h`, `--help` | Display the usage |
 
+> [!TIP]
+> xmouse is also in [my-universe](https://tsukini22.github.io/my-universe/) (the packages of all my projects in one set of repositories for `dnf`, `apt` and `pacman`, with a catalog and a CLI); a repository already registered by `setup.sh` is kept:
+> ```bash
+> curl -fsSL https://tsukini22.github.io/my-universe/install.sh | bash -s -- --only xmouse
+> sudo dnf install xmouse-pre    # or: sudo apt install xmouse-pre / sudo pacman -S xmouse-pre
+> ```
+
 ## Usage
 
 ```bash
