@@ -204,7 +204,6 @@ void xmouse::ui::gui::LayoutView::mousePressEvent(QMouseEvent* event)
         return;
     }
     if (!this->_editable || event->button() != Qt::LeftButton || id.isEmpty()) return;
-    if (!this->_hub.foreignInputNow()) this->_hub.panelUsedLocally(); // the click of a cursor given the panel keeps it
     this->_dragged = id;
     this->_dragStart = event->position().toPoint();
     this->_dragOrigin = this->_hub.layout().device(id).position;

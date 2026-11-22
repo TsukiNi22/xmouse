@@ -248,14 +248,20 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     accessLayout->setContentsMargins(14, 10, 10, 10);
     this->_accessText = new QLabel(this->_accessBanner);
     this->_accessText->setWordWrap(true);
-    QPushButton* accept = make_button("Accept", "primary");
-    QPushButton* refuse = make_button("Refuse", "danger");
+    this->_accessAccept = make_button("Accept", "primary");
+    this->_accessRefuse = make_button("Refuse", "danger");
+    this->_accessRevoke = make_button("Revoke", "danger");
     accessLayout->addWidget(this->_accessText, 1);
-    accessLayout->addWidget(accept);
-    accessLayout->addWidget(refuse);
+    accessLayout->addWidget(this->_accessAccept);
+    accessLayout->addWidget(this->_accessRefuse);
+    accessLayout->addWidget(this->_accessRevoke);
     this->_accessBanner->hide();
-    QObject::connect(accept, &QPushButton::clicked, this, [this]() {this->_hub.grantAccess(this->_accessId);});
-    QObject::connect(refuse, &QPushButton::clicked, this, [this]() {this->_hub.refuseAccess(this->_accessId);});
+    QObject::connect(this->_accessAccept, &QPushButton::clicked, this, [this]() {this->_hub.grantAccess(this->_accessId);});
+    QObject::connect(this->_accessRefuse, &QPushButton::clicked, this, [this]() {this->_hub.refuseAccess(this->_accessId);});
+    QObject::connect(this->_accessRevoke, &QPushButton::clicked, this, [this]() {
+        this->_hub.revokeAccess(this->_accessId);
+        this->_accessBanner->hide();
+    });
     mainLayout->addWidget(this->_accessBanner);
     this->_noticeBanner = new QWidget(main);
     this->_noticeBanner->setObjectName("banner");
@@ -304,14 +310,23 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     QObject::connect(&hub, &core::Hub::accessRequested, this, [this](const QString& id, const QString& name, const int) {
         this->_accessId = id;
         this->_accessBanner->setProperty("name", name);
+        this->_accessAccept->show();
+        this->_accessRefuse->show();
+        this->_accessRevoke->hide();
         this->_accessBanner->show();
         this->raise();
         if (this->_tray) this->_tray->showMessage("Access to the panel asked", name + " asks to use the xmouse panel of this device", QSystemTrayIcon::Warning, 8000);
     });
     QObject::connect(&hub, &core::Hub::accessEnded, this, [this](const QString& id, const bool granted) {
         if (id != this->_accessId) return;
-        this->_accessBanner->hide();
-        if (granted) this->showNotice_(this->_accessBanner->property("name").toString() + " can now use the panel (until you use it again)", "warning");
+        if (!granted) {this->_accessBanner->hide(); return;}
+
+        // Granted: the banner stays, the access is taken back only with Revoke (the clicks here never end it)
+        this->_accessText->setText("<b>" + this->_accessBanner->property("name").toString().toHtmlEscaped() + "</b> can use this xmouse panel with its cursor, until you revoke it.");
+        this->_accessAccept->hide();
+        this->_accessRefuse->hide();
+        this->_accessRevoke->show();
+        this->_accessBanner->show();
     });
     QObject::connect(&hub, &core::Hub::padsChanged, this, &MainWindow::refreshPads_);
     QObject::connect(&hub, &core::Hub::padApproval, this, &MainWindow::onPadApproval_);
@@ -351,10 +366,10 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
         this->refreshCode_();
         this->refreshStatus_();
         this->refreshEndpoints_();
-        if (this->_accessBanner->isVisible()) {
+        if (this->_accessBanner->isVisible() && this->_accessAccept->isVisible()) { // asking: its countdown
             const core::Foreign f = this->_hub.foreign().value(this->_accessId);
             const qint64 left = this->_hub.config().settings().focusRequestDelay - (QDateTime::currentMSecsSinceEpoch() - f.askedAt) / 1000;
-            this->_accessText->setText("<b>" + f.name.toHtmlEscaped() + "</b> asks to use this xmouse panel with its cursor: granted in <b>" + QString::number(std::max<qint64>(0, left)) + " s</b> unless you refuse (or use the panel yourself), or at once if you accept.");
+            this->_accessText->setText("<b>" + f.name.toHtmlEscaped() + "</b> asks to use this xmouse panel with its cursor: granted in <b>" + QString::number(std::max<qint64>(0, left)) + " s</b> unless you refuse, or at once if you accept.");
         }
     });
     this->_tick.start();
@@ -1444,9 +1459,6 @@ void xmouse::ui::gui::MainWindow::hideEvent(QHideEvent* event)
 
 bool xmouse::ui::gui::MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
-    // A click / key of the local person in a window of xmouse ends the accesses granted to the foreign cursors
-    if ((event->type() == QEvent::MouseButtonPress || event->type() == QEvent::KeyPress) && watched->isWidgetType() && !this->_hub.foreignInputNow())
-        this->_hub.panelUsedLocally();
     if (event->type() == QEvent::WindowActivate || event->type() == QEvent::WindowDeactivate) QTimer::singleShot(0, this, &MainWindow::reportPanel_);
     return QMainWindow::eventFilter(watched, event);
 }

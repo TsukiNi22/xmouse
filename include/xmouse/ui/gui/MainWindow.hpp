@@ -70,7 +70,10 @@ class MainWindow final: public QMainWindow {
         /* banners */
         QWidget* _accessBanner = nullptr;
         QLabel* _accessText = nullptr;
-        QString _accessId = ""; // member asking the panel
+        QPushButton* _accessAccept = nullptr; // asking: Accept / Refuse; granted: Revoke
+        QPushButton* _accessRefuse = nullptr;
+        QPushButton* _accessRevoke = nullptr;
+        QString _accessId = ""; // member asking the panel (or given it)
         QWidget* _noticeBanner = nullptr;
         QLabel* _noticeText = nullptr;
 

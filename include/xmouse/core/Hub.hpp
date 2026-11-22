@@ -73,7 +73,7 @@ enum class ForeignState {
     Free, // moves, clicks and types here
     Paused, // the panel of xmouse has the focus (or the cursor is over it): its input is held
     Asking, // it asked the access to the panel: granted at the end of the delay unless refused
-    Granted, // access to the panel granted (until the local person uses the panel again)
+    Granted, // access to the panel granted (until the local person revokes it)
 };
 
 //----------------------------------------------------------------//
@@ -273,7 +273,7 @@ class Hub: public QObject {
 
         /* foreign cursors */
         QHash<QString, Foreign> _foreign;
-        QSet<QString> _granted; // cursors given the panel: kept when they come back, until the local person uses it
+        QSet<QString> _granted; // cursors given the panel: kept when they come back, until the local person revokes it
         QString _keyboardOwner = ""; // last foreign cursor that clicked here (its keyboard types here)
         QPoint _savedPointer; // local pointer before a foreign click
         bool _hasSavedPointer = false;
@@ -451,10 +451,9 @@ class Hub: public QObject {
         void setRights(const QString& id, const Rights& rights);
         void setNetworkSetting(const QString& name, const QJsonValue& value); // net/<name> for every member
         void setPanelFocused(const bool focused); // the window of xmouse got / lost the focus
-        void panelUsedLocally(void); // a key / click of the local person in the panel: the granted accesses end
         void refuseAccess(const QString& id); // the local person refuses an access request
         void grantAccess(const QString& id); // the local person accepts an access request at once (no waiting)
-        _cold _nodiscard bool foreignInputNow(void) const; // a click / key reaching the panel now comes from a foreign cursor (injected lately, or a button of one held)
+        void revokeAccess(const QString& id); // the local person takes a granted access back
         void kickCursor(const QString& id); // the foreign cursor is sent back to its device
         void comeBack(void); // my cursor back on this device (tray, shortcut)
 

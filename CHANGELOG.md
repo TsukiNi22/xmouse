@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Changed
+- **A granted access to the panel stays until Revoke**: the banner stays with a Revoke button; the clicks of the local person in the panel no longer end a request nor a granted access
+
+### Fixed
+- **Accept did nothing**: pressing the button was taken for the local person using the panel, which ended the request before the button acted
+
 
 ## [v1.0.7-pre] - 2026-11-22
 ### Added

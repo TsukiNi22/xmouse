@@ -389,7 +389,7 @@ void xmouse::core::Hub::padPhantomAt_(const QString& pad, const QPoint& local)
         f.color = colorOf(pad);
         f.local = local;
         f.seen = now_ms();
-        if (this->_granted.contains(pad)) f.state = ForeignState::Granted; // given the panel before (the pad came back / reconnected)
+        if (this->_granted.contains(pad)) f.state = ForeignState::Granted; // given the panel before (the pad came back / reconnected), until revoked
         this->_foreign[pad] = f;
         this->_log.info("input", pad, "cursor of " + f.name + " here (" + (f.passing ? "private mode: passing" : "phantom") + ")");
     }
