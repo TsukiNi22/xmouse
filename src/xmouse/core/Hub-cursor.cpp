@@ -356,10 +356,11 @@ bool xmouse::core::Hub::padOwnCursor_(const QString& pad)
 {
     // Pointer mode: the pad drives the real pointer (its own cursor dropped, the pointer goes on from there)
     if (!this->padPhantom_()) {
+        if (this->_padAway.contains(pad)) this->padAwayEnd_(pad);
         if (this->_foreign.contains(pad)) {this->_padPointer = this->_foreign.value(pad).local; this->foreignLeave_(pad);}
         return false;
     }
-    if (!this->_foreign.contains(pad)) this->padPhantomAt_(pad, this->_padPointer.isNull() ? this->localPointer_() : this->_padPointer);
+    if (!this->_foreign.contains(pad) && !this->_padAway.contains(pad)) this->padPhantomAt_(pad, this->_padPointer.isNull() ? this->localPointer_() : this->_padPointer);
     return true;
 }
 
@@ -377,12 +378,17 @@ void xmouse::core::Hub::padPhantomAt_(const QString& pad, const QPoint& local)
         f.color = colorOf(pad);
         f.local = local;
         f.seen = now_ms();
+        if (this->_granted.contains(pad)) f.state = ForeignState::Granted; // given the panel before (the pad came back / reconnected)
         this->_foreign[pad] = f;
         this->_log.info("input", pad, "cursor of " + f.name + " here (" + (f.passing ? "private mode: passing" : "phantom") + ")");
     }
     this->foreignPointer_(pad, local, 0, false);
     this->_presence[pad] = Presence{pad, self, this->_layout.toGlobal(self, this->_foreign.value(pad).local), this->_foreign.value(pad).local, 0, now_ms(), 0}; // on the map too
+    this->padPresence_();
+}
 
+void xmouse::core::Hub::padPresence_(void)
+{
     // The maps at 30 Hz at most (the overlay draws every move), the last position always told
     if (now_ms() - this->_padPresenceAt >= PAD_PRESENCE_INTERVAL) {
         this->_padPresenceAt = now_ms();
@@ -397,6 +403,73 @@ void xmouse::core::Hub::padPhantomAt_(const QString& pad, const QPoint& local)
     }
 }
 
+void xmouse::core::Hub::padLeave_(const QString& pad, const QPoint& global, const Hit& hit)
+{
+    PadAway away;
+
+    // Its cursor here ends, it enters the other device under its own name (the relay says it comes from the pad)
+    if (this->_foreign.contains(pad)) this->foreignLeave_(pad);
+    away.target = hit.device;
+    away.global = QPointF(global);
+    away.local = hit.local;
+    this->_padAway[pad] = away;
+    this->sendTo_(away.target, QJsonObject{{"t", "enter"}, {"x", hit.local.x()}, {"y", hit.local.y()}, {"name", this->_pads.value(pad).name}}, pad);
+    this->_presence[pad] = Presence{pad, away.target, global, hit.local, 0, now_ms(), 0};
+    this->padPresence_();
+}
+
+void xmouse::core::Hub::padAwayMotion_(const QString& pad, const double dx, const double dy)
+{
+    PadAway& away = this->_padAway[pad];
+    const QPoint from = away.global.toPoint();
+    QPoint to;
+    std::optional<Hit> hit;
+
+    away.global += QPointF(dx, dy);
+    to = this->_layout.move(from, away.global.toPoint() - from);
+    if (to != away.global.toPoint()) away.global = QPointF(to); // stopped on a border: no hidden drift
+    hit = this->_layout.hit(to);
+    if (!hit) return;
+    if (hit->device == this->_group.self()) { // back here: its own cursor again
+        this->padAwayEnd_(pad);
+        this->padPhantomAt_(pad, hit->local);
+        return;
+    }
+    if (hit->device != away.target) {
+        const QString left = away.target;
+        if (!this->reachable(hit->device)) {away.global = QPointF(from); return;} // an unreachable device is a wall
+        for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
+            if (away.buttons & (1 << b)) this->sendBinaryTo_(left, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data(), pad);
+        away.buttons = 0;
+        away.target = hit->device;
+        this->sendTo_(left, QJsonObject{{"t", "leave"}}, pad);
+        this->sendTo_(away.target, QJsonObject{{"t", "enter"}, {"x", hit->local.x()}, {"y", hit->local.y()}, {"name", this->_pads.value(pad).name}}, pad);
+    }
+    away.local = hit->local;
+    this->sendBinaryTo_(away.target, net::ByteWriter(net::Binary::Pointer).u16(++away.seq).i32(away.local.x()).i32(away.local.y()).data(), pad);
+    this->_presence[pad] = Presence{pad, away.target, to, away.local, 0, now_ms(), 0};
+    this->padPresence_();
+}
+
+void xmouse::core::Hub::padAwayEnd_(const QString& pad)
+{
+    auto it = this->_padAway.find(pad);
+
+    if (it == this->_padAway.end()) return;
+    for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
+        if (it->buttons & (1 << b)) this->sendBinaryTo_(it->target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data(), pad);
+    this->sendTo_(it->target, QJsonObject{{"t", "leave"}}, pad);
+    this->_padAway.erase(it);
+    if (this->_presence.remove(pad) > 0) emit this->presenceChanged();
+}
+
+void xmouse::core::Hub::padAwayInput_(const QString& pad, const QByteArray& data)
+{
+    const PadAway away = this->_padAway.value(pad);
+
+    this->sendBinaryTo_(away.target, data, pad);
+}
+
 void xmouse::core::Hub::padMotion_(const QString& pad, const double dx, const double dy)
 {
     const QString self = this->_group.self();
@@ -405,15 +478,17 @@ void xmouse::core::Hub::padMotion_(const QString& pad, const double dx, const do
     QPoint to;
     std::optional<Hit> hit;
 
-    if (this->_away) {this->onMotion_(dx, dy); return;}
     own = this->padOwnCursor_(pad);
+    if (own && this->_padAway.contains(pad)) {this->padAwayMotion_(pad, dx, dy); return;} // its own cursor on another device
+    if (!own && this->_away) {this->onMotion_(dx, dy); return;} // pointer mode: it drives the cursor of this device where it is
     this->_homePad = pad;
     from = this->_layout.toGlobal(self, own ? this->_foreign.value(pad).local : this->localPointer_());
     to = this->_layout.move(from, QPoint(static_cast<int>(std::lround(dx)), static_cast<int>(std::lround(dy))));
     hit = this->_layout.hit(to);
     if (hit && hit->device != self && this->reachable(hit->device)) {
-        // Through the border of this device: the cursor goes on the other one (nothing to release here)
-        if (own) this->foreignLeave_(pad);
+        // Through the border of this device: phantom / private mode, its own cursor goes on the other one (the cursor of
+        // this device stays with the person); pointer mode, the cursor of this device goes (nothing to release here)
+        if (own) {this->padLeave_(pad, to, *hit); return;}
         this->_awayByPad = true;
         this->leaveTo_(to, hit->device, hit->local);
         return;
@@ -429,29 +504,48 @@ void xmouse::core::Hub::padMotion_(const QString& pad, const double dx, const do
 
 void xmouse::core::Hub::padButton_(const QString& pad, const net::MouseButton button, const bool down)
 {
+    const bool own = this->padOwnCursor_(pad);
+
+    if (own && this->_padAway.contains(pad)) {
+        PadAway& away = this->_padAway[pad];
+        if (down) away.buttons |= 1 << static_cast<int>(button);
+        else away.buttons &= ~(1 << static_cast<int>(button));
+        this->padAwayInput_(pad, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(button)).u8(down ? 1 : 0).i32(away.local.x()).i32(away.local.y()).data());
+        return;
+    }
+    if (own) {this->foreignButton_(pad, button, down); return;} // at its own cursor here (private mode: nothing)
     if (this->_away) {this->onButton_(button, down); return;}
-    if (this->padOwnCursor_(pad)) {this->foreignButton_(pad, button, down); return;} // at its own cursor (private mode: nothing)
     if (this->_injector) this->_injector->mouseButton(button, down);
 }
 
 void xmouse::core::Hub::padWheel_(const QString& pad, const int dx, const int dy)
 {
+    const bool own = this->padOwnCursor_(pad);
+
+    if (own && this->_padAway.contains(pad)) {this->padAwayInput_(pad, net::ByteWriter(net::Binary::Wheel).i16(static_cast<std::int16_t>(std::clamp(dx, -32000, 32000))).i16(static_cast<std::int16_t>(std::clamp(dy, -32000, 32000))).data()); return;}
+    if (own) {this->foreignWheel_(pad, dx, dy); return;}
     if (this->_away) {this->onWheel_(dx, dy); return;}
-    if (this->padOwnCursor_(pad)) {this->foreignWheel_(pad, dx, dy); return;}
     if (this->_injector) this->_injector->mouseWheel(dx, dy);
 }
 
 void xmouse::core::Hub::padKey_(const QString& pad, const QString& code, const bool down)
 {
+    const bool own = this->padOwnCursor_(pad);
+
+    if (own && this->_padAway.contains(pad)) {this->padAwayInput_(pad, net::ByteWriter(net::Binary::Key).u8(down ? 1 : 0).text8(code).data()); return;}
+    if (own) {this->foreignKey_(pad, code, down); return;}
     if (this->_away) {this->onKey_(code, down); return;}
-    if (this->padOwnCursor_(pad)) {this->foreignKey_(pad, code, down); return;}
     if (this->_injector) this->_injector->key(code, down);
 }
 
 void xmouse::core::Hub::padText_(const QString& pad, const QString& text)
 {
+    bool own = false;
+
     if (text.isEmpty()) return;
+    own = this->padOwnCursor_(pad);
+    if (own && this->_padAway.contains(pad)) {this->padAwayInput_(pad, net::ByteWriter(net::Binary::Text).bytes(text.left(4096).toUtf8()).data()); return;}
+    if (own) {this->foreignText_(pad, text.left(4096)); return;} // private mode: the pad acts only on the other devices
     if (this->_away) {this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Text).bytes(text.left(4096).toUtf8()).data()); return;}
-    if (this->padOwnCursor_(pad)) {this->foreignText_(pad, text.left(4096)); return;} // private mode: the pad acts only on the other devices
     if (this->_injector) this->_injector->text(text.left(4096));
 }

@@ -989,6 +989,7 @@ void xmouse::core::Hub::housekeeping_(void)
     for (Foreign& f: this->_foreign) {
         if (f.state != ForeignState::Asking || now - f.askedAt < static_cast<qint64>(this->_config.settings().focusRequestDelay) * 1000) continue;
         f.state = ForeignState::Granted;
+        this->_granted.insert(f.id);
         this->_log.warn("access", f.id, "access to the panel granted to " + f.name + " (not refused in time)");
         this->sendTo_(f.id, QJsonObject{{"t", "access"}, {"text", "access to the panel granted"}});
         emit this->accessEnded(f.id, true);
@@ -996,6 +997,8 @@ void xmouse::core::Hub::housekeeping_(void)
     }
     for (const QString& id: this->_foreign.keys())
         if (!this->_pads.contains(id) && !this->reachable(id)) this->foreignLeave_(id); // the own cursor of a pad goes with its socket
+    for (const QString& pad: this->_padAway.keys()) // the own cursor of a pad on a device gone
+        if (!this->_layout.contains(this->_padAway.value(pad).target) || !this->reachable(this->_padAway.value(pad).target)) this->padAwayEnd_(pad);
     for (auto it = this->_presence.begin(); it != this->_presence.end();) {
         const bool padHere = this->_pads.contains(it.key()) && this->_foreign.contains(it.key()); // still, but still here
         if (it.key() != this->_group.self() && !padHere && now - it->seen > PRESENCE_TTL) {it = this->_presence.erase(it); presence = true;}

@@ -132,11 +132,14 @@ void xmouse::core::Hub::onPadClosed_(net::WebSocket* ws)
     }
     if (it != this->_pads.end()) {
         if (it->control == ws && this->_foreign.contains(id)) this->foreignLeave_(id); // its own cursor goes with it
+        if (it->control == ws) this->padAwayEnd_(id); // there too
         if (it->control == ws) it->control = nullptr;
         if (it->display == ws) {
             it->display = nullptr;
             this->_log.info("pads", id, it->name + ": screen gone");
             if (this->_away && this->_target == id) this->comeBack(); // my cursor was on it: back here, never held on a screen gone
+            for (const QString& other: this->_padAway.keys()) // the own cursors of the pads on it too
+                if (this->_padAway.value(other).target == id) this->padAwayEnd_(other);
             this->_publishSoon.start(); // links: the others stop reaching its screen
             this->updateEdges_();
         }
@@ -283,7 +286,11 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
         return;
     }
     if (type == "text") {this->padText_(pad, o.value("text").toString().left(4096)); return;}
-    if (type == "home") {this->comeBack(); return;}
+    if (type == "home") {
+        if (this->_padAway.contains(pad)) {this->padAwayEnd_(pad); (void)this->padOwnCursor_(pad); return;} // its own cursor back here
+        this->comeBack();
+        return;
+    }
     if (type == "ping") {this->ping(); return;}
     if (type == "laser") {this->setLaser(o.value("on").toBool()); return;}
     if (type == "follow") {this->follow(o.value("id").toString()); return;}

@@ -133,6 +133,16 @@ struct Presence {
     quint16 seq = 0;
 };
 
+// The own cursor of a pad gone to another device (phantom / private mode): it goes there under its own name, the
+// cursor of this device stays where the person left it
+struct PadAway {
+    QString target = ""; // device it is on
+    QPointF global; // position in the global space
+    QPoint local; // the same on the target
+    int buttons = 0; // bits of the buttons held there (MouseButton)
+    quint16 seq = 0; // moves sent
+};
+
 // A phone (android app) or a browser (web pad) paired with this device: it drives its cursor, a phone also offers its screen
 struct Pad {
     QString id = "";
@@ -257,9 +267,11 @@ class Hub: public QObject {
         QString _following = ""; // member followed on the map and the overlays
         QPoint _padPointer; // local pointer moved by a pad when the platform does not tell it
         QString _homePad; // the pad that drove last (its own cursor comes back with the cursor of this device)
+        QHash<QString, PadAway> _padAway; // pad -> its own cursor on another device
 
         /* foreign cursors */
         QHash<QString, Foreign> _foreign;
+        QSet<QString> _granted; // cursors given the panel: kept when they come back, until the local person uses it
         QString _keyboardOwner = ""; // last foreign cursor that clicked here (its keyboard types here)
         QPoint _savedPointer; // local pointer before a foreign click
         bool _hasSavedPointer = false;
@@ -339,6 +351,11 @@ class Hub: public QObject {
         void padText_(const QString& pad, const QString& text);
         _hot bool padOwnCursor_(const QString& pad); // its own cursor made / dropped as the modes say, true when it has one
         _hot void padPhantomAt_(const QString& pad, const QPoint& local);
+        _hot void padPresence_(void); // the maps told of the own cursors of the pads (30 Hz at most, the last position always)
+        void padLeave_(const QString& pad, const QPoint& global, const Hit& hit); // its own cursor crosses to another device
+        _hot void padAwayMotion_(const QString& pad, const double dx, const double dy);
+        void padAwayEnd_(const QString& pad); // its own cursor leaves the device it was on (back here, gone, mode changed)
+        _hot void padAwayInput_(const QString& pad, const QByteArray& data); // a click / wheel / key / text of a pad sent where its cursor is
         _cold _nodiscard QPoint localPointer_(void) const; // pointer of this device (capture, else the pad one)
 
         /* foreign cursors (Hub-foreign.cpp) */
@@ -433,6 +450,8 @@ class Hub: public QObject {
         void setPanelFocused(const bool focused); // the window of xmouse got / lost the focus
         void panelUsedLocally(void); // a key / click of the local person in the panel: the granted accesses end
         void refuseAccess(const QString& id); // the local person refuses an access request
+        void grantAccess(const QString& id); // the local person accepts an access request at once (no waiting)
+        _cold _nodiscard bool foreignInputNow(void) const; // a click / key reaching the panel now comes from a foreign cursor (injected lately, or a button of one held)
         void kickCursor(const QString& id); // the foreign cursor is sent back to its device
         void comeBack(void); // my cursor back on this device (tray, shortcut)
 
