@@ -47,6 +47,15 @@ File Description:
     #define XMOUSE_PING_INTERVAL 2000 // ms between two pings of a link (latency, dead link detection)
     #define XMOUSE_LINK_TIMEOUT 8000 // ms without anything received before a link is dropped
     #define XMOUSE_PRESENCE_INTERVAL 50 // ms between two presence updates of a moving cursor (20 Hz)
+    #define XMOUSE_UDP_PROBE_INTERVAL 1000 // ms between two udp probes of a member
+    #define XMOUSE_UDP_TIMEOUT 3500 // ms without an udp answer before the moves go back to tcp
+
+    /* relay, files, windows */
+    #define XMOUSE_RELAY_HOPS 3 // members a relayed message may cross
+    #define XMOUSE_FILE_CHUNK (128 * 1024) // bytes of a file chunk
+    #define XMOUSE_FILE_WINDOW (2 * 1024 * 1024) // bytes waiting on a link before the next chunk waits (back pressure)
+    #define XMOUSE_MAX_FILES 1000 // files of one transfer
+    #define XMOUSE_MAX_FRAME (4 * 1024 * 1024) // biggest frame of a streamed window (jpeg)
 
 namespace xmouse::net { // namespace start
 
@@ -60,11 +69,15 @@ namespace xmouse::net { // namespace start
 */
 enum class Binary: std::uint8_t {
     Pointer = 0x20, // owner -> target u16 seq, i32 x, i32 y (absolute, logical pixels of the desktop of the target)
-    Button = 0x21, // owner -> target u8 button (MouseButton), u8 down
+    Button = 0x21, // owner -> target u8 button (MouseButton), u8 down [, i32 x, i32 y: where (the moves may come by udp)]
     Wheel = 0x22, // owner -> target i16 dx, i16 dy (1/120 of a notch, like Qt angleDelta)
     Key = 0x23, // owner -> target u8 down, u8 length, code (KeyboardEvent.code: "KeyA", "ShiftLeft"...)
     Text = 0x24, // owner -> target utf8 text typed (soft keyboards, IME)
     Presence = 0x30, // owner -> every member u16 seq, u8 length, device id of the screen, i32 x, i32 y (global layout space), u8 flags (Presence*)
+    UdpProbe = 0x31, // udp only: u8 0 = ping | 1 = pong (the path works both ways)
+    FileChunk = 0x40, // sender -> receiver text8 transfer, u16 file, u32 offset high, u32 offset low, data
+    Relay = 0x50, // through a member: text8 to, text8 from, u8 hops, the inner binary message
+    WindowFrame = 0x60, // source -> viewer text8 stream, u16 width, u16 height, jpeg
 };
 
 enum class MouseButton: std::uint8_t {
@@ -89,6 +102,7 @@ enum class DeviceKind: std::uint8_t {
     #define XMOUSE_PRESENCE_DOWN 0x01 // a button is held (drag)
     #define XMOUSE_PRESENCE_HIDDEN 0x02 // the cursor is back on its own device (not drawn by the others)
     #define XMOUSE_PRESENCE_PING 0x04 // "look here" wave asked
+    #define XMOUSE_PRESENCE_LASER 0x08 // laser pointer: its trail is drawn where it goes
 
 //----------------------------------------------------------------//
 /* PROTOTYPE */
