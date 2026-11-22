@@ -44,7 +44,17 @@ Le clavier du touchpad a les modificateurs maintenus, les touches spéciales et 
 > [!IMPORTANT]
 > Android ne laisse une appli cliquer dans les autres **que par un service d'Accessibilité**. **Les laisser toucher** ouvre les étapes : Accessibilité > Applications installées > xmouse screen > activé. Grisé (« Paramètre restreint ») ? Infos de l'appli > le menu en haut à droite > **Autoriser les paramètres restreints**, puis à nouveau.
 
-Avec **Les laisser toucher**, les touches tapées sur un ordinateur arrivent comme les caractères de **sa** disposition de clavier (azerty compris), <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>A</kbd> collent, copient, coupent et sélectionnent tout, et le presse-papiers de l'ordinateur est envoyé au téléphone quand il change.
+Avec **Les laisser toucher**, les touches tapées sur un ordinateur arrivent comme les caractères de **sa** disposition de clavier (azerty compris), et le presse-papiers de l'ordinateur est envoyé au téléphone quand il change.
+
+| Touche / bouton de l'ordinateur | Sur le téléphone |
+| ------------------------------- | ---------------- |
+| <kbd>Entrée</kbd> | L'action du champ (envoyer, rechercher, suivant) ; un retour à la ligne dans un champ multiligne |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>A</kbd> | Coller, copier, couper, tout sélectionner |
+| Flèches, <kbd>Début</kbd> / <kbd>Fin</kbd> (avec <kbd>Maj</kbd> : sélection) | Se déplacer dans le texte ; hors d'un champ, ↑ ↓ ← → déplacent le focus (Android 13+) |
+| <kbd>Retour arrière</kbd> / <kbd>Suppr</kbd>, <kbd>Tab</kbd> | Effacer, champ suivant |
+| <kbd>Page préc.</kbd> / <kbd>Page suiv.</kbd> | Défiler d'une page |
+| <kbd>Échap</kbd> ou le bouton précédent de la souris, <kbd>Super</kbd> | Retour, accueil |
+| <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Impr. écran</kbd>, lecture / pause | Applis récentes, capture d'écran, média |
 
 ## Mises à jour {#updates}
 

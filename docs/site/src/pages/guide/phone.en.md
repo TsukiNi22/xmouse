@@ -46,7 +46,17 @@ The keyboard of the touchpad has sticky modifiers, the special keys and the F-ke
 > [!IMPORTANT]
 > Android lets an app click in the others **only through an Accessibility service**. **Let them touch** opens the steps: Accessibility > Installed apps > xmouse screen > on. Greyed out ("Restricted setting")? App info > the menu at the top right > **Allow restricted settings**, then again.
 
-With **Let them touch**, the keys typed on a computer arrive as the characters of **its** keyboard layout (azerty included), <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>A</kbd> paste, copy, cut and select all, and the clipboard of the computer is sent to the phone when it changes.
+With **Let them touch**, the keys typed on a computer arrive as the characters of **its** keyboard layout (azerty included), and the clipboard of the computer is sent to the phone when it changes.
+
+| Key / button of the computer | On the phone |
+| ---------------------------- | ------------ |
+| <kbd>Enter</kbd> | The action of the field (send, search, next); a new line in a multi-line field |
+| <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>A</kbd> | Paste, copy, cut, select all |
+| Arrows, <kbd>Home</kbd> / <kbd>End</kbd> (with <kbd>Shift</kbd>: select) | Move in the text; outside a text field, ↑ ↓ ← → move the focus (Android 13+) |
+| <kbd>Backspace</kbd> / <kbd>Delete</kbd>, <kbd>Tab</kbd> | Delete, next field |
+| <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | Scroll a page |
+| <kbd>Esc</kbd> or the back button of the mouse, <kbd>Super</kbd> | Back, home |
+| <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Print Screen</kbd>, play / pause | Recent apps, screenshot, media |
 
 ## Updates {#updates}
 
