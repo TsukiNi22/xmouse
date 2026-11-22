@@ -81,6 +81,7 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
     this->_keysDown.clear();
     this->_buttonsDown = 0;
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", local.x()}, {"y", local.y()}, {"name", this->_config.deviceName()}});
+    this->tellShowOnly_(device);
     this->_moveDirty = true;
     this->_presenceDirty = true;
     this->_flush.start();
@@ -134,6 +135,7 @@ void xmouse::core::Hub::switchTarget_(const QString& device)
     this->_target = device;
     this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
+    this->tellShowOnly_(device);
     emit this->awayChanged();
 }
 
@@ -423,6 +425,7 @@ void xmouse::core::Hub::padLeave_(const QString& pad, const QPoint& global, cons
     away.local = hit.local;
     this->_padAway[pad] = away;
     this->sendTo_(away.target, QJsonObject{{"t", "enter"}, {"x", hit.local.x()}, {"y", hit.local.y()}, {"name", this->_pads.value(pad).name}}, pad);
+    this->tellShowOnly_(away.target);
     this->_presence[pad] = Presence{pad, away.target, global, hit.local, 0, now_ms(), 0};
     this->padPresence_();
 }

@@ -152,6 +152,7 @@ struct Pad {
     qint64 created = 0; // ms
     qint64 seen = 0; // ms, last connection
     bool screenOn = false; // its screen is in the layout (the android app in screen mode)
+    bool touch = false; // its screen is touched by the cursors (Accessibility service of the app); else they are only shown there
     QSize screen; // logical size of its screen
     double scale = 1.0;
     QPointer<net::WebSocket> control; // the touchpad page
@@ -268,6 +269,7 @@ class Hub: public QObject {
         QPoint _padPointer; // local pointer moved by a pad when the platform does not tell it
         QString _homePad; // the pad that drove last (its own cursor comes back with the cursor of this device)
         QHash<QString, PadAway> _padAway; // pad -> its own cursor on another device
+        QSet<QString> _toldShowOnly; // pads whose screen only shows the cursors, told once a run when a cursor goes there
 
         /* foreign cursors */
         QHash<QString, Foreign> _foreign;
@@ -355,6 +357,7 @@ class Hub: public QObject {
         void padLeave_(const QString& pad, const QPoint& global, const Hit& hit); // its own cursor crosses to another device
         _hot void padAwayMotion_(const QString& pad, const double dx, const double dy);
         void padAwayEnd_(const QString& pad); // its own cursor leaves the device it was on (back here, gone, mode changed)
+        void tellShowOnly_(const QString& device); // a cursor goes on a phone screen that only shows it: told once (its clicks do nothing there)
         _hot void padAwayInput_(const QString& pad, const QByteArray& data); // a click / wheel / key / text of a pad sent where its cursor is
         _cold _nodiscard QPoint localPointer_(void) const; // pointer of this device (capture, else the pad one)
 

@@ -300,6 +300,10 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
     if (type == "screen") {
         const int w = std::clamp(o.value("w").toInt(), 0, 20000);
         const int h = std::clamp(o.value("h").toInt(), 0, 20000);
+        const bool touch = o.value("touch").toBool();
+        if (it->touch != touch || !it->screenOn) this->_log.info("pads", pad, it->name + " lends its screen (" + (touch ? "touch: the cursors click, scroll and type there" : "cursors shown only: their clicks do nothing there, 'Let them touch' in the app turns the Accessibility service on") + ")");
+        if (it->touch != touch) this->_toldShowOnly.remove(pad);
+        it->touch = touch;
         it->screenOn = w >= 100 && h >= 100 && o.value("on").toBool(true);
         it->screen = QSize(w, h);
         it->scale = std::clamp(o.value("scale").toDouble(1.0), 0.5, 8.0);
@@ -318,6 +322,15 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
         this->sendTo_(o.value("id").toString(), QJsonObject{{"t", "access"}, {"text", o.value("text").toString().left(200)}}, pad);
         return;
     }
+}
+
+void xmouse::core::Hub::tellShowOnly_(const QString& device)
+{
+    const auto it = this->_pads.constFind(device);
+
+    if (it == this->_pads.constEnd() || !it->screenOn || it->touch || this->_toldShowOnly.contains(device)) return;
+    this->_toldShowOnly.insert(device);
+    emit this->notice(it->name + " only shows the cursors: clicks, scroll and keys do nothing there. On the phone: This screen in the layout > Let them touch (its Accessibility service)");
 }
 
 void xmouse::core::Hub::publishPad_(const QString& pad)
