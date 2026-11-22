@@ -9,6 +9,7 @@
 package io.github.tsukini22.xmouse;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -16,10 +17,12 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.RectF;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
@@ -29,38 +32,68 @@ import io.github.tsukini22.xmouse.core.Node;
 
 import org.json.JSONObject;
 
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 final class ScreenLink {
     // What the Accessibility service does with the input of the cursors (null: phantom, nothing touched)
     interface Actions {
+        int TOUCH_DOWN = 0; // a finger put on the screen
+        int TOUCH_MOVE = 1; // it moved (sent as it comes, never replayed at the end)
+        int TOUCH_UP = 2; // lifted
+        int BY_CHARACTER = 0; // units of the moves of the caret
+        int BY_WORD = 1;
+        int BY_LINE = 2;
+
         void gesture(Path path, long duration);
+        void touch(int kind, float x, float y); // a live finger: a tap, a drag, a long press of their real length
+        void swipe(float x, float y, float dx, float dy, long duration); // still at its end: the content moves that much, never flung
+        void longPress(float x, float y); // the context menu of Android
         void pinch(float x, float y, float from, float to, long duration); // two fingers on a line through (x, y), their half distance from -> to
+        void scroll(float x, float y, int direction, boolean toEdge); // the list under (x, y): a page, or up to its top / bottom
+        void refresh(float x, float y); // reload: a pull down at the cursor
+        boolean key(String code, String character, boolean down, int meta); // the real key event in a focused text field (Android 13+), false: none
+        boolean editing(); // a text field has the focus
         void back();
         void home();
         void insert(String text);
-        void backspace();
+        void backspace(boolean word); // Ctrl: the word before
+        void deleteForward(boolean word); // Ctrl: the word after
         void paste(); // the clipboard of the phone (the one of the computer, sent when its cursor comes) in the focused field
         void copy();
         void cut();
         void selectAll();
+        void undo(); // the edits made from the computers
+        void redo();
         void enter(boolean newLine); // the action of the keyboard of the field (send, search, next); Shift: a new line
-        void deleteForward();
         void nextField(boolean back); // Tab, Shift + Tab
-        void moveCaret(int delta); // Left / Right (outside a text field: the d-pad of Android 13+)
-        void caretEdge(boolean end); // Home / End
-        void select(int delta); // Shift + Left / Right: the selection grows or shrinks
-        void selectEdge(boolean end); // Shift + Home / End
-        void global(String name); // up, down, recents, notifications, screenshot, playPause (actions of the whole phone)
+        void caret(int unit, int delta, boolean select); // the arrows: a character, a word (Ctrl), a line (Up / Down); Shift selects
+        void caretEdge(boolean end, boolean whole, boolean select); // Home / End: the line, Ctrl: the text; Shift selects
+        void global(String name); // home, back, recents, notifications, quickSettings, power, lock, screenshot, allApps, split, the d-pad
+        void media(int keyCode); // KeyEvent.KEYCODE_MEDIA_*: to the player of the phone
+        void volume(int direction); // 1 up, -1 down, 0 mute / unmute
+        void launch(String what); // "settings", "search", a category of app (Intent.CATEGORY_APP_*)
     }
 
-    private static final long TAP_TIME = 300; // ms: a shorter press is a tap, a longer one a long press
-    private static final float TAP_MOVE = 12; // px a tap may move
+    private static final long WHEEL_LIFT = 140; // ms without a notch before the finger of the wheel lifts (still: no fling)
+    private static final float WHEEL_MARGIN = 24; // dp: the finger of the wheel is put again at the cursor before a border
+    private static final Set<String> MODIFIERS = new HashSet<>(Arrays.asList("ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight"));
+    // Keys of the whole phone, never sent to an app as they are (Android acts on them: back, the media, the volume...)
+    private static final Set<String> SYSTEM_KEYS = new HashSet<>(Arrays.asList("Escape", "PrintScreen", "ContextMenu", "AudioVolumeUp", "AudioVolumeDown", "AudioVolumeMute",
+        "MediaPlayPause", "MediaPlay", "MediaPause", "MediaStop", "MediaTrackNext", "MediaTrackPrevious", "MediaFastForward", "MediaRewind", "MediaRecord", "Eject",
+        "BrowserBack", "BrowserHome", "BrowserSearch", "LaunchMail", "LaunchApp1", "LaunchApp2", "MediaSelect", "Power", "Sleep", "WakeUp", "BrightnessUp", "BrightnessDown"));
+    // The numpad without Num Lock (its digits come as text with it): its arrows, Home, End, PageUp, PageDown, Insert, Delete
+    private static final Map<String, String> NUMPAD_NAVIGATION = new HashMap<>();
+
+    static {
+        String[][] pairs = {{"Numpad8", "ArrowUp"}, {"Numpad2", "ArrowDown"}, {"Numpad4", "ArrowLeft"}, {"Numpad6", "ArrowRight"}, {"Numpad7", "Home"},
+            {"Numpad1", "End"}, {"Numpad9", "PageUp"}, {"Numpad3", "PageDown"}, {"Numpad0", "Insert"}, {"NumpadDecimal", "Delete"}};
+        for (String[] pair: pairs) NUMPAD_NAVIGATION.put(pair[0], pair[1]);
+    }
     private static final float WHEEL_PIXELS = 0.8f; // px of swipe per 1/120 of a notch
     private static final long[] RECONNECT = {1000, 2000, 4000, 8000, 15000}; // ms
     private static final long IDLE_HIDE = 3000; // ms a cursor stays drawn without moving
@@ -81,9 +114,13 @@ final class ScreenLink {
     private int _tries = 0;
     private boolean _stopped = false;
     private boolean _local = false; // the phone is a member: the events come from its node
-    private boolean _ctrl = false; // Ctrl held by the cursor on this screen (its shortcuts: paste, copy, cut, select all)
-    private boolean _shift = false; // Shift held: the arrows select
-    private boolean _alt = false; // Alt held: Alt + Tab shows the recent apps
+    private final Set<String> _held = new HashSet<>(); // the modifiers held by the cursors on this screen (Ctrl, Shift, Alt, Meta)
+    private final Set<String> _native = new HashSet<>(); // keys pressed as real key events (released the same way)
+    private boolean _metaAlone = false; // Meta pressed, no other key yet: alone it opens all the apps (the start menu)
+    private String _wheelBy = null; // the cursor whose wheel holds a finger on the screen
+    private float _wheelX;
+    private float _wheelY;
+    private final Runnable _wheelLift = this::wheelUp;
     private static volatile ScreenLink _active; // the screen lent now (the node gives it its events)
 
     // A foreign cursor on this screen
@@ -92,11 +129,8 @@ final class ScreenLink {
         int color = Color.rgb(61, 220, 151);
         float x;
         float y;
-        boolean down = false;
-        int button = 0;
-        long downAt = 0;
+        boolean down = false; // its left button held: a finger on the screen
         long moved = SystemClock.uptimeMillis(); // last move: a still cursor fades out
-        final List<float[]> path = new ArrayList<>(); // its moves while a button is held (drag)
     }
 
     ScreenLink(Context context, Actions actions, int windowType) {
@@ -129,6 +163,8 @@ final class ScreenLink {
     void stop() {
         Node node = NodeService.node();
         if (this._local && node != null) node.setScreen(0, 0, 1);
+        this.wheelUp();
+        if (this._actions != null) for (Cursor c: this._cursors.values()) if (c.down) this._actions.touch(Actions.TOUCH_UP, c.x, c.y);
         if (_active == this) _active = null;
         this._stopped = true;
         this._ui.removeCallbacks(this._keepOff);
@@ -256,17 +292,25 @@ final class ScreenLink {
                 this.wakeFade();
                 break;
             }
-            case "leave":
-                this._cursors.remove(id);
-                if (this._cursors.isEmpty()) {this._ui.removeCallbacks(this._keepOff); this.keepOn(false);} // no cursor: the timeout of Android
+            case "leave": {
+                Cursor gone = this._cursors.remove(id);
+                if (gone != null && gone.down && this.actions() != null) this._actions.touch(Actions.TOUCH_UP, gone.x, gone.y); // its finger lifted where it left
+                if (id.equals(this._wheelBy)) this.wheelUp();
+                if (this._cursors.isEmpty()) {
+                    this._ui.removeCallbacks(this._keepOff);
+                    this.keepOn(false); // no cursor: the timeout of Android
+                    this._held.clear();
+                    this._native.clear();
+                }
                 break;
+            }
             case "pointer": {
                 Cursor c = this._cursors.get(id);
                 if (c == null) break;
                 c.x = o.optInt("x") * this._density;
                 c.y = o.optInt("y") * this._density;
                 c.moved = SystemClock.uptimeMillis();
-                if (c.down) c.path.add(new float[]{c.x, c.y});
+                if (c.down && this.actions() != null) this._actions.touch(Actions.TOUCH_MOVE, c.x, c.y); // the finger follows the cursor as it moves
                 this.wakeFade();
                 break;
             }
@@ -276,14 +320,9 @@ final class ScreenLink {
             case "wheel":
                 this.onWheel(id, o.optInt("dx"), o.optInt("dy"));
                 break;
-            case "key": {
-                String code = o.optString("code");
-                if (code.startsWith("Control")) {this._ctrl = o.optBoolean("down"); break;}
-                if (code.startsWith("Shift")) {this._shift = o.optBoolean("down"); break;}
-                if (code.startsWith("Alt")) {this._alt = o.optBoolean("down"); break;}
-                if (o.optBoolean("down")) this.onKey(id, code, o.optString("char"));
+            case "key":
+                this.onKeyEvent(id, o.optString("code"), o.optString("char"), o.optBoolean("down"));
                 break;
-            }
             case "clip": // the clipboard of the computer, to paste here
                 try {
                     android.content.ClipboardManager clipboard = (android.content.ClipboardManager) this._context.getSystemService(Context.CLIPBOARD_SERVICE);
@@ -323,29 +362,19 @@ final class ScreenLink {
             return;
         }
         if (b == 3) {if (down) this._actions.back(); return;} // back button of the mouse
-        if (b == 1 || b == 4) return; // middle, forward: Android has none (never a tap by mistake)
+        if (b == 1 || b == 4) return; // middle, forward: Android has none (never a touch by mistake)
+        if (b == 2) {if (down) this._actions.longPress(c.x, c.y); return;} // right button: a long press at once (the context menu of Android)
+        // Left button: a finger, put and lifted with the button, its moves sent as they come: a drag follows the cursor,
+        // a long press lasts what the button is held, a quick click is a tap
         if (down) {
+            this.wheelUp(); // the finger of the wheel lifted first: one finger at a time
             c.down = true;
-            c.button = b;
-            c.downAt = SystemClock.uptimeMillis();
-            c.path.clear();
-            c.path.add(new float[]{c.x, c.y});
+            this._actions.touch(Actions.TOUCH_DOWN, c.x, c.y);
             return;
         }
         if (!c.down) return;
         c.down = false;
-        long held = Math.max(1, SystemClock.uptimeMillis() - c.downAt);
-        float[] first = c.path.get(0);
-        boolean moved = Math.hypot(c.x - first[0], c.y - first[1]) > TAP_MOVE;
-        Path path = new Path();
-        path.moveTo(first[0], first[1]);
-        if (moved) {
-            for (float[] p: c.path) path.lineTo(p[0], p[1]);
-            path.lineTo(c.x, c.y);
-        }
-        // Right button: a long press (the context menu of Android); a quick left click: a tap; held / moved: a press / a drag
-        long duration = c.button == 2 ? 650 : (moved ? Math.min(held, 5000) : (held < TAP_TIME ? 40 : Math.min(held, 5000)));
-        this._actions.gesture(path, duration);
+        this._actions.touch(Actions.TOUCH_UP, c.x, c.y);
     }
 
     // The view is drawn again when the next still cursor starts to fade (nothing else would redraw it)
@@ -363,67 +392,248 @@ final class ScreenLink {
     }
 
     // Page Up / Down: a swipe of most of the screen at the cursor (or the middle of the screen)
-    private void page(String id, int direction) {
+    // A zoom where the cursor is (Ctrl + wheel, Ctrl + plus / minus): two fingers apart (in) or together (out)
+    private void zoom(float x, float y, int direction, int amount) {
+        float base = 48 * this._density;
+        float span = Math.min(260 * this._density, Math.max(40, amount) * 0.6f * this._density);
+        if (direction > 0) this._actions.pinch(x, y, base, base + span, 220);
+        else this._actions.pinch(x, y, base + span, base, 220);
+    }
+
+    // The wheel: a finger put at the cursor that follows the notches as they come, lifted still WHEEL_LIFT after the last
+    // one (the content stops there, never flung), put again at the cursor before it leaves the screen
+    private void onWheel(String id, int dx, int dy) {
+        Cursor c = this._cursors.get(id);
+        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
+        float margin = WHEEL_MARGIN * this._density;
+        float mx = dx * WHEEL_PIXELS * this._density;
+        float my = dy * WHEEL_PIXELS * this._density; // wheel up (dy > 0) shows what is above: the finger goes down
+        float x0;
+        float y0;
+
+        if (c == null || this.actions() == null) return;
+        if (this.ctrl() && dy != 0) {this.wheelUp(); this.zoom(c.x, c.y, dy > 0 ? 1 : -1, Math.abs(dy)); return;}
+        if (c.down) return; // a button holds the finger: never a second one
+        if (!id.equals(this._wheelBy) || outside(this._wheelX + mx, this._wheelY + my, m, margin)) {
+            this.wheelUp();
+            // At the cursor, moved back from the border it goes to: the content under the cursor follows it
+            x0 = mx > 0 ? Math.min(c.x, m.widthPixels * 0.75f) : (mx < 0 ? Math.max(c.x, m.widthPixels * 0.25f) : c.x);
+            y0 = my > 0 ? Math.min(c.y, m.heightPixels * 0.75f) : (my < 0 ? Math.max(c.y, m.heightPixels * 0.25f) : c.y);
+            this._wheelBy = id;
+            this._wheelX = x0;
+            this._wheelY = y0;
+            this._actions.touch(Actions.TOUCH_DOWN, x0, y0);
+        }
+        this._wheelX = Math.max(0, Math.min(m.widthPixels - 1, this._wheelX + mx));
+        this._wheelY = Math.max(0, Math.min(m.heightPixels - 1, this._wheelY + my));
+        this._actions.touch(Actions.TOUCH_MOVE, this._wheelX, this._wheelY);
+        this._ui.removeCallbacks(this._wheelLift);
+        this._ui.postDelayed(this._wheelLift, WHEEL_LIFT);
+    }
+
+    private static boolean outside(float x, float y, DisplayMetrics m, float margin) {
+        return x < margin || y < margin || x > m.widthPixels - margin || y > m.heightPixels - margin;
+    }
+
+    private void wheelUp() {
+        this._ui.removeCallbacks(this._wheelLift);
+        if (this._wheelBy == null) return;
+        this._wheelBy = null;
+        if (this._actions != null) this._actions.touch(Actions.TOUCH_UP, this._wheelX, this._wheelY);
+    }
+
+    // ---------------------------------------------------------------- //
+    // Keys of the foreign cursors
+
+    private boolean ctrl() {return this._held.contains("ControlLeft") || this._held.contains("ControlRight");}
+
+    private boolean shift() {return this._held.contains("ShiftLeft") || this._held.contains("ShiftRight");}
+
+    private boolean alt() {return this._held.contains("AltLeft") || this._held.contains("AltRight");}
+
+    private boolean meta() {return this._held.contains("MetaLeft") || this._held.contains("MetaRight");}
+
+    // The modifiers held, as the meta state of a key event of Android
+    private int metaState() {
+        int meta = 0;
+        if (this._held.contains("ShiftLeft")) meta |= KeyEvent.META_SHIFT_ON | KeyEvent.META_SHIFT_LEFT_ON;
+        if (this._held.contains("ShiftRight")) meta |= KeyEvent.META_SHIFT_ON | KeyEvent.META_SHIFT_RIGHT_ON;
+        if (this._held.contains("ControlLeft")) meta |= KeyEvent.META_CTRL_ON | KeyEvent.META_CTRL_LEFT_ON;
+        if (this._held.contains("ControlRight")) meta |= KeyEvent.META_CTRL_ON | KeyEvent.META_CTRL_RIGHT_ON;
+        if (this._held.contains("AltLeft")) meta |= KeyEvent.META_ALT_ON | KeyEvent.META_ALT_LEFT_ON;
+        if (this._held.contains("AltRight")) meta |= KeyEvent.META_ALT_ON | KeyEvent.META_ALT_RIGHT_ON;
+        if (this._held.contains("MetaLeft")) meta |= KeyEvent.META_META_ON | KeyEvent.META_META_LEFT_ON;
+        if (this._held.contains("MetaRight")) meta |= KeyEvent.META_META_ON | KeyEvent.META_META_RIGHT_ON;
+        return meta;
+    }
+
+    // A key of a cursor: a modifier is kept; in a focused text field the real key event (every shortcut of the app),
+    // except the keys of the whole phone; else the action of the phone that does what the key does on a computer
+    private void onKeyEvent(String id, String code, String character, boolean down) {
+        String key = NUMPAD_NAVIGATION.containsKey(code) ? NUMPAD_NAVIGATION.get(code) : code;
+
+        if (key.startsWith("OS")) key = "Meta" + key.substring(2);
+        if (MODIFIERS.contains(key)) {this.onModifier(key, down); return;}
+        if (this.actions() == null) return;
+        if (!down) {
+            if (this._native.remove(key)) this._actions.key(key, character, false, this.metaState());
+            return;
+        }
+        this._metaAlone = false;
+        if (!this.systemKey(key) && this._actions.key(key, character, true, this.metaState())) {this._native.add(key); return;}
+        this.onKey(id, key, character);
+    }
+
+    private void onModifier(String key, boolean down) {
+        boolean meta = key.startsWith("Meta");
+
+        if (down) {
+            if (meta && !this.meta()) this._metaAlone = true; // the first Meta
+            else if (!meta) this._metaAlone = false; // Meta + Shift + S...: not alone
+            this._held.add(key);
+            return;
+        }
+        this._held.remove(key);
+        if (meta && this._metaAlone && !this.meta()) {
+            this._metaAlone = false;
+            if (this.actions() != null) this._actions.global("allApps"); // Meta alone: all the apps (the start menu), like Android 14
+        }
+    }
+
+    // The keys the phone does itself whatever has the focus: Meta + any key, Alt + Tab, the media...
+    private boolean systemKey(String key) {
+        boolean ctrl = this.ctrl();
+        boolean shift = this.shift();
+        boolean alt = this.alt();
+
+        if (SYSTEM_KEYS.contains(key) || this.meta()) return true;
+        if (alt && !ctrl && (key.equals("Tab") || key.equals("F4") || key.equals("ArrowLeft") || key.equals("ArrowRight") || key.equals("Home"))) return true;
+        if (ctrl && alt && key.equals("Delete")) return true;
+        if (ctrl && (key.equals("Equal") || key.equals("Minus") || key.equals("NumpadAdd") || key.equals("NumpadSubtract"))) return true; // a zoom where the cursor is
+        if ((ctrl || shift) && key.equals("Insert")) return true;
+        return shift && !ctrl && (key.equals("Delete") || key.equals("F10"));
+    }
+
+    // A key that is not given to an app as it is: the action of the phone that does what it does on a computer
+    private void onKey(String id, String key, String character) {
         Cursor c = this._cursors.get(id);
         DisplayMetrics m = this._context.getResources().getDisplayMetrics();
         float x = c != null ? c.x : m.widthPixels / 2f;
-        float y = m.heightPixels / 2f;
-        float span = m.heightPixels * 0.35f * direction;
-        Path path = new Path();
-        path.moveTo(x, y + span);
-        path.lineTo(x, y - span);
-        this._actions.gesture(path, 250);
-    }
+        float y = c != null ? c.y : m.heightPixels / 2f;
+        // The letter of the layout of the computer (azerty Ctrl + A is the key KeyQ), else the one of the code
+        String letter = (character.isEmpty() && key.startsWith("Key") ? key.substring(3) : character).toLowerCase(java.util.Locale.ROOT);
+        boolean ctrl = this.ctrl();
+        boolean shift = this.shift();
+        boolean alt = this.alt();
+        boolean editing;
 
-    private void onWheel(String id, int dx, int dy) {
-        Cursor c = this._cursors.get(id);
-        if (c == null || this.actions() == null) return;
-        if (this._ctrl && dy != 0) { // Ctrl + wheel (a zoom on a computer): a pinch where the cursor is, apart to zoom in
-            float base = 48 * this._density;
-            float span = Math.min(260 * this._density, Math.abs(dy) * 0.6f * this._density);
-            if (dy > 0) this._actions.pinch(c.x, c.y, base, base + span, 220);
-            else this._actions.pinch(c.x, c.y, base + span, base, 220);
-            return;
-        }
-        Path path = new Path();
-        path.moveTo(c.x, c.y);
-        // Wheel up (dy > 0) shows what is above: the finger goes down
-        path.lineTo(c.x + dx * WHEEL_PIXELS * this._density, c.y + dy * WHEEL_PIXELS * this._density);
-        this._actions.gesture(path, 120);
-    }
-
-    private void onKey(String id, String code, String character) {
-        if (this.actions() == null) return;
-        if (this._ctrl) {
-            // The letter of the layout of the computer (azerty Ctrl+A is the key KeyQ), else the one of the code
-            String letter = character.isEmpty() && code.startsWith("Key") ? code.substring(3) : character;
-            switch (letter.toLowerCase(java.util.Locale.ROOT)) {
-                case "v": this._actions.paste(); break;
-                case "c": this._actions.copy(); break;
-                case "x": this._actions.cut(); break;
-                case "a": this._actions.selectAll(); break;
+        if (this.meta()) {this.onMetaKey(key, letter, shift, ctrl); return;}
+        if (ctrl && alt && key.equals("Delete")) {this._actions.global("power"); return;} // Ctrl + Alt + Del: the power menu
+        if (ctrl && key.equals("Escape")) {this._actions.global(shift ? "recents" : "allApps"); return;} // Ctrl + Shift + Esc: the apps running; Ctrl + Esc: the start menu
+        if (alt && !ctrl) {
+            switch (key) {
+                case "Tab": this._actions.global("recents"); return;
+                case "F4": case "ArrowLeft": this._actions.back(); return; // close, the page before
+                case "Home": this._actions.home(); return;
+                case "ArrowRight": return; // forward: Android has none
                 default: break;
             }
-            return;
         }
-        switch (code) {
+        if (ctrl) {
+            switch (letter) {
+                case "a": this._actions.selectAll(); return;
+                case "c": this._actions.copy(); return;
+                case "x": this._actions.cut(); return;
+                case "v": this._actions.paste(); return; // Ctrl + Shift + V too: the text only
+                case "z": if (shift) this._actions.redo(); else this._actions.undo(); return;
+                case "y": this._actions.redo(); return;
+                case "r": this._actions.refresh(x, y); return; // Ctrl + R, Ctrl + Shift + R: reload
+                default: break;
+            }
+            switch (key) {
+                case "Equal": case "NumpadAdd": this.zoom(x, y, 1, 120); return;
+                case "Minus": case "NumpadSubtract": this.zoom(x, y, -1, 120); return;
+                case "Insert": this._actions.copy(); return;
+                case "F5": this._actions.refresh(x, y); return;
+                default: break;
+            }
+        }
+        if (shift && !ctrl) {
+            switch (key) {
+                case "Insert": this._actions.paste(); return;
+                case "Delete": this._actions.cut(); return;
+                case "F10": this._actions.longPress(x, y); return; // the context menu
+                default: break;
+            }
+        }
+        editing = this._actions.editing();
+        switch (key) {
             case "Escape": case "BrowserBack": this._actions.back(); break;
-            case "MetaLeft": case "MetaRight": case "BrowserHome": this._actions.home(); break;
-            case "Backspace": this._actions.backspace(); break;
-            case "Delete": this._actions.deleteForward(); break;
-            case "Enter": case "NumpadEnter": this._actions.enter(this._shift); break;
-            case "Tab": if (this._alt) this._actions.global("recents"); else this._actions.nextField(this._shift); break;
-            case "ArrowLeft": if (this._shift) this._actions.select(-1); else this._actions.moveCaret(-1); break;
-            case "ArrowRight": if (this._shift) this._actions.select(1); else this._actions.moveCaret(1); break;
-            case "ArrowUp": this._actions.global("up"); break;
-            case "ArrowDown": this._actions.global("down"); break;
-            case "Home": if (this._shift) this._actions.selectEdge(false); else this._actions.caretEdge(false); break;
-            case "End": if (this._shift) this._actions.selectEdge(true); else this._actions.caretEdge(true); break;
-            case "PageUp": this.page(id, -1); break;
-            case "PageDown": this.page(id, 1); break;
+            case "BrowserHome": this._actions.home(); break;
+            case "F5": case "BrowserRefresh": this._actions.refresh(x, y); break;
+            case "Backspace": this._actions.backspace(ctrl); break;
+            case "Delete": this._actions.deleteForward(ctrl); break;
+            case "Enter": case "NumpadEnter": this._actions.enter(shift && !ctrl); break;
+            case "Tab": this._actions.nextField(shift); break;
+            case "ArrowLeft": this._actions.caret(ctrl ? Actions.BY_WORD : Actions.BY_CHARACTER, -1, shift); break;
+            case "ArrowRight": this._actions.caret(ctrl ? Actions.BY_WORD : Actions.BY_CHARACTER, 1, shift); break;
+            case "ArrowUp": this._actions.caret(Actions.BY_LINE, -1, shift); break;
+            case "ArrowDown": this._actions.caret(Actions.BY_LINE, 1, shift); break;
+            case "Home": if (editing) this._actions.caretEdge(false, ctrl, shift); else this._actions.scroll(x, y, -1, true); break;
+            case "End": if (editing) this._actions.caretEdge(true, ctrl, shift); else this._actions.scroll(x, y, 1, true); break;
+            case "PageUp": this._actions.scroll(x, y, -1, false); break;
+            case "PageDown": this._actions.scroll(x, y, 1, false); break;
             case "PrintScreen": this._actions.global("screenshot"); break;
-            case "MediaPlayPause": this._actions.global("playPause"); break;
-            case "ContextMenu": this._actions.global("notifications"); break;
+            case "ContextMenu": this._actions.longPress(x, y); break;
+            case "AudioVolumeUp": this._actions.volume(1); break;
+            case "AudioVolumeDown": this._actions.volume(-1); break;
+            case "AudioVolumeMute": this._actions.volume(0); break;
+            case "MediaPlayPause": this._actions.media(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE); break;
+            case "MediaPlay": this._actions.media(KeyEvent.KEYCODE_MEDIA_PLAY); break;
+            case "MediaPause": this._actions.media(KeyEvent.KEYCODE_MEDIA_PAUSE); break;
+            case "MediaStop": this._actions.media(KeyEvent.KEYCODE_MEDIA_STOP); break;
+            case "MediaTrackNext": this._actions.media(KeyEvent.KEYCODE_MEDIA_NEXT); break;
+            case "MediaTrackPrevious": this._actions.media(KeyEvent.KEYCODE_MEDIA_PREVIOUS); break;
+            case "MediaFastForward": this._actions.media(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD); break;
+            case "MediaRewind": this._actions.media(KeyEvent.KEYCODE_MEDIA_REWIND); break;
+            case "MediaRecord": this._actions.media(KeyEvent.KEYCODE_MEDIA_RECORD); break;
+            case "Eject": this._actions.media(KeyEvent.KEYCODE_MEDIA_EJECT); break;
+            case "BrowserSearch": this._actions.launch("search"); break;
+            case "LaunchMail": this._actions.launch(Intent.CATEGORY_APP_EMAIL); break;
+            case "LaunchApp1": this._actions.launch(Build.VERSION.SDK_INT >= 29 ? Intent.CATEGORY_APP_FILES : Intent.CATEGORY_APP_GALLERY); break;
+            case "LaunchApp2": this._actions.launch(Intent.CATEGORY_APP_CALCULATOR); break;
+            case "MediaSelect": this._actions.launch(Intent.CATEGORY_APP_MUSIC); break;
+            case "Power": case "Sleep": this._actions.global("lock"); break;
+            default: break; // F1-F4, F6-F24, CapsLock...: Android has no action for them outside a text field
+        }
+    }
+
+    // Meta (Super, Windows) + a key: the actions of the whole phone, by the letter of the layout of the computer
+    private void onMetaKey(String key, String letter, boolean shift, boolean ctrl) {
+        switch (key) {
+            case "Tab": this._actions.global("recents"); return;
+            case "Backspace": case "ArrowLeft": case "Backquote": case "Escape": this._actions.back(); return;
+            case "Enter": this._actions.home(); return;
+            case "PrintScreen": this._actions.global("screenshot"); return;
+            case "ArrowUp": this._actions.global("split"); return;
+            default: break;
+        }
+        if (ctrl && letter.equals("s")) {this._actions.global("screenshot"); return;} // Meta + Ctrl + S, like Android
+        switch (letter) {
+            case "d": case "h": this._actions.home(); return; // the desktop
+            case "n": this._actions.global("notifications"); return;
+            case "a": this._actions.global("quickSettings"); return;
+            case "l": this._actions.global("lock"); return;
+            case "x": this._actions.global("power"); return;
+            case "i": this._actions.launch("settings"); return;
+            case "s": if (shift) this._actions.global("screenshot"); else this._actions.launch(Intent.CATEGORY_APP_MESSAGING); return;
+            case "b": this._actions.launch(Intent.CATEGORY_APP_BROWSER); return;
+            case "c": this._actions.launch(Intent.CATEGORY_APP_CONTACTS); return;
+            case "e": this._actions.launch(Build.VERSION.SDK_INT >= 29 ? Intent.CATEGORY_APP_FILES : Intent.CATEGORY_APP_EMAIL); return;
+            case "k": this._actions.launch(Intent.CATEGORY_APP_CALENDAR); return;
+            case "m": this._actions.launch(Intent.CATEGORY_APP_MAPS); return;
+            case "p": this._actions.launch(Intent.CATEGORY_APP_MUSIC); return;
+            case "u": this._actions.launch(Intent.CATEGORY_APP_CALCULATOR); return;
             default: break;
         }
     }
