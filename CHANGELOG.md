@@ -19,9 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- Network switch at the bottom of the sidebar (like the sharing switch of xdesk): red `Leave the network` (the others stay linked, there is no server), green `Create or join`
+
 ### Fixed
 - The `setup.sh` options `--pre` and `--windows` never changed the package installed
-- Wayland: the input capture was never armed after the dialog (`session_handle` is an object path); the permission is now asked once (`CreateSession2` + `Start` with `persist_mode` 2 and a restore token in `<data>/portal-input-capture.token`)
+- Wayland: the input capture was never armed after the dialog (`session_handle` is an object path)
+- Wayland: the input capture dialog only shows once an edge opens on a device online (not at every start); remembered with a restore token on the portals >= v2 (`CreateSession2` + `Start`, `persist_mode` 2), GNOME 50 implements the version 1 only
 - Flood of `QPixmap::fill` warnings on every refresh of the members
 - Windows: the links failed with the OpenSSL 3.2 of the MinGW build (no ML-KEM): `X25519` fallback, the devices tell `pq` in the network and are dialed with the compatible groups
 - Unit tests: a lone test crashed at exit (static `QCoreApplication`), the unix rights checked on Windows
