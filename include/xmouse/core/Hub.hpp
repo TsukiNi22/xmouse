@@ -229,6 +229,8 @@ class Hub: public QObject {
         QSslConfiguration _serverTls; // pinned self-signed certificate (the tailscale one is added for its name)
         QString _injectorError = "";
         QString _captureError = "";
+        QList<Edge> _edgesSent; // the edges the capture holds: set again only when they change (a portal ends its capture)
+        bool _edgesKnown = false;
         QTimer _saveTimer; // state written 1 s after the last change
         QTimer _flush; // cursor moves sent at most every 4 ms (the last position only)
         QTimer _presenceTimer; // presence of the cursor told to everybody (20 Hz while it moves)

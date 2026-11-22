@@ -78,6 +78,8 @@ struct Edge {
     int to = 0; // last pixel covered (inclusive)
     QString target = ""; // device on the other side
     int screen = -1; // local screen of the edge
+
+    _hot _nodiscard bool operator==(const Edge& other) const = default; // the same barrier (the capture is not set again)
 };
 
 //----------------------------------------------------------------//

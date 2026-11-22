@@ -71,6 +71,7 @@ class PortalCapture final: public IInputCapture, protected QDBusContext {
         bool _enabled = false;
         bool _capturing = false;
         bool _started = false; // session ready
+        bool _barriersPending = false; // the edges changed during a capture: set when it ends
         bool _requested = false; // session asked (once per run: GNOME has no restore token, every session is a dialog)
         qint64 _recoveredAt = 0; // ms, last time a capture kept by the compositor was taken back
         int _recoveries = 0; // in a row: a Release first, then the capture disabled and armed again

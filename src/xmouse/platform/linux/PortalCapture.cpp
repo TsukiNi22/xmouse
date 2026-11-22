@@ -56,6 +56,7 @@ File Description:
 #define RECOVER_INTERVAL 300 // ms between two recoveries of a capture kept by the compositor
 #define RECOVER_REARM 150 // ms between the Disable and the Enable of a recovery
 #define RECOVER_SERIES 1500 // ms: a recovery within this delay of the last one is the next step of the same series
+#define DISABLE_TIMEOUT 1000 // ms for the Disable sent before new barriers (answered at once on the local bus)
 
 //----------------------------------------------------------------//
 /* STRUCT */
@@ -408,6 +409,7 @@ void xmouse::platform::PortalCapture::getZones_(void)
 
 void xmouse::platform::PortalCapture::setEdges(const QList<core::Edge>& edges)
 {
+    if (this->_started && edges == this->_edges) return; // the same barriers: nothing sent (the capture goes on)
     this->_edges = edges;
     if (!edges.isEmpty() && !this->_requested) {this->_requested = true; this->createSession_(); return;} // the first neighbour online
     if (this->_started) this->applyBarriers_();
@@ -416,6 +418,17 @@ void xmouse::platform::PortalCapture::setEdges(const QList<core::Edge>& edges)
 void xmouse::platform::PortalCapture::applyBarriers_(void)
 {
     QDBusArgument barriers;
+
+    // Never under a capture: GNOME takes new barriers only on a disabled session, and a Disable ends the capture (the
+    // cursor came back by itself): set when the capture ends. A session enabled: disabled first, enabled after
+    if (this->_capturing) {this->_barriersPending = true; return;}
+    this->_barriersPending = false;
+    if (this->_enabled && !this->_session.isEmpty()) {
+        QDBusMessage disable = QDBusMessage::createMethodCall(PORTAL_SERVICE, PORTAL_PATH, PORTAL_INPUT_CAPTURE, "Disable");
+        disable.setArguments({QVariant::fromValue(QDBusObjectPath(this->_session)), QVariantMap()});
+        (void)QDBusConnection::sessionBus().call(disable, QDBus::Block, DISABLE_TIMEOUT); // before the barriers, in that order
+        this->_enabled = false;
+    }
 
     // Only the edges that are on a border of a zone of the compositor (a barrier inside the desktop is refused)
     this->_barriers.clear();
@@ -462,6 +475,7 @@ void xmouse::platform::PortalCapture::release(const QPoint& local)
     (void)QDBusConnection::sessionBus().call(call, QDBus::NoBlock);
     this->_capturing = false;
     this->_position = local;
+    if (this->_barriersPending) {this->applyBarriers_(); return;} // the edges changed under the capture: set now
 
     // The barriers are disabled by a release on some compositors: enabled again
     this->_enabled = false;
@@ -494,6 +508,7 @@ void xmouse::platform::PortalCapture::onDeactivated_(const QDBusObjectPath& sess
     if (!this->_capturing) return;
     this->_capturing = false;
     emit this->ended();
+    if (this->_barriersPending) this->applyBarriers_();
 }
 
 void xmouse::platform::PortalCapture::onDisabled_(const QDBusObjectPath& session, const QVariantMap&)
@@ -501,7 +516,8 @@ void xmouse::platform::PortalCapture::onDisabled_(const QDBusObjectPath& session
     if (session.path() != this->_session) return;
     this->_enabled = false;
     if (this->_capturing) {this->_capturing = false; emit this->ended();}
-    if (!this->_barriers.isEmpty()) this->setEnabled_(true); // a lock screen / vt switch: armed again
+    if (this->_barriersPending) this->applyBarriers_();
+    else if (!this->_barriers.isEmpty()) this->setEnabled_(true); // a lock screen / vt switch: armed again
 }
 
 void xmouse::platform::PortalCapture::onZonesChanged_(const QDBusObjectPath& session, const QVariantMap&)

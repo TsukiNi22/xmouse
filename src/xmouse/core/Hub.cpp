@@ -320,6 +320,7 @@ void xmouse::core::Hub::startCapture_(void)
     if (!is_gui()) {this->_captureError = "no display"; return;} // a member without screen: links, clipboard, relay
     if (QGuiApplication::platformName() == "offscreen") {this->_captureError = "offscreen"; return;} // snapshots, tests: no portal dialog
     this->_capture = platform::create_input_capture(this);
+    this->_edgesKnown = false; // a new capture: its edges sent at the first update
     QObject::connect(this->_capture.get(), &platform::IInputCapture::crossed, this, &Hub::onCrossed_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::motion, this, &Hub::onMotion_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::button, this, &Hub::onButton_);
@@ -348,7 +349,9 @@ void xmouse::core::Hub::startCapture_(void)
         this->setStatus_("edges unavailable: " + error);
     });
     QObject::connect(this->_capture.get(), &platform::IInputCapture::ended, this, [this]() {
-        if (this->_away && !this->_awayByPad) this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
+        if (!this->_away || this->_awayByPad) return;
+        this->_log.info("input", this->_target, "the compositor ended the capture of the pointer (" + this->_capture->name() + "): the cursor comes back");
+        this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
     });
     if (!this->_capture->start()) {
         this->_captureError = this->_capture->error();
@@ -365,6 +368,11 @@ void xmouse::core::Hub::updateEdges_(void)
     if (!this->_capture) return;
     for (const Edge& e: this->_layout.exits(this->_group.self()))
         if (this->reachable(e.target)) edges.append(e); // an offline device is a wall
+    // The same edges (a pad that sends its screen again, a state applied, every 30 s): the capture keeps its barriers,
+    // the portal of GNOME ended the capture under the cursor when they were set again (the cursor came back by itself)
+    if (this->_edgesKnown && edges == this->_edgesSent) return;
+    this->_edgesSent = edges;
+    this->_edgesKnown = true;
     this->_capture->setEdges(edges);
 }
 

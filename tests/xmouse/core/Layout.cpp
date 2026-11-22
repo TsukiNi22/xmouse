@@ -109,6 +109,18 @@ TEST(Layout, ExitsAreTheSharedPartOfTheBorder)
     EXPECT_EQ(b[0].to, 1023);
 }
 
+// The hub sets the barriers of the capture again only when the edges change (the portal of GNOME ended the capture
+// under the cursor at each refresh): the same layout gives equal edges, a moved device other ones
+TEST(Layout, ExitsCompareEqualUntilTheLayoutChanges)
+{
+    xmouse::core::Layout layout = side_by_side();
+    const QList<xmouse::core::Edge> before = layout.exits("a");
+
+    EXPECT_EQ(side_by_side().exits("a"), before);
+    layout.setPosition("b", QPoint(1920, 300));
+    EXPECT_NE(layout.exits("a"), before);
+}
+
 TEST(Layout, ExitsAboveAndBelow)
 {
     xmouse::core::Layout layout;
