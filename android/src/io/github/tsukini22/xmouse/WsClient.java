@@ -67,7 +67,7 @@ final class WsClient {
     private void run() {
         String reason = "closed";
         try {
-            SSLSocket socket = (SSLSocket) Pinned.factory(this._fp).createSocket();
+            SSLSocket socket = (SSLSocket) Pinned.factory(this._fp, this._host).createSocket();
             socket.connect(new InetSocketAddress(this._host, this._port), Pinned.TIMEOUT);
             socket.setTcpNoDelay(true);
             socket.startHandshake();
