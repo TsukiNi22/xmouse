@@ -40,6 +40,7 @@ final class ScreenLink {
     // What the Accessibility service does with the input of the cursors (null: phantom, nothing touched)
     interface Actions {
         void gesture(Path path, long duration);
+        void pinch(float x, float y, float from, float to, long duration); // two fingers on a line through (x, y), their half distance from -> to
         void back();
         void home();
         void insert(String text);
@@ -368,6 +369,13 @@ final class ScreenLink {
     private void onWheel(String id, int dx, int dy) {
         Cursor c = this._cursors.get(id);
         if (c == null || this.actions() == null) return;
+        if (this._ctrl && dy != 0) { // Ctrl + wheel (a zoom on a computer): a pinch where the cursor is, apart to zoom in
+            float base = 48 * this._density;
+            float span = Math.min(260 * this._density, Math.abs(dy) * 0.6f * this._density);
+            if (dy > 0) this._actions.pinch(c.x, c.y, base, base + span, 220);
+            else this._actions.pinch(c.x, c.y, base + span, base, 220);
+            return;
+        }
         Path path = new Path();
         path.moveTo(c.x, c.y);
         // Wheel up (dy > 0) shows what is above: the finger goes down

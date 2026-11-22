@@ -15,6 +15,9 @@
     const SEND_INTERVAL = 16; // ms between two moves sent (the sum of the deltas)
     const TAP_TIME = 220; // ms: a touch shorter than this, that did not move, is a click
     const TAP_MOVE = 10; // px a tap may move
+    const PINCH_START = 28; // px the two fingers must spread / close before it is a zoom (a scroll keeps their distance)
+    const ZOOM_STEP = 2.4; // 1/120 of a notch per px of spread (Ctrl + wheel on the device: a zoom where the cursor is)
+    const SWIPE_NAV = 90; // px three fingers must cross sideways for back / forward
     const DRAG_WINDOW = 300; // ms after a tap during which a new touch starts a drag
     const SCROLL_STEP = 2.2; // wheel units (1/120 of a notch) per pixel of two fingers
     const RECONNECT = [500, 1000, 2000, 4000, 8000]; // ms between two tries
@@ -183,7 +186,7 @@
         surface.setPointerCapture(e.pointerId);
         touches.set(e.pointerId, {x: e.clientX, y: e.clientY, t: e.timeStamp, sx: e.clientX, sy: e.clientY});
         if (!gesture) {
-            gesture = {start: e.timeStamp, maxFingers: 1, moved: false, scroll: {x: 0, y: 0}};
+            gesture = {start: e.timeStamp, maxFingers: 1, moved: false, scroll: {x: 0, y: 0}, pinch: null, zoom: 0, swipe: 0};
             // Tap then hold: the left button stays down while the finger moves
             if (e.timeStamp - lastTap < DRAG_WINDOW) {
                 dragging = true;
@@ -192,6 +195,7 @@
             }
         }
         gesture.maxFingers = Math.max(gesture.maxFingers, touches.size);
+        if (touches.size === 2) gesture.pinch = {start: spread(), last: spread(), zoom: false}; // the distance of the two fingers
         $("hint").hidden = true;
         e.preventDefault();
     });
@@ -211,6 +215,18 @@
             pending.dx += ax;
             pending.dy += ay;
         } else if (touches.size === 2) {
+            // Two fingers spreading / closing: a zoom where the cursor is (Ctrl + wheel on a computer, a pinch on a phone)
+            const now = spread();
+            if (gesture.pinch && !gesture.pinch.zoom && Math.abs(now - gesture.pinch.start) > PINCH_START) gesture.pinch.zoom = true;
+            if (gesture.pinch && gesture.pinch.zoom) {
+                gesture.zoom += (now - gesture.pinch.last) * ZOOM_STEP;
+                gesture.pinch.last = now;
+                const notch = Math.trunc(gesture.zoom / 40) * 40;
+                if (notch !== 0) {send({t: "zoom", d: notch}); gesture.zoom -= notch;}
+                e.preventDefault();
+                return;
+            }
+            if (gesture.pinch) gesture.pinch.last = now;
             // Two fingers: scroll (the first finger of the pair drives it)
             if (e.pointerId !== touches.keys().next().value) return;
             gesture.scroll.x += -dx * SCROLL_STEP;
@@ -222,9 +238,17 @@
                 gesture.scroll.x -= wx;
                 gesture.scroll.y -= wy;
             }
+        } else if (touches.size === 3 && e.pointerId === touches.keys().next().value) {
+            gesture.swipe += dx; // three fingers sideways: back / forward at the end
         }
         e.preventDefault();
     });
+
+    // Distance of the first two fingers on the surface
+    function spread() {
+        const [a, b] = [...touches.values()];
+        return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    }
 
     function end(e) {
         if (!touches.has(e.pointerId)) return;
@@ -236,6 +260,8 @@
             surface.classList.remove("dragging");
             send({t: "button", b: 0, down: false});
             if (!gesture.moved) click(0); // a double tap: the second click
+        } else if (gesture.maxFingers === 3 && Math.abs(gesture.swipe) > SWIPE_NAV) {
+            click(gesture.swipe > 0 ? 3 : 4); // three fingers to the right: back, to the left: forward (the mouse buttons)
         } else if (short && !gesture.moved) {
             if (gesture.maxFingers === 1) {click(0); lastTap = e.timeStamp;}
             else if (gesture.maxFingers === 2) click(2);

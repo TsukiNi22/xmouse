@@ -70,6 +70,24 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     }
 
     @Override
+    public void pinch(float x, float y, float from, float to, long duration) {
+        try {
+            Path left = new Path();
+            Path right = new Path();
+            left.moveTo(Math.max(0, x - from), y);
+            left.lineTo(Math.max(0, x - to), y);
+            right.moveTo(x + from, y);
+            right.lineTo(x + to, y);
+            this.dispatchGesture(new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(left, 0, Math.max(1, duration)))
+                .addStroke(new GestureDescription.StrokeDescription(right, 0, Math.max(1, duration)))
+                .build(), null, null);
+        } catch (Exception e) {
+            // a stroke out of the screen: ignored
+        }
+    }
+
+    @Override
     public void back() {this.performGlobalAction(GLOBAL_ACTION_BACK);}
 
     @Override

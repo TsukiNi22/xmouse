@@ -281,6 +281,14 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
         if (b >= 0 && b <= static_cast<int>(net::MouseButton::Forward)) this->padButton_(pad, static_cast<net::MouseButton>(b), o.value("down").toBool());
         return;
     }
+    if (type == "zoom") { // two fingers spreading / closing: Ctrl + wheel where the cursor is (a pinch on a phone screen)
+        const int d = std::clamp(o.value("d").toInt(), -1200, 1200);
+        if (d == 0) return;
+        this->padKey_(pad, "ControlLeft", true);
+        this->padWheel_(pad, 0, d);
+        this->padKey_(pad, "ControlLeft", false);
+        return;
+    }
     if (type == "wheel") {this->padWheel_(pad, std::clamp(o.value("dx").toInt(), -32000, 32000), std::clamp(o.value("dy").toInt(), -32000, 32000)); return;}
     if (type == "key") {
         QString code = o.value("code").toString().left(32);
