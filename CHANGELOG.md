@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.0-pre] - 2026-11-22
 ### Added
 - **Encrypted UDP** for the moves and the presence (`net::Datagrams`): AES-256-GCM with a key derived from the network key (rotated with it), nonce = salt of the run + counter, probes every second, TCP when it does not pass (`udp` setting)
 - **Prediction and reordering** on lossy links: a late or replayed move is dropped (sequence numbers), a foreign cursor is drawn ahead along its speed while its next packet is late (80 ms at most), a click carries its position
