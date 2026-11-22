@@ -17,7 +17,10 @@ BUILD="$ROOT/build-release"
 DEPS=0
 UINPUT=0
 AUTOSTART=0
+GNOME=0
 UNINSTALL=0
+EXTENSION="xmouse@tsukini22.github.io"
+EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION"
 SUDO=""
 
 usage() {
@@ -26,6 +29,7 @@ Usage: scripts/install.sh [options]
   --deps         install the build dependencies (dnf / apt / pacman / brew, asks for sudo) and libutils
   --uinput       let your user move / click / type for the other devices on Wayland (udev uaccess rule, sudo)
   --autostart    start xmouse at login (tray)
+  --gnome        GNOME Wayland: the xmouse extension (edges without the portal dialog at every start, active after a new login)
   --prefix DIR   install folder (default: ~/.local -> ~/.local/bin/xmouse)
   --uninstall    remove xmouse from the prefix, the menu entry and the autostart
   -h, --help     this help
@@ -37,6 +41,7 @@ while [ $# -gt 0 ]; do
         --deps) DEPS=1 ;;
         --uinput) UINPUT=1 ;;
         --autostart) AUTOSTART=1 ;;
+        --gnome) GNOME=1 ;;
         --prefix) PREFIX="$2"; shift ;;
         --uninstall) UNINSTALL=1 ;;
         -h|--help) usage; exit 0 ;;
@@ -53,6 +58,10 @@ die() { printf '\033[1;31mxmouse\033[0m %s\n' "$*" >&2; exit 1; }
 if [ "$UNINSTALL" -eq 1 ]; then
     rm -f "$PREFIX/bin/xmouse" "$HOME/.local/share/applications/xmouse.desktop" \
         "$HOME/.config/autostart/xmouse.desktop" "$HOME/.local/share/icons/hicolor/scalable/apps/xmouse.svg"
+    if [ -d "$EXTENSION_DIR" ]; then
+        gnome-extensions disable "$EXTENSION" 2> /dev/null || true
+        rm -rf "$EXTENSION_DIR"
+    fi
     say "removed (your settings, network and logs stay in ~/.config/xmouse and ~/.local/share/xmouse)"
     exit 0
 fi
@@ -117,6 +126,24 @@ if [ "$AUTOSTART" -eq 1 ]; then
     mkdir -p "$HOME/.config/autostart"
     cp "$HOME/.local/share/applications/xmouse.desktop" "$HOME/.config/autostart/xmouse.desktop"
     say "xmouse starts at login (set startMinimized in the settings to start in the tray)"
+fi
+
+# ===== GNOME Shell extension (edges without the portal dialog) =====
+if [ "$GNOME" -eq 1 ]; then
+    mkdir -p "$EXTENSION_DIR"
+    cp "$ROOT/gnome-extension/$EXTENSION/"* "$EXTENSION_DIR/"
+    # A new extension is only seen by GNOME Shell after a new login (Wayland): enabled now in the settings if needed
+    if ! gnome-extensions enable "$EXTENSION" 2> /dev/null; then
+        current="$(gsettings get org.gnome.shell enabled-extensions)"
+        case "$current" in
+            *"'$EXTENSION'"*) ;;
+            "@as []") gsettings set org.gnome.shell enabled-extensions "['$EXTENSION']" ;;
+            *) gsettings set org.gnome.shell enabled-extensions "${current%]}, '$EXTENSION']" ;;
+        esac
+        say "GNOME extension installed: active after your next login (then no more input capture dialog)"
+    else
+        say "GNOME extension installed and enabled: restart xmouse"
+    fi
 fi
 
 # ===== uinput (clicks / keys of the other devices on Wayland) =====

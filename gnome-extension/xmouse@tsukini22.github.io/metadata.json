@@ -1,0 +1,8 @@
+{
+    "uuid": "xmouse@tsukini22.github.io",
+    "name": "xmouse",
+    "description": "Edges and input capture for xmouse on GNOME Wayland, without the dialog of the input capture portal at every start. Only the xmouse program may use it.",
+    "shell-version": ["45", "46", "47", "48", "49", "50"],
+    "url": "https://github.com/TsukiNi22/xmouse",
+    "version": 1
+}
