@@ -60,6 +60,8 @@ struct Device {
         ctx.os = "linux";
         xmouse::security::configure_tls(client, true);
         ctx.tls = client;
+        ctx.tlsCompat = QSslConfiguration::defaultConfiguration();
+        xmouse::security::configure_tls(ctx.tlsCompat, false);
         ctx.memberCheck = [this](const QString& id) {return id == this->allowed ? QString() : QString("unknown member");};
         ctx.state = []() {return QJsonObject{{"net/name", QJsonObject{{"v", "desk"}, {"c", "1"}, {"a", "x"}}}};};
         server.setLocalCertificate(this->cert.certificate());
@@ -74,9 +76,8 @@ static void ensure_app(void)
     static int argc = 1;
     static char name[] = "unit_tests";
     static char* argv[] = {name, nullptr};
-    static std::unique_ptr<QCoreApplication> app;
-
-    if (!QCoreApplication::instance()) app = std::make_unique<QCoreApplication>(argc, argv);
+    // Never destroyed: a static QCoreApplication deleted by exit() runs after the statics of Qt (crash at the end of a lone test)
+    if (!QCoreApplication::instance()) (void)new QCoreApplication(argc, argv);
 }
 
 // Run the event loop until done() or the timeout (false = timeout)

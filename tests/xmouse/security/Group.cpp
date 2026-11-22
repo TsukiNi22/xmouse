@@ -56,7 +56,9 @@ TEST(Group, CreateSaveLoad)
     EXPECT_EQ(b.key(), a.key());
     EXPECT_EQ(b.key().size(), XMOUSE_GROUP_KEY_SIZE);
     EXPECT_EQ(b.epoch(), 1);
-    EXPECT_EQ(QFile(dir.filePath("group.json")).permissions() & (QFileDevice::ReadGroup | QFileDevice::ReadOther), QFileDevice::Permissions());
+    #ifndef _WIN32
+        EXPECT_EQ(QFile(dir.filePath("group.json")).permissions() & (QFileDevice::ReadGroup | QFileDevice::ReadOther), QFileDevice::Permissions()); // no unix rights on Windows
+    #endif
 }
 
 TEST(Group, AdoptRefusesABrokenKey)
