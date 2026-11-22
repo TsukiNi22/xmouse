@@ -101,7 +101,7 @@ public final class Node implements Link.Context, Mesh.Events {
     private boolean _moveDirty = false;
     private int _seq = 0;
     private int _buttons = 0;
-    private final Set<String> _keys = new HashSet<>();
+    private final Map<String, String> _keys = new HashMap<>(); // keys held on the target -> their letter (released with it)
     private long _pingUntil = 0;
     private boolean _laser = false;
     private boolean _presenceDirty = false;
@@ -728,7 +728,7 @@ public final class Node implements Link.Context, Mesh.Events {
 
     private void leaveTarget() {
         for (int b = 0; b <= 4; b++) if ((this._buttons & (1 << b)) != 0) this._mesh.sendBinary(this._target, new Writer(BUTTON).u8(b).u8(0).bytes());
-        for (String code: this._keys) this._mesh.sendBinary(this._target, new Writer(KEY).u8(0).text8(code).bytes());
+        for (Map.Entry<String, String> held: this._keys.entrySet()) this._mesh.sendBinary(this._target, this.keyPacket(held.getKey(), false, held.getValue()));
         this._buttons = 0;
         this._keys.clear();
         this._mesh.send(this._target, Json.obj("t", "leave"));
@@ -798,12 +798,30 @@ public final class Node implements Link.Context, Mesh.Events {
     public void key(String code, boolean down, String character) {
         this._loop.execute(() -> {
             if (!this._away) {this._listener.screen(Json.obj("t", "key", "id", this._net.self(), "code", code, "down", down, "char", character)); return;}
-            if (down) this._keys.add(code);
+            if (down) this._keys.put(code, character);
             else this._keys.remove(code);
-            Writer w = new Writer(KEY).u8(down ? 1 : 0).text8(code);
-            if (!character.isEmpty()) w.text8(character);
-            this._mesh.sendBinary(this._target, w.bytes());
+            this._mesh.sendBinary(this._target, this.keyPacket(code, down, character));
         });
+    }
+
+    // A key for the target: Ctrl and Cmd change places on a Mac (Ctrl + C copies there), its letter after its code
+    private byte[] keyPacket(String code, boolean down, String character) {
+        String os = Json.str(Json.map(this._state.value("device/" + this._target)), "os", "");
+        String key = code;
+        Writer w;
+
+        if (os.equals("macos")) {
+            switch (code) {
+                case "ControlLeft": key = "MetaLeft"; break;
+                case "ControlRight": key = "MetaRight"; break;
+                case "MetaLeft": key = "ControlLeft"; break;
+                case "MetaRight": key = "ControlRight"; break;
+                default: break;
+            }
+        }
+        w = new Writer(KEY).u8(down ? 1 : 0).text8(key);
+        if (!character.isEmpty()) w.text8(character);
+        return w.bytes();
     }
 
     public void text(String text) {

@@ -36,6 +36,7 @@ File Description:
 #define BACKPRESSURE_LIMIT (256 * 1024) // bytes waiting on a link before the moves are skipped (the next one carries the position)
 #define PING_DURATION 1500 // ms a "look here" wave is told
 #define SLOW_MOVE_INTERVAL 15 // ms between two moves sent to a phone (its screen draws at 60 Hz: more only loads it)
+#define KEY_REPEAT_DELAY 500 // ms a key is held on a phone before it repeats (like a desktop)
 #define AWAY_CHECK_TICKS 4 // presence ticks (50 ms) between two reads of the real pointer while away (200 ms)
 #define AWAY_PAD_MOVE 24 // px the real pointer may move while the cursor is away with a pad (the person took the mouse)
 #define AWAY_LOST_MOVE 120 // px a held pointer may be found away from where it is held (twice in a row: the capture is lost)
@@ -92,6 +93,12 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
     this->_target = device;
     this->_log.info("input", device, "my cursor goes to " + this->_layout.device(device).name + (this->_awayByPad ? " (a pad drives it)" : " (captured)"));
     this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
+    if (this->_injector) {
+        const platform::LockKeys locks = this->_injector->lockKeys(); // a phone types as this keyboard is set now (Caps Lock, Num Lock)
+        this->_capsLock = locks.caps;
+        this->_numLock = locks.num;
+    }
+    this->_repeat.stop();
     this->_awayWatch = this->_capture && this->_capture->knowsPointer();
     this->_awayPointer = this->_awayWatch ? this->_capture->pointer() : QPoint();
     this->_awayLost = 0;
@@ -150,12 +157,13 @@ void xmouse::core::Hub::switchTarget_(const QString& device)
     for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
         if (this->_buttonsDown & (1 << b)) this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
     for (const QString& code: this->_keysDown)
-        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false)); // with its letter: the key pressed there is the one released
+        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false, this->_target)); // with its letter: the key pressed there is the one released
     this->_buttonsDown = 0;
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
     this->_target = device;
     this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
     this->_textKeys.clear();
+    this->_repeat.stop();
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
     this->tellShowOnly_(device);
     if (this->_pads.contains(device)) this->clipToPads_(device);
@@ -228,8 +236,9 @@ void xmouse::core::Hub::goHome_(const QPoint& global)
     for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
         if (this->_buttonsDown & (1 << b)) this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
     for (const QString& code: this->_keysDown)
-        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false)); // with its letter: the key pressed there is the one released
+        this->sendBinaryTo_(this->_target, this->keyPacket_(code, false, this->_target)); // with its letter: the key pressed there is the one released
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
+    this->_repeat.stop();
     this->_away = false;
     this->_target.clear();
     this->_keysDown.clear();
@@ -296,27 +305,48 @@ void xmouse::core::Hub::onKey_(const QString& code, const bool down)
     // A phone types characters, not keys: a key of the layout of this device becomes its character (azerty, Shift,
     // AltGr), the special keys and the shortcuts stay keys
     if (this->_slowTarget && down && code == "CapsLock") this->_capsLock = !this->_capsLock;
+    if (this->_slowTarget && down && code == "NumLock") this->_numLock = !this->_numLock;
+    if (!down && code == this->_repeatCode) this->_repeat.stop(); // released: no more repeats
     if (this->_slowTarget && !down && this->_textKeys.remove(code)) return; // its character went at the press
     if (this->_slowTarget && down) {
         const QString text = this->keyText_(code);
         if (!text.isEmpty()) {
+            const QByteArray data = net::ByteWriter(net::Binary::Text).bytes(text.toUtf8()).data();
             this->_textKeys.insert(code);
-            this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Text).bytes(text.toUtf8()).data());
+            this->sendBinaryTo_(this->_target, data);
+            this->repeatLater_(code, data);
             return;
         }
     }
-    this->sendBinaryTo_(this->_target, this->keyPacket_(code, down));
+    this->sendBinaryTo_(this->_target, this->keyPacket_(code, down, this->_target));
+    if (this->_slowTarget && down) this->repeatLater_(code, this->keyPacket_(code, true, this->_target));
 }
 
-QByteArray xmouse::core::Hub::keyPacket_(const QString& code, const bool down) const
+void xmouse::core::Hub::repeatLater_(const QString& code, const QByteArray& data)
 {
+    // The modifiers and the lock keys never repeat; the last key pressed repeats, like on a desktop
+    if (code.startsWith("Shift") || code.startsWith("Control") || code.startsWith("Alt") || code.startsWith("Meta") || code.startsWith("OS") || code.endsWith("Lock")) return;
+    this->_repeatCode = code;
+    this->_repeatData = data;
+    this->_repeat.setInterval(KEY_REPEAT_DELAY);
+    this->_repeat.start();
+}
+
+QByteArray xmouse::core::Hub::keyPacket_(const QString& code, const bool down, const QString& target) const
+{
+    static const QHash<QString, QString> swap = {{"ControlLeft", "MetaLeft"}, {"ControlRight", "MetaRight"}, {"MetaLeft", "ControlLeft"}, {"MetaRight", "ControlRight"}};
+    const QString os = this->_pads.contains(target) ? "android" : this->_state.value("device/" + target).toObject().value("os").toString();
     net::ByteWriter w(net::Binary::Key);
     QString letter = this->_injector ? this->_injector->characterOf(code, false, false) : QString();
+    QString key = code;
+
+    // Between a Mac and the others, Ctrl and Cmd change places: Ctrl + C copies on a Mac, Cmd + C on a PC or a phone
+    if ((osName() == "macos") != (os == "macos") && swap.contains(code)) key = swap.value(code);
 
     // A letter key: the letter it types on the layout of this device goes after the code (azerty Ctrl + A is the key
     // KeyQ): the other side presses the key of that letter on its own layout, never Ctrl + Q (older ones read the code)
     if (letter.isEmpty()) letter = us_character(code, false);
-    w.u8(down ? 1 : 0).text8(code);
+    w.u8(down ? 1 : 0).text8(key);
     if (letter.size() == 1 && letter.front().unicode() < 128 && letter.front().isLetter()) w.text8(letter.toLower());
     return w.data();
 }
@@ -329,6 +359,14 @@ QString xmouse::core::Hub::keyText_(const QString& code) const
 
     for (const char* shortcut: {"ControlLeft", "ControlRight", "AltLeft", "MetaLeft", "MetaRight"})
         if (this->_keysDown.contains(shortcut)) return "";
+    // The numpad: its signs always, its digits with Num Lock on (else its arrows, Home, End... stay keys)
+    if (code.startsWith("Numpad")) {
+        static const QHash<QString, QString> signs = {{"NumpadDivide", "/"}, {"NumpadMultiply", "*"}, {"NumpadSubtract", "-"}, {"NumpadAdd", "+"}, {"NumpadEqual", "="}, {"NumpadComma", ","}};
+        if (signs.contains(code)) return signs.value(code);
+        if (!this->_numLock) return "";
+        if (code == "NumpadDecimal") return ".";
+        return code.size() == 7 && code.at(6).isDigit() ? QString(code.at(6)) : QString();
+    }
     if (this->_injector) text = this->_injector->characterOf(code, shift, altgr);
     if (text.isEmpty() && !altgr) text = us_character(code, shift);
     if (text.isEmpty() || !text.front().isPrint()) return ""; // Enter, Tab, Backspace...: keys
@@ -609,7 +647,7 @@ void xmouse::core::Hub::padKey_(const QString& pad, const QString& code, const b
 {
     const bool own = this->padOwnCursor_(pad);
 
-    if (own && this->_padAway.contains(pad)) {this->padAwayInput_(pad, net::ByteWriter(net::Binary::Key).u8(down ? 1 : 0).text8(code).data()); return;}
+    if (own && this->_padAway.contains(pad)) {this->padAwayInput_(pad, this->keyPacket_(code, down, this->_padAway.value(pad).target)); return;}
     if (own) {this->foreignKey_(pad, code, down); return;}
     if (this->_away) {this->onKey_(code, down); return;}
     if (this->_injector) this->_injector->key(code, down);

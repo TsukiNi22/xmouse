@@ -261,7 +261,11 @@ class Hub: public QObject {
         int _awayLost = 0; // reads in a row where a held pointer was found elsewhere
         bool _slowTarget = false; // the cursor is on a phone (pad or member): its moves at the rate of a screen, its keys as text
         QSet<QString> _textKeys; // keys held whose character went to the phone (their release is not sent)
-        bool _capsLock = false; // Caps Lock pressed while my cursor is on a phone: its letters change case
+        bool _capsLock = false; // Caps Lock of this device while my cursor is on a phone (its lights at the departure, then the presses)
+        bool _numLock = true; // Num Lock the same way: the numpad types its digits there, else its arrows, Home, End...
+        QTimer _repeat; // a key held while my cursor is on a phone: sent again (a phone repeats nothing by itself)
+        QString _repeatCode = ""; // the key held
+        QByteArray _repeatData; // what it sends (its key, or its character)
         QHash<QString, QString> _padClip; // pad -> hash of the clipboard text it was given
         qint64 _lastSlowMove = 0; // ms
         qint64 _padPresenceAt = 0; // ms, last map update for the own cursor of a pad
@@ -351,7 +355,8 @@ class Hub: public QObject {
         void sendPresence_(void);
         void checkAway_(void); // away: the real pointer moves although nothing holds it / the capture was lost -> the cursor comes back
         _hot _nodiscard QString keyText_(const QString& code) const; // the character a key types here ("" = a special key / a shortcut)
-        _hot _nodiscard QByteArray keyPacket_(const QString& code, const bool down) const; // the key and the letter it types here (a layout of the other side)
+        _hot _nodiscard QByteArray keyPacket_(const QString& code, const bool down, const QString& target) const; // the key for target, with the letter it types here (a layout of the other side)
+        _hot void repeatLater_(const QString& code, const QByteArray& data); // a key pressed while my cursor is on a phone: repeated while it is held
         void clipToPads_(const QString& only = ""); // the clipboard text to the phone screens (only: this one, when a cursor enters it)
         void keepAway_(void); // the layout changed while away: the cursor stays on its device (closest point) or comes back
         void padMotion_(const QString& pad, const double dx, const double dy); // a pad moves the cursor of this device (or its own one, phantom / private mode)

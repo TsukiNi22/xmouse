@@ -46,6 +46,7 @@ File Description:
 /* DEFINE */
 
 #define FLUSH_INTERVAL 4 // ms between two moves sent (250 Hz at most, the latest position only)
+#define KEY_REPEAT_INTERVAL 33 // ms between two repeats of a key held on a phone (30 a second, like a desktop)
 #define PREDICT_INTERVAL 8 // ms between two predicted positions of a foreign cursor
 #define PRESENCE_TTL 10000 // ms a presence stays on the map without news
 #define JOIN_TIMEOUT 30000 // ms the local person has to accept a new device
@@ -86,6 +87,11 @@ xmouse::core::Hub::Hub(Config& config, QObject* parent)
     this->_flush.setInterval(FLUSH_INTERVAL);
     this->_flush.setTimerType(Qt::PreciseTimer);
     QObject::connect(&this->_flush, &QTimer::timeout, this, &Hub::flushMove_);
+    QObject::connect(&this->_repeat, &QTimer::timeout, this, [this]() {
+        if (!this->_away || !this->_slowTarget) {this->_repeat.stop(); return;}
+        this->sendBinaryTo_(this->_target, this->_repeatData);
+        this->_repeat.setInterval(KEY_REPEAT_INTERVAL);
+    });
     this->_presenceTimer.setInterval(XMOUSE_PRESENCE_INTERVAL);
     QObject::connect(&this->_presenceTimer, &QTimer::timeout, this, &Hub::sendPresence_);
     this->_housekeeping.setInterval(1000);
