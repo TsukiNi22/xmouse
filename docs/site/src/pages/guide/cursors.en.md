@@ -15,7 +15,7 @@ The cursors of the other members (and of the phones) come on your screens with t
 | Pointer (default) | Moves the real pointer of this device, like a second mouse; its name is shown beside it |
 | Phantom | Drawn over the apps with its name; your pointer stays yours: it only jumps to the phantom for one of its clicks, then comes back |
 
-A phone touchpad follows the same modes: in phantom mode it has its own cursor (its name), which goes to the other devices under that name while your mouse stays with you.
+A cursor that does not move for 3 s fades out, and comes back at once when it moves (its clicks alone do not bring it back). A phone touchpad follows the same modes: in phantom mode it has its own cursor (its name), which goes to the other devices under that name while your mouse stays with you.
 
 ## The protected panel {#panel}
 

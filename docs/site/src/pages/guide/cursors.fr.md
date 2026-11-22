@@ -13,7 +13,7 @@ Les curseurs des autres membres (et des téléphones) viennent sur vos écrans a
 | Pointeur (par défaut) | Déplace le vrai pointeur de cet appareil, comme une deuxième souris ; son nom est affiché à côté |
 | Fantôme | Dessiné par-dessus les applis avec son nom ; votre pointeur reste le vôtre : il ne saute vers le fantôme que pour un de ses clics, puis revient |
 
-Un touchpad de téléphone suit les mêmes modes : en mode fantôme il a son propre curseur (son nom), qui va sur les autres appareils sous ce nom pendant que votre souris reste avec vous.
+Un curseur qui ne bouge pas pendant 3 s s'efface, et revient d'un coup quand il bouge (ses clics seuls ne le font pas revenir). Un touchpad de téléphone suit les mêmes modes : en mode fantôme il a son propre curseur (son nom), qui va sur les autres appareils sous ce nom pendant que votre souris reste avec vous.
 
 ## Le panneau protégé {#panel}
 
