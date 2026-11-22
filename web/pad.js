@@ -10,6 +10,7 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     const android = window.XmouseAndroid || null; // the bridge of the android app (null in a browser)
+    const node = window.XmouseNode || null; // the phone is a member itself: the commands go to its node (no websocket, no pairing)
     const TOKEN_KEY = "xmouse.pad.token." + location.host;
     const SEND_INTERVAL = 16; // ms between two moves sent (the sum of the deltas)
     const TAP_TIME = 220; // ms: a touch shorter than this, that did not move, is a click
@@ -52,6 +53,7 @@
     /* LINK */
 
     function send(object) {
+        if (node) {node.send(JSON.stringify(object)); return;}
         if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(object));
     }
 
@@ -442,6 +444,13 @@
     /* START */
 
     if ("wakeLock" in navigator) navigator.wakeLock.request("screen").catch(() => {}); // the pad stays on while it is used
+    if (node) {
+        // A member: the node of the phone answers through window.xmouseNodeMessage (its map 10 times a second)
+        window.xmouseNodeMessage = (text) => {try {onMessage(JSON.parse(text));} catch (e) { /* malformed */ }};
+        showPad(node.device());
+        $("unpair").hidden = true;
+        return;
+    }
     if (token()) {showPad(""); $("link").classList.remove("ok");} // paired: the pad at once, its dot turns green once linked
     else showPair();
     connect();

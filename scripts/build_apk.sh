@@ -46,6 +46,7 @@ command mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/assets"
 
 # Assets: the QR code scanner page and its decoder (jsQR)
 cp "$APP/assets/"* "$ROOT/third_party/jsQR/jsQR.js" "$OUT/assets/"
+cp "$ROOT/web/pad.html" "$ROOT/web/pad.js" "$ROOT/web/pad.css" "$ROOT/web/icon.svg" "$OUT/assets/" # the touchpad page of a phone that is a member itself
 cp "$ROOT/third_party/jsQR/LICENSE" "$OUT/assets/LICENSE-jsQR.txt"
 
 # Resources + manifest

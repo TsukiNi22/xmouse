@@ -1,5 +1,8 @@
 /*
- * xmouse android application: the /pad page of a device of the network in a WebView, with
+ * xmouse android application, two ways:
+ *  - this phone in a network (NodeService: a member itself, it creates or joins a network, its touchpad drives its own
+ *    cursor across the devices, its screen is lent to the layout)
+ *  - a pad of a computer: the /pad page of a device of the network in a WebView, with
  *  - the device taken from its QR code / link (https://host:port/pad?code=..&fp=..): the fp pins its certificate, every
  *    TLS error is accepted ONLY for that exact certificate
  *  - a bridge for the page (XmouseAndroid): the token of the pad shared with the screen service, the screen lent
@@ -44,7 +47,10 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ScrollView;
 import android.widget.Toast;
+
+import io.github.tsukini22.xmouse.core.Node;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -104,16 +110,32 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (this._web != null && this._web.getUrl() != null && this._web.getUrl().startsWith(SCANNER)) {this.startOrSetup(); return;}
-        this.moveTaskToBack(true); // the pad stays connected
+        this.moveTaskToBack(true); // the pad / the network stays connected
+    }
+
+    @Override
+    protected void onDestroy() {
+        NodeService.unlisten(this._memberListener);
+        super.onDestroy();
     }
 
     private String host() {return this._prefs.getString("host", "");}
 
     private String pin() {return this._prefs.getString("fp", "");}
 
+    private String mode() {return this._prefs.getString("mode", "");}
+
     private void startOrSetup() {
-        if (this.host().isEmpty() || this.pin().isEmpty()) this.showSetup("");
-        else this.openPad();
+        if (this.mode().equals("member")) {
+            NodeService.start(this);
+            this.showMember();
+            this._ui.postDelayed(() -> {this.autoUpdate(); this.resumeScreen();}, 4000); // once linked to its network
+            return;
+        }
+        if (this.host().isEmpty() || this.pin().isEmpty()) {
+            if (this.mode().isEmpty()) this.showChoice();
+            else this.showSetup("");
+        } else this.openPad();
     }
 
     // A link shared to the app, or typed / scanned: https://host:port/pad?code=..&fp=..
@@ -125,6 +147,7 @@ public class MainActivity extends Activity {
 
     private boolean useLink(String link) {
         Uri uri = Uri.parse(link);
+        if (this.mode().equals("member")) {this.joinWhenReady(link, 0); this.showMember(); return true;} // a member joins the network of the link
         String fp = uri.getQueryParameter("fp");
         if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || fp == null || fp.length() != 64) {
             this.showSetup(this.tr("This is not the link of an xmouse device (its QR code holds its identity).", "Ce n'est pas le lien d'un appareil xmouse (son QR code contient son identité)."));
@@ -201,6 +224,217 @@ public class MainActivity extends Activity {
     }
 
     // ---------------------------------------------------------------- //
+    // First launch: what this phone is
+
+    private void showChoice() {
+        this.clearRoot();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(this.dp(24), this.dp(48), this.dp(24), this.dp(24));
+        TextView title = this.text("xmouse", 28, TEXT);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        box.addView(title);
+        box.addView(this.text(this.tr("What is this phone for?", "À quoi sert ce téléphone ?"), 16, MUTED));
+        Button member = new Button(this);
+        member.setText(this.tr("This phone in a network: it creates one or joins one", "Ce téléphone dans un réseau : il en crée un ou en rejoint un"));
+        member.setOnClickListener(v -> {this._prefs.edit().putString("mode", "member").apply(); this.startOrSetup();});
+        box.addView(member);
+        box.addView(this.text(this.tr("A member like a computer: its touchpad drives a cursor across the screens of every device, the others reach its screen, it can be the first device of a network.",
+            "Un membre comme un ordinateur : son touchpad pilote un curseur sur les écrans de tous les appareils, les autres atteignent son écran, il peut être le premier appareil d'un réseau."), 14, MUTED));
+        Button pad = new Button(this);
+        pad.setText(this.tr("Drive a computer (touchpad)", "Piloter un ordinateur (touchpad)"));
+        pad.setOnClickListener(v -> {this._prefs.edit().putString("mode", "pad").apply(); this.showSetup("");});
+        box.addView(pad);
+        box.addView(this.text(this.tr("Paired with one computer (its QR code): the touchpad and the keyboard of that computer.", "Associé à un ordinateur (son QR code) : le touchpad et le clavier de cet ordinateur."), 14, MUTED));
+        this._root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+    }
+
+    // ---------------------------------------------------------------- //
+    // This phone as a member
+
+    // The node starts with the service: the join waits for it a few seconds
+    private void joinWhenReady(String link, int tries) {
+        Node node = NodeService.node();
+        NodeService.start(this);
+        if (node != null) {node.join(link, ""); return;}
+        if (tries < 40) this._ui.postDelayed(() -> this.joinWhenReady(link, tries + 1), 250);
+    }
+
+    private final Node.Listener _memberListener = new Node.Listener() {
+        @Override public void changed() {if (MainActivity.this._memberShown) MainActivity.this.refreshMember();}
+        @Override public void joinRequest(String pending, String name, String os) {
+            new AlertDialog.Builder(MainActivity.this)
+                .setTitle(MainActivity.this.tr("A device wants to join", "Un appareil veut rejoindre"))
+                .setMessage(name + " (" + os + ")" + MainActivity.this.tr(" gave the right code. Refused by default in 30 s.", " a donné le bon code. Refusé par défaut dans 30 s."))
+                .setPositiveButton(MainActivity.this.tr("Accept", "Accepter"), (d, w) -> {Node n = NodeService.node(); if (n != null) n.approve(pending, true); NodeService.cancel(MainActivity.this, pending);})
+                .setNegativeButton(MainActivity.this.tr("Refuse", "Refuser"), (d, w) -> {Node n = NodeService.node(); if (n != null) n.approve(pending, false); NodeService.cancel(MainActivity.this, pending);})
+                .show();
+        }
+        @Override public void joinResult(boolean ok, String message) {if (MainActivity.this._memberShown) MainActivity.this.refreshMember();}
+        @Override public void notice(String text) { /* toasts of the service */ }
+        @Override public void screen(java.util.Map<String, Object> event) { /* the lent screen */ }
+        @Override public void map(java.util.Map<String, Object> map) {
+            String json = io.github.tsukini22.xmouse.core.Json.write(map);
+            MainActivity.this._ui.post(() -> {
+                if (MainActivity.this._localPad != null) MainActivity.this._localPad.evaluateJavascript("window.xmouseNodeMessage && window.xmouseNodeMessage(" + org.json.JSONObject.quote(json) + ")", null);
+            });
+        }
+        @Override public void clipboard(String text) { /* the service sets it */ }
+        @Override public void link(String from, String url) { /* a notification of the service */ }
+    };
+
+    private boolean _memberShown = false;
+    private LinearLayout _memberBox;
+    private WebView _localPad; // the touchpad page of the app (assets) driving the node
+
+    private Button button(String label, android.view.View.OnClickListener click) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setOnClickListener(click);
+        return b;
+    }
+
+    private void showMember() {
+        this.clearRoot();
+        this._localPad = null;
+        this._memberShown = true;
+        NodeService.listen(this._memberListener);
+        ScrollView scroll = new ScrollView(this);
+        this._memberBox = new LinearLayout(this);
+        this._memberBox.setOrientation(LinearLayout.VERTICAL);
+        this._memberBox.setPadding(this.dp(20), this.dp(36), this.dp(20), this.dp(24));
+        scroll.addView(this._memberBox);
+        this._root.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        this.refreshMember();
+        String pending = this.getIntent().getStringExtra("pending");
+        if (pending != null) this.getIntent().removeExtra("pending");
+    }
+
+    private void refreshMember() {
+        Node node = NodeService.node();
+        LinearLayout box = this._memberBox;
+        if (box == null || !this._memberShown) return;
+        box.removeAllViews();
+        TextView title = this.text(this.tr("xmouse - this phone", "xmouse - ce téléphone"), 24, TEXT);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        box.addView(title);
+        if (node == null) {
+            box.addView(this.text(this.tr("Starting...", "Démarrage..."), 15, MUTED));
+            this._ui.postDelayed(this::refreshMember, 500);
+            return;
+        }
+        if (!node.joined()) {
+            box.addView(this.text(this.tr("In no network yet: create one (this phone is its first device), or join the network of another device.",
+                "Dans aucun réseau : créez-en un (ce téléphone en est le premier appareil), ou rejoignez le réseau d'un autre appareil."), 15, MUTED));
+            final EditText name = new EditText(this);
+            name.setText(Build.MODEL + " network");
+            name.setTextColor(TEXT);
+            box.addView(name);
+            box.addView(this.button(this.tr("Create a network", "Créer un réseau"), v -> node.createNetwork(name.getText().toString())));
+            box.addView(this.text(this.tr("Join: scan the QR code of a member (Network page), or paste its link.", "Rejoindre : scannez le QR code d'un membre (page Réseau), ou collez son lien."), 15, MUTED));
+            box.addView(this.button(this.tr("Scan the QR code", "Scanner le QR code"), v -> this.openScanner()));
+            final EditText link = new EditText(this);
+            link.setHint("https://192.168.1.20:47900/?code=...&fp=...");
+            link.setTextColor(TEXT);
+            link.setHintTextColor(MUTED);
+            link.setSingleLine(true);
+            box.addView(link);
+            box.addView(this.button(this.tr("Join with this link", "Rejoindre avec ce lien"), v -> node.join(link.getText().toString().trim(), "")));
+        } else {
+            box.addView(this.text(this.tr("Network ", "Réseau ") + node.networkName(), 18, ACCENT));
+            box.addView(this.text(this.tr("Code ", "Code ") + node.code() + this.tr("  (changes in ", "  (change dans ") + node.codeSecondsLeft() / 60 + ":" + String.format("%02d", node.codeSecondsLeft() % 60) + ")", 20, TEXT));
+            box.addView(this.text(this.tr("A device joins with the link of this phone (Connect to a network on a computer).", "Un appareil rejoint avec le lien de ce téléphone (Se connecter à un réseau sur un ordinateur)."), 14, MUTED));
+            box.addView(this.button(this.tr("Share the link", "Partager le lien"), v -> {
+                Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, node.joinLink());
+                this.startActivity(Intent.createChooser(share, "xmouse"));
+            }));
+            box.addView(this.button(this.tr("New code", "Nouveau code"), v -> {node.newCode(); this._ui.postDelayed(this::refreshMember, 300);}));
+            box.addView(this.text(this.tr("Members", "Membres"), 16, TEXT));
+            for (Node.Member m: node.members()) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                TextView label = this.text((m.online ? "● " : "○ ") + m.name + "  " + m.kind + (m.self ? this.tr("  (this phone)", "  (ce téléphone)") : (m.online ? (m.rtt >= 0 ? "  " + m.rtt + " ms" : "") : this.tr("  offline", "  hors ligne"))), 15, m.online ? TEXT : MUTED);
+                row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+                if (!m.self) {
+                    final String id = m.id;
+                    final String who = m.name;
+                    row.addView(this.button(this.tr("Remove", "Retirer"), v -> new AlertDialog.Builder(this).setTitle(who)
+                        .setMessage(this.tr("It leaves the network (the key changes).", "Il quitte le réseau (la clé change)."))
+                        .setPositiveButton(this.tr("Remove", "Retirer"), (d, w) -> node.removeMember(id)).setNegativeButton(this.tr("Cancel", "Annuler"), null).show()));
+                }
+                box.addView(row);
+            }
+            box.addView(this.button(this.tr("Open the touchpad", "Ouvrir le touchpad"), v -> this.openLocalPad()));
+            box.addView(this.button(this.tr("This screen in the layout", "Cet écran dans la disposition"), v -> this.lendScreenDialog()));
+            box.addView(this.button(this.tr("Leave the network", "Quitter le réseau"), v -> new AlertDialog.Builder(this)
+                .setMessage(this.tr("This phone leaves the network: it needs a new code to come back.", "Ce téléphone quitte le réseau : il lui faudra un nouveau code pour revenir."))
+                .setPositiveButton(this.tr("Leave", "Quitter"), (d, w) -> node.leave()).setNegativeButton(this.tr("Cancel", "Annuler"), null).show()));
+        }
+        box.addView(this.button(this.tr("Use this phone as the touchpad of one computer instead", "Utiliser plutôt ce téléphone comme touchpad d'un ordinateur"), v -> {
+            this._prefs.edit().putString("mode", "pad").apply();
+            this._memberShown = false;
+            NodeService.unlisten(this._memberListener);
+            NodeService.stop(this);
+            this.showSetup("");
+        }));
+    }
+
+    // The touchpad page of the app (its assets): its commands go to the node of the phone
+    private final class NodeBridge {
+        @JavascriptInterface public String device() {return MainActivity.this._prefs.getString("name", Build.MODEL);}
+
+        @JavascriptInterface public void send(String json) {
+            Node node = NodeService.node();
+            org.json.JSONObject o;
+            if (node == null) return;
+            try {o = new org.json.JSONObject(json);} catch (Exception e) {return;}
+            switch (o.optString("t")) {
+                case "move": node.move(o.optDouble("dx"), o.optDouble("dy")); break;
+                case "button": node.button(o.optInt("b"), o.optBoolean("down")); break;
+                case "wheel": node.wheel(o.optInt("dx"), o.optInt("dy")); break;
+                case "key": node.key(o.optString("code"), o.optBoolean("down")); break;
+                case "text": node.text(o.optString("text")); break;
+                case "home": node.home(); break;
+                case "ping": node.ping(); break;
+                case "laser": node.laser(o.optBoolean("on")); break;
+                case "link": node.sendLink(o.optString("device"), o.optString("url")); break;
+                default: break;
+            }
+        }
+    }
+
+    private void openLocalPad() {
+        this.clearRoot();
+        this._memberShown = false;
+        WebView web = this.newWeb();
+        this._web = web;
+        this._localPad = web;
+        web.addJavascriptInterface(new NodeBridge(), "XmouseNode");
+        web.addJavascriptInterface(new Bridge(), "XmouseAndroid");
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {return MainActivity.this.asset(request.getUrl());}
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {return !request.getUrl().toString().startsWith(SCANNER);}
+        });
+        this._root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        web.loadUrl(SCANNER + "/pad.html");
+    }
+
+    // A file of the assets of the app on its local https origin (scanner, touchpad page)
+    private WebResourceResponse asset(Uri uri) {
+        if (!uri.toString().startsWith(SCANNER)) return null;
+        String name = uri.getPath() == null || uri.getPath().equals("/") ? "scan.html" : uri.getPath().substring(1);
+        String type = name.endsWith(".js") ? "text/javascript" : name.endsWith(".css") ? "text/css" : name.endsWith(".svg") ? "image/svg+xml" : "text/html";
+        try {
+            return new WebResourceResponse(type, "UTF-8", this.getAssets().open(name));
+        } catch (Exception e) {
+            return new WebResourceResponse("text/plain", "UTF-8", 404, "Not found", null, null);
+        }
+    }
+
+    // ---------------------------------------------------------------- //
     // Pad
 
     private static String fingerprintOf(SslCertificate certificate) {
@@ -271,10 +505,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (this._web != null && !this.host().isEmpty()) {
+        if (this.mode().equals("member") || (this._web != null && !this.host().isEmpty())) {
             this.autoUpdate();
             this.resumeScreen(); // back from the overlay permission: the screen is lent at once
         }
+        if (this.mode().equals("member") && this._memberShown) this.refreshMember();
     }
 
     // Every launch / return to the app: the device is asked for a newer app (a dialog only when there is one)
@@ -287,7 +522,7 @@ public class MainActivity extends Activity {
 
     // The screen stays lent (phantom) as long as the person wants it and the overlay is allowed
     private void resumeScreen() {
-        if (this._prefs.getBoolean("lend", false) && !this._prefs.getString("token", "").isEmpty()) OverlayService.start(this);
+        if (this._prefs.getBoolean("lend", false) && (this.mode().equals("member") || !this._prefs.getString("token", "").isEmpty())) OverlayService.start(this);
     }
 
     private void lendPhantom() {
@@ -313,7 +548,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean screenLent() {return ScreenService.running() || OverlayService.running();}
 
         // Phantom (the cursors drawn, "Display over other apps") or touch (Accessibility: their clicks become touches)
-        @JavascriptInterface public void lendScreen() {
+        @JavascriptInterface public void lendScreen() {MainActivity.this._ui.post(MainActivity.this::lendScreenDialog);}
+
+        @JavascriptInterface public void checkUpdate() {MainActivity.this._ui.post(() -> MainActivity.this.checkUpdate(true));}
+
+        @JavascriptInterface public void changeDevice() {
+            MainActivity.this._ui.post(() -> {
+                if (MainActivity.this.mode().equals("member")) MainActivity.this.showMember();
+                else MainActivity.this.showSetup("");
+            });
+        }
+    }
+
+    private void lendScreenDialog() {
             MainActivity.this._ui.post(() -> {
                 AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this)
                     .setTitle(MainActivity.this.tr("This screen in the layout", "Cet écran dans la disposition"))
@@ -328,11 +575,6 @@ public class MainActivity extends Activity {
                 });
                 dialog.show();
             });
-        }
-
-        @JavascriptInterface public void checkUpdate() {MainActivity.this._ui.post(() -> MainActivity.this.checkUpdate(true));}
-
-        @JavascriptInterface public void changeDevice() {MainActivity.this._ui.post(() -> MainActivity.this.showSetup(""));}
     }
 
     // ---------------------------------------------------------------- //
@@ -356,17 +598,7 @@ public class MainActivity extends Activity {
         });
         web.setWebViewClient(new WebViewClient() {
             @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                Uri uri = request.getUrl();
-                if (!uri.toString().startsWith(SCANNER)) return null;
-                String name = uri.getPath() == null || uri.getPath().equals("/") ? "scan.html" : uri.getPath().substring(1);
-                try {
-                    InputStream in = MainActivity.this.getAssets().open(name);
-                    return new WebResourceResponse(name.endsWith(".js") ? "text/javascript" : "text/html", "UTF-8", in);
-                } catch (Exception e) {
-                    return new WebResourceResponse("text/plain", "UTF-8", 404, "Not found", null, null);
-                }
-            }
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {return MainActivity.this.asset(request.getUrl());}
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -391,9 +623,11 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- //
     // Updates
 
-    String version() {
+    String version() {return versionOf(this);}
+
+    static String versionOf(android.content.Context context) {
         try {
-            PackageInfo info = this.getPackageManager().getPackageInfo(this.getPackageName(), 0);
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
             return info.versionName == null ? "0" : info.versionName;
         } catch (Exception e) {
             return "0";
@@ -425,8 +659,21 @@ public class MainActivity extends Activity {
     }
 
     private void checkUpdate(boolean asked) {
-        final String origin = this.host();
-        final String fp = this.pin();
+        String from = this.host();
+        String pinned = this.pin();
+        if (this.mode().equals("member")) { // a member: a computer of its network carries the newest app
+            Node node = NodeService.node();
+            String[] source = node == null ? null : node.updateSource();
+            if (source == null) {
+                if (asked) Toast.makeText(this, this.tr("No computer of the network online to update from", "Aucun ordinateur du réseau en ligne pour la mise à jour"), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            from = source[0];
+            pinned = source[1];
+        }
+        final String origin = from;
+        final String fp = pinned;
+        if (origin.isEmpty() || fp.isEmpty()) return;
         new Thread(() -> {
             String remote = "";
             try {

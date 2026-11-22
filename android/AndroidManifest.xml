@@ -67,6 +67,20 @@
                 android:value="Shows the cursors of the devices of the network over the apps (the screen of the phone lent to the network)" />
         </service>
 
+        <!-- The phone as a member of a network: its links kept alive in the background -->
+        <service
+            android:name=".NodeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the links of the phone to the other devices of its xmouse network (the phone is a member of the network)" />
+        </service>
+
+        <receiver
+            android:name=".ApprovalReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".InstallReceiver"
             android:exported="false" />

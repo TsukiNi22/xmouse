@@ -3,7 +3,8 @@
  *  - OverlayService (phantom): the cursors of the members drawn over the apps with their name, nothing touched
  *    ("Display over other apps" only: no Accessibility, nothing blocked by Play Protect)
  *  - ScreenService (Accessibility): the same, and their clicks / drags / scrolls / text become touches (Actions)
- * It links to the device of the pad (role "screen"), tells the size of the screen, keeps the cursors and draws them.
+ * It links to the device of the pad (role "screen"), or takes the events of the node of the phone when the phone is a
+ * member itself (NodeService), tells the size of the screen, keeps the cursors and draws them.
 */
 package io.github.tsukini22.xmouse;
 
@@ -22,6 +23,9 @@ import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
+
+import io.github.tsukini22.xmouse.core.Json;
+import io.github.tsukini22.xmouse.core.Node;
 
 import org.json.JSONObject;
 
@@ -58,6 +62,8 @@ final class ScreenLink {
     private float _density = 1;
     private int _tries = 0;
     private boolean _stopped = false;
+    private boolean _local = false; // the phone is a member: the events come from its node
+    private static volatile ScreenLink _active; // the screen lent now (the node gives it its events)
 
     // A foreign cursor on this screen
     private static final class Cursor {
@@ -80,14 +86,27 @@ final class ScreenLink {
     // ---------------------------------------------------------------- //
     // Life cycle
 
+    static ScreenLink active() {return _active;}
+
     void start() {
         this._stopped = false;
         this._density = this._context.getResources().getDisplayMetrics().density;
         this.addOverlay();
-        this.connect();
+        _active = this;
+        this._local = NodeService.node() != null;
+        if (this._local) this.sendScreen(); // a member: its node publishes the screen
+        else this.connect();
+    }
+
+    // An event of the node of the phone (a member itself): the same json as the screen of a pad
+    void onLocalEvent(Map<String, Object> event) {
+        if (this._local && !this._stopped) this.onMessage(Json.write(event));
     }
 
     void stop() {
+        Node node = NodeService.node();
+        if (this._local && node != null) node.setScreen(0, 0, 1);
+        if (_active == this) _active = null;
         this._stopped = true;
         if (this._ws != null) this._ws.close();
         this._ws = null;
@@ -116,7 +135,7 @@ final class ScreenLink {
         final String origin = this.prefs().getString("host", "");
         final String fp = this.prefs().getString("fp", "");
         final String token = this.prefs().getString("token", "");
-        if (this._stopped) return;
+        if (this._stopped || this._local) return;
         if (origin.isEmpty() || token.isEmpty()) {
             this._ui.post(() -> Toast.makeText(this._context, "xmouse: pair the app with a device first", Toast.LENGTH_LONG).show());
             return;
@@ -146,6 +165,12 @@ final class ScreenLink {
     }
 
     private void send(JSONObject o) {
+        Node node = NodeService.node();
+        if (this._local && node != null) {
+            if (o.optString("t").equals("screen")) node.setScreen(o.optInt("w"), o.optInt("h"), o.optDouble("scale", 1));
+            else if (o.optString("t").equals("access")) node.tell(o.optString("id"), o.optString("text"));
+            return;
+        }
         if (this._ws != null) this._ws.send(o.toString());
     }
 
