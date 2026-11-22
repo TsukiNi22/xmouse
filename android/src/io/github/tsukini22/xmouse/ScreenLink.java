@@ -264,8 +264,13 @@ final class ScreenLink {
         if (this.actions() == null) {
             // Phantom / private mode: the click is only shown; the member is told once why nothing happens
             c.down = down;
-            if (down && this._told.add(id)) this.send(json("t", "access", "id", id, "text", this.privateMode() ? "private mode: your cursor passes over this phone without acting"
-                : "this phone only shows your cursor (turn on its Accessibility service \"xmouse screen\" to let it touch)"));
+            if (down && this._told.add(id)) {
+                this.send(json("t", "access", "id", id, "text", this.privateMode() ? "private mode: your cursor passes over this phone without acting"
+                    : "this phone only shows your cursor (turn on its Accessibility service \"xmouse screen\" to let it touch)"));
+                if (!this.privateMode()) Toast.makeText(this._context, "xmouse: " + (java.util.Locale.getDefault().getLanguage().equals("fr")
+                    ? "les clics ne font rien ici : xmouse > Cet écran dans la disposition > Les laisser toucher"
+                    : "the clicks do nothing here: xmouse > This screen in the layout > Let them touch"), Toast.LENGTH_LONG).show();
+            }
             return;
         }
         if (b == 3) {if (down) this._actions.back(); return;} // back button of the mouse

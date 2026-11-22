@@ -796,6 +796,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Android lets an app touch the others only through an Accessibility service, turned on by the person; an app
+    // installed from the browser needs "Allow restricted settings" first (its App info page, the menu at the top)
+    private void enableTouch() {
+        if (ScreenService.running()) {
+            Toast.makeText(this, this.tr("The cursors already touch this phone", "Les curseurs touchent déjà ce téléphone"), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(this.tr("Let the cursors touch", "Laisser les curseurs toucher"))
+            .setMessage(this.tr(
+                "Android lets an app click in the other apps only through an Accessibility service:\n\n"
+                    + "1. Accessibility: Installed apps (or Downloaded apps) > xmouse screen > on.\n\n"
+                    + "2. Greyed out, \"Restricted setting\"? App info > the menu at the top right > Allow restricted settings, then step 1 again.\n\n"
+                    + "The cursors then click, drag, scroll and type on this phone (off at any time in the same place).",
+                "Android ne laisse une appli cliquer dans les autres que par un service d'Accessibilité :\n\n"
+                    + "1. Accessibilité : Applications installées (ou téléchargées) > xmouse screen > activé.\n\n"
+                    + "2. Grisé, « Paramètre restreint » ? Infos de l'appli > le menu en haut à droite > Autoriser les paramètres restreints, puis l'étape 1 à nouveau.\n\n"
+                    + "Les curseurs cliquent, glissent, défilent et tapent alors sur ce téléphone (désactivable à tout moment au même endroit)."))
+            .setPositiveButton(this.tr("1. Accessibility", "1. Accessibilité"), (d, w) -> this.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
+            .setNeutralButton(this.tr("2. App info", "2. Infos de l'appli"), (d, w) -> this.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + this.getPackageName()))))
+            .setNegativeButton(this.tr("Cancel", "Annuler"), null)
+            .show();
+    }
+
     private void lendScreenDialog() {
             MainActivity.this._ui.post(() -> {
                 String now = ScreenService.running() ? MainActivity.this.tr("Now: the cursors touch this phone (Accessibility).\n\n", "Maintenant : les curseurs touchent ce téléphone (Accessibilité).\n\n")
@@ -808,7 +832,7 @@ public class MainActivity extends Activity {
                         "Show the cursors: the cursors of the network come on this phone and are drawn over the apps with their name (\"Display over other apps\").\n\nLet them touch: their clicks, drags, scrolls and text also act here (the Accessibility service \"xmouse screen\"; after an install from the browser, Settings > Apps > xmouse > Allow restricted settings first).",
                         "Afficher les curseurs : les curseurs du réseau viennent sur ce téléphone, dessinés par-dessus les applis avec leur nom (« Afficher par-dessus les autres applis »).\n\nLes laisser toucher : leurs clics, glisser, défilements et textes agissent aussi ici (le service d'Accessibilité « xmouse screen » ; après une installation depuis le navigateur : Paramètres > Applis > xmouse > Autoriser les paramètres restreints d'abord)."))
                     .setPositiveButton(MainActivity.this.tr("Show the cursors", "Afficher les curseurs"), (d, w) -> MainActivity.this.lendPhantom())
-                    .setNeutralButton(MainActivity.this.tr("Let them touch", "Les laisser toucher"), (d, w) -> MainActivity.this.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+                    .setNeutralButton(MainActivity.this.tr("Let them touch", "Les laisser toucher"), (d, w) -> MainActivity.this.enableTouch());
                 if (OverlayService.running()) dialog.setNegativeButton(MainActivity.this.tr("Stop", "Arrêter"), (d, w) -> {
                     MainActivity.this._prefs.edit().putBoolean("lend", false).apply();
                     OverlayService.stop(MainActivity.this);
