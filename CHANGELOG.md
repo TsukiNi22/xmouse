@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Fixed
+- **A frozen mouse on GNOME**: when the xmouse extension is installed but not loaded yet (GNOME loads it at the next login), xmouse no longer falls back to the input capture portal, which could keep the pointer frozen or hidden, steal the screenshot tool or ask at every start: no edge until the next login, the status and a notice say it (`XMOUSE_PORTAL=1` forces the portal)
+
+### Added
+- The log says where my cursor goes (captured or driven by a pad) and when it comes back
 
 ## [v1.0.10-pre] - 2026-11-22
 ### Added
