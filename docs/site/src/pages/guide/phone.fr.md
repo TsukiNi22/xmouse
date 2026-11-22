@@ -42,7 +42,7 @@ Le clavier du touchpad a les modificateurs maintenus, les touches spéciales et 
 | Les laisser toucher | Leurs clics, glisser et défilements deviennent des touchers, leurs touches tapent dans le champ actif (service d'Accessibilité « xmouse screen ») |
 
 > [!IMPORTANT]
-> Android ne laisse une appli cliquer dans les autres **que par un service d'Accessibilité**. **Les laisser toucher** ouvre les étapes : Accessibilité > Applications installées > xmouse screen > activé. Grisé (« Paramètre restreint ») ? Infos de l'appli > le menu en haut à droite > **Autoriser les paramètres restreints**, puis à nouveau.
+> Android ne laisse une appli cliquer dans les autres **que par un service d'Accessibilité**. **Les laisser toucher** ouvre les étapes : Accessibilité > Applications installées > xmouse screen > activé. Grisé (« Paramètre restreint ») ? Infos de l'appli > le menu en haut à droite > **Autoriser les paramètres restreints**, puis à nouveau. Ensuite Infos de l'appli > **Batterie** > **Sans restriction** : sinon Android arrête le service de temps en temps, et les clics ne font rien jusqu'à son retour.
 
 Avec **Les laisser toucher**, les touches tapées sur un ordinateur arrivent comme les caractères de **sa** disposition de clavier (azerty compris), et le presse-papiers de l'ordinateur est envoyé au téléphone quand il change.
 

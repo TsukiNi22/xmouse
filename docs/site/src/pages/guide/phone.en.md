@@ -44,7 +44,7 @@ The keyboard of the touchpad has sticky modifiers, the special keys and the F-ke
 | Let them touch | Their clicks, drags and scrolls become touches, their keys type in the focused field (Accessibility service "xmouse screen") |
 
 > [!IMPORTANT]
-> Android lets an app click in the others **only through an Accessibility service**. **Let them touch** opens the steps: Accessibility > Installed apps > xmouse screen > on. Greyed out ("Restricted setting")? App info > the menu at the top right > **Allow restricted settings**, then again.
+> Android lets an app click in the others **only through an Accessibility service**. **Let them touch** opens the steps: Accessibility > Installed apps > xmouse screen > on. Greyed out ("Restricted setting")? App info > the menu at the top right > **Allow restricted settings**, then again. Then App info > **Battery** > **Unrestricted**: else Android stops the service now and then, and the clicks do nothing until it comes back.
 
 With **Let them touch**, the keys typed on a computer arrive as the characters of **its** keyboard layout (azerty included), and the clipboard of the computer is sent to the phone when it changes.
 

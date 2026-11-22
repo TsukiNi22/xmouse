@@ -34,6 +34,10 @@ Une appli installée depuis un navigateur peut être bloquée par Play Protect :
 
 Son écran est en mode **Afficher les curseurs** : Android ne laisse une appli cliquer dans les autres que par un service d'Accessibilité. Dans l'appli : **Cet écran dans la disposition** > **Les laisser toucher** (voir [le téléphone](page:phone#screen)). L'ordinateur le dit aussi, la première fois qu'un curseur y va.
 
+## Les clics marchent un coup sur deux sur le téléphone {#phone-clicks-sometimes}
+
+Android a arrêté le service d'Accessibilité (économie de batterie, appli balayée des récentes) et l'écran a été prêté sans lui un moment. Mettez Infos de l'appli > **Batterie** > **Sans restriction** pour xmouse ; depuis la 1.0.12, l'appli ne prête jamais l'écran sans le service tant qu'il est activé.
+
 ## L'écran du téléphone n'est pas sur la carte {#phone-screen}
 
 **Cet écran dans la disposition** doit être activé (la notification le dit), et le téléphone doit atteindre l'ordinateur auquel il est associé (même réseau local, Tailscale). Mettez l'appli à jour : [mises à jour](page:phone#updates).
