@@ -1,0 +1,48 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: TsukiNi22
+Label: xmouse
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: xmouse APT repository
+Date: Sun, 22 Nov 2026 01:40:18 +0000
+Date: Sun, 22 Nov 2026 01:40:18 +0000
+MD5Sum:
+ 7e918fc38ab436481235059fca942fa2              212 Release
+ d41d8cd98f00b204e9800998ecf8427e                0 main/binary-amd64/Packages
+ d779157ac0888d18663ffe9a19c1072e               29 main/binary-amd64/Packages.gz
+ 8dc5aea5b03dff8595f096f9e368e888               32 main/binary-amd64/Packages.xz
+SHA1:
+ 02879a318b50ec8f0c319ffef4c132068e387373              212 Release
+ da39a3ee5e6b4b0d3255bfef95601890afd80709                0 main/binary-amd64/Packages
+ 32d4fe29149106b79a5dc8afa02e81a9d672f6c6               29 main/binary-amd64/Packages.gz
+ 9746882f4236fa1c3a8f86be2f1d9c46680c0b10               32 main/binary-amd64/Packages.xz
+SHA256:
+ cafa44f060231cb1f8a4978414d9971c53b6237d0f8d90843ff0d2b655cb9986              212 Release
+ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855                0 main/binary-amd64/Packages
+ cc7150bb58f14ce97e8edfddd6e22050325de36d04ca81de2ef1899834828bc6               29 main/binary-amd64/Packages.gz
+ 0040f94d11d0039505328a90b2ff48968db873e9e7967307631bf40ef5679275               32 main/binary-amd64/Packages.xz
+SHA512:
+ 9fc2b66de3c688bab303e695a06fcb42aa0ff77ebf3f1e880b29bd4d97290ce755acae2282d66fcf725db973fc7123e5e6493d32e42f747100151868851f6503              212 Release
+ cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e                0 main/binary-amd64/Packages
+ c70b75d83a327f414c5502c450d0e92bd71efa3e2fdf035e753cb69c72f31c1e5566447cfec1e76ac380b5622766c7e80f5fb931a93b9d4812b9d1b70977b6be               29 main/binary-amd64/Packages.gz
+ 034b32f1138322638c7a5b7949a3b184c6a4cdfd003360a496c08c56c2cc645c94fbe9cdf9d84c963af6dda6c442717cd61d7e1cecf7024bd463f6f5196c5527               32 main/binary-amd64/Packages.xz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEabgoTZm5pynFvpNbBnA1xqffqRYFAmsCSAIACgkQBnA1xqff
+qRblLg//VyVhwo2aatwpa5hJI59LD/DrzLlZXVxUgDmaM3mZsp3ku1yzKfArHuRz
+trpUCCnL4FN4cJxdJ0WyLcuPLY4LxKt+VKUTVy2NheCmgHa4V//3qavsbNso2Ed/
+poHjnFHEntvbuIGkPM+oQdVqcdlt53oLcONt2Z0kf+X/wB5GBhu/R75eWcypGLmu
+DcfKkEMa0r/2Z+KmyQUuquZw44yI9rLvR7KPJEvrSALxVXxl5nxrWcXSyR/lVsM5
+NaU+ucf8x5R2AuccrG7o4fcQin5XK73XeJEd6CcHunEIfmvzjZTsGJrBRxjfey2B
+TpIyzT/1Ep4/FSE5edsv/7BX0VW7tBfuJFODieTqc69ZoX3pUWIsH8bID3tK6ukG
+gUVNUpcN/5eofe5vqwW/YXZbksEyYA+OO+GtTCNL865eTpV4cJcPfCvnJEXWD4hV
+uZgBMVoGv3oEudM5ROw5uY4Ii0clnbFy+z301uOEUzLPtXTi10SJAiNlvvlEfun9
+S7Bmmx98gYe2lALuNDklaLgfnYG3cYT2YQUjNsXWU2S7kJot+nEE0D5CzDGpiUA7
+vZ/tJUTXioVZ0RXsuewQf9ZFBw4jD+qV1ZvJBSvxM4PY8gjD4WSYpbVsISw1DVCv
+uHuu5aggc9XmqRDSNeG5AtTnM9SVSgbkcdve66t7UHPQSEDWVrg=
+=q4aF
+-----END PGP SIGNATURE-----
