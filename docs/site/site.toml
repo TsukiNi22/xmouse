@@ -1,0 +1,39 @@
+# xmouse documentation site (better-html-doc) - build: python3 <skills>/better-html-doc/scripts/build_site.py --site docs/site --out docs
+
+[site]
+name = "xmouse"
+langs = ["en", "fr"]
+repo = "https://github.com/TsukiNi22/xmouse"
+edit_url = ""
+pages_url = "https://tsukini22.github.io/xmouse/docs/"
+storage_key = "xmouse-docs"
+logo = "../logo.svg"
+
+[home]
+title = { en = "xmouse documentation", fr = "Documentation de xmouse" }
+tagline = { en = "One cursor, one keyboard and one clipboard across a network of screens: computers and phones.", fr = "Un curseur, un clavier et un presse-papiers sur un réseau d'écrans : ordinateurs et téléphones." }
+changelog = "../../CHANGELOG.md"
+links = [
+    { href = "install.html", text = { en = "Install", fr = "Installer" } },
+    { href = "faq.html", text = { en = "Troubleshooting", fr = "Dépannage" } },
+    { href = "graph.html", text = { en = "Project graph", fr = "Graphe du projet" } },
+    { href = "https://github.com/TsukiNi22/xmouse/releases", text = { en = "Releases", fr = "Versions" } },
+]
+
+[[sections]]
+id = "guide"
+title = { en = "User guide", fr = "Guide utilisateur" }
+desc = { en = "Install, create the network, place the screens, phones, cursors, sharing.", fr = "Installer, créer le réseau, placer les écrans, téléphones, curseurs, partage." }
+icon = '<path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/>'
+
+[[sections]]
+id = "concepts"
+title = { en = "Concepts", fr = "Concepts" }
+desc = { en = "How the cursor crosses the screens, the network, the security, explained.", fr = "Comment le curseur traverse les écrans, le réseau, la sécurité, expliqués." }
+icon = '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/>'
+
+[[sections]]
+id = "resources"
+title = { en = "Resources", fr = "Ressources" }
+desc = { en = "Troubleshooting, downloads, known limits.", fr = "Dépannage, téléchargements, limites connues." }
+icon = '<path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h4"/>'

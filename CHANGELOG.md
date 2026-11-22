@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- **Documentation site** (`docs/site`, built into `docs/`, EN / FR, search): user guide (install, network, layout, phone, cursors and privacy, sharing, settings), concepts explained at two levels with animations (how the cursor crosses the screens, the mesh / relay / UDP, the security), troubleshooting, downloads and known limits
 
 ## [v1.0.8-pre] - 2026-11-22
 ### Added
