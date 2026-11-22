@@ -221,7 +221,7 @@ void xmouse::core::Hub::sendPresence_(void)
     }
     if (now_ms() < this->_pingUntil) flags |= XMOUSE_PRESENCE_PING;
     if (this->_laser) flags |= XMOUSE_PRESENCE_LASER;
-    mine = Presence{this->_group.self(), on, global, flags, now_ms(), ++this->_presenceSeq};
+    mine = Presence{this->_group.self(), on, global, this->_away ? this->_targetLocal : this->localPointer_(), flags, now_ms(), ++this->_presenceSeq};
     this->_presence[mine.id] = mine;
     data = net::ByteWriter(net::Binary::Presence).u16(mine.seq).text8(on).i32(global.x()).i32(global.y()).u8(static_cast<std::uint8_t>(flags)).data();
 
@@ -255,6 +255,14 @@ void xmouse::core::Hub::follow(const QString& id)
     this->_following = id == this->_group.self() ? QString() : id;
     emit this->followChanged();
     emit this->presenceChanged();
+}
+
+QPoint xmouse::core::Hub::presenceGlobal(const Presence& p) const
+{
+    // Mine: where it is now; the others: on their device as it is placed now
+    if (p.id == this->_group.self() && !this->_away) return this->pointerGlobal();
+    if (!p.on.isEmpty() && this->_layout.contains(p.on)) return this->_layout.toGlobal(p.on, p.local);
+    return p.global;
 }
 
 QPoint xmouse::core::Hub::pointerGlobal(void) const

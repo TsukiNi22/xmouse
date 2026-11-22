@@ -145,7 +145,7 @@ void xmouse::ui::gui::OverlayWindow::paintFollow_(QPainter& p, const double s)
     QScreen* mine = QGuiApplication::screenAt(this->_hub.ownPointer());
     if (!mine) mine = QGuiApplication::primaryScreen();
     if (mine != this->_screen) return;
-    target = QPointF(this->_owner.toLocal(pr.global));
+    target = QPointF(this->_owner.toLocal(this->_hub.presenceGlobal(pr)));
     if (pr.on == self && !(pr.flags & XMOUSE_PRESENCE_HIDDEN) && screen.contains(target.toPoint())) return; // here: its cursor is drawn with a halo
     center = QPointF(screen.center());
     direction = target - center;
@@ -198,7 +198,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
     // "Look here" waves of the cursors on this device (mine at home too)
     for (const core::Presence& pr: this->_hub.presence()) {
         if (!(pr.flags & XMOUSE_PRESENCE_PING) || pr.on != self) continue;
-        paint_wave(p, this->_owner.toLocal(pr.global) - origin, core::Hub::colorOf(pr.id), s);
+        paint_wave(p, pr.local - origin, core::Hub::colorOf(pr.id), s); // on this device: its own pixels
     }
 
     for (const core::Foreign& f: this->_hub.foreign()) {

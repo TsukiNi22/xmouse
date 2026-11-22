@@ -433,6 +433,7 @@ void xmouse::core::Hub::rebuildLayout_(void)
     this->updateEdges_();
     emit this->layoutChanged();
     emit this->membersChanged();
+    emit this->presenceChanged(); // the cursors follow their devices
 }
 
 void xmouse::core::Hub::refreshCandidates_(void)
@@ -951,6 +952,7 @@ void xmouse::core::Hub::onBinary_(const QString& id, const QByteArray& data)
             const int x = r.i32(); // one read per statement: the order of the arguments of a call is not defined
             const int y = r.i32();
             p.global = QPoint(x, y);
+            p.local = this->_layout.toLocal(p.on, p.global);
             p.flags = r.u8();
             p.seen = now_ms();
             if (!r.ok()) break;

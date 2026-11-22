@@ -415,8 +415,10 @@ void xmouse::core::Hub::sendPadMaps_(void)
         }
         devices.append(QJsonObject{{"id", d.id}, {"name", d.name}, {"self", d.id == this->_group.self()}, {"online", d.id == this->_group.self() || this->reachable(d.id)}, {"kind", this->_state.value("device/" + d.id).toObject().value("kind").toString("desktop")}, {"rects", rects}});
     }
-    for (const Presence& p: this->_presence)
-        cursors.append(QJsonObject{{"id", p.id}, {"name", this->_layout.device(p.id).name}, {"color", colorOf(p.id).name()}, {"x", p.global.x()}, {"y", p.global.y()}, {"on", p.on}, {"flags", p.flags}});
+    for (const Presence& p: this->_presence) {
+        const QPoint at = this->presenceGlobal(p);
+        cursors.append(QJsonObject{{"id", p.id}, {"name", this->_layout.device(p.id).name}, {"color", colorOf(p.id).name()}, {"x", at.x()}, {"y", at.y()}, {"on", p.on}, {"flags", p.flags}});
+    }
     map = QJsonObject{{"t", "map"}, {"devices", devices}, {"cursors", cursors}, {"me", QJsonObject{{"id", this->_group.self()}, {"away", this->_away}, {"target", this->_layout.device(this->_target).name}, {"laser", this->_laser}, {"x", this->pointerGlobal().x()}, {"y", this->pointerGlobal().y()}}}, {"network", this->_group.joined() ? this->_group.name() : QString()}, {"device", this->_config.deviceName()}, {"private", this->_config.settings().privateMode}};
     for (const Pad& p: this->_pads)
         send_json(p.control, map);

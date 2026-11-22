@@ -146,6 +146,13 @@ public final class Layout {
         return new int[]{x - b.x + d.px, y - b.y + d.py};
     }
 
+    public int[] toLocal(String id, int gx, int gy) {
+        Device d = this._devices.get(id);
+        if (d == null) return new int[]{gx, gy};
+        Rect b = this.bounds(id);
+        return new int[]{gx - d.px + b.x, gy - d.py + b.y};
+    }
+
     public Hit hit(int gx, int gy) {
         for (String id: this.sortedIds()) {
             Device d = this._devices.get(id);

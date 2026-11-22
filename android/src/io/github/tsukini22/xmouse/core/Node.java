@@ -619,7 +619,8 @@ public final class Node implements Link.Context, Mesh.Events {
                 int y = r.i32();
                 int flags = r.u8();
                 if (!r.ok) return;
-                this._presence.put(id, new long[]{x, y, flags, System.currentTimeMillis()});
+                int[] local = this._layout.toLocal(on, x, y); // kept on its device: it follows the device moved on the layout
+                this._presence.put(id, new long[]{local[0], local[1], flags, System.currentTimeMillis()});
                 this._presenceOn.put(id, on);
                 return;
             }
@@ -823,7 +824,8 @@ public final class Node implements Link.Context, Mesh.Events {
         if (System.currentTimeMillis() < this._pingUntil) {flags |= PRESENCE_PING; this._presenceDirty = true;}
         if (this._laser) flags |= PRESENCE_LASER;
         byte[] data = new Writer(PRESENCE).u16(++this._seq).text8(on).i32((int) Math.round(this._gx)).i32((int) Math.round(this._gy)).u8(flags).bytes();
-        this._presence.put(this._net.self(), new long[]{Math.round(this._gx), Math.round(this._gy), flags, System.currentTimeMillis()});
+        int[] local = this._layout.toLocal(on, (int) Math.round(this._gx), (int) Math.round(this._gy));
+        this._presence.put(this._net.self(), new long[]{local[0], local[1], flags, System.currentTimeMillis()});
         this._presenceOn.put(this._net.self(), on);
         for (String id: this._mesh.ids()) this._mesh.sendBinary(id, data);
     }
@@ -841,8 +843,11 @@ public final class Node implements Link.Context, Mesh.Events {
             boolean self = d.id.equals(this._net.self());
             devices.add(Json.obj("id", d.id, "name", d.name, "self", self, "online", self || this._mesh.online(d.id), "kind", Json.str(Json.map(this._state.value("device/" + d.id)), "kind", "desktop"), "rects", rects));
         }
-        for (Map.Entry<String, long[]> it: this._presence.entrySet())
-            cursors.add(Json.obj("id", it.getKey(), "name", this.nameOf(it.getKey(), ""), "color", colorOf(it.getKey()), "x", it.getValue()[0], "y", it.getValue()[1], "on", this._presenceOn.getOrDefault(it.getKey(), ""), "flags", it.getValue()[2]));
+        for (Map.Entry<String, long[]> it: this._presence.entrySet()) {
+            String on = this._presenceOn.getOrDefault(it.getKey(), "");
+            int[] at = this._layout.toGlobal(on, (int) it.getValue()[0], (int) it.getValue()[1]);
+            cursors.add(Json.obj("id", it.getKey(), "name", this.nameOf(it.getKey(), ""), "color", colorOf(it.getKey()), "x", at[0], "y", at[1], "on", on, "flags", it.getValue()[2]));
+        }
         return Json.obj("t", "map", "devices", devices, "cursors", cursors, "network", this._net.name(), "device", this._name, "private", false,
             "me", Json.obj("id", this._net.self(), "away", this._away, "target", this.nameOf(this._target, ""), "laser", this._laser, "x", Math.round(this._gx), "y", Math.round(this._gy)));
     }

@@ -105,6 +105,7 @@ class Layout {
         _cold void placeUnplaced(void); // devices without a position go to the right of the others
         _hot _nodiscard std::optional<Hit> hit(const QPoint& global) const; // nullopt = between the screens
         _hot _nodiscard QPoint toGlobal(const QString& id, const QPoint& local) const;
+        _hot _nodiscard QPoint toLocal(const QString& id, const QPoint& global) const; // inverse of toGlobal
         _hot _nodiscard QPoint move(const QPoint& from, const QPoint& delta) const; // slides along the borders, never leaves the screens
         _hot _nodiscard QPoint clampTo(const QString& id, const QPoint& global) const; // closest point on a screen of the device
         _cold _nodiscard QRect bounds(const QString& id) const; // local bounding box of its screens

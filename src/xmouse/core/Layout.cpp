@@ -155,6 +155,14 @@ QRect xmouse::core::Layout::totalBounds(void) const
     return box;
 }
 
+QPoint xmouse::core::Layout::toLocal(const QString& id, const QPoint& global) const
+{
+    auto it = this->_devices.constFind(id);
+
+    if (it == this->_devices.constEnd()) return global;
+    return global - it->position + this->bounds(id).topLeft();
+}
+
 QPoint xmouse::core::Layout::toGlobal(const QString& id, const QPoint& local) const
 {
     auto it = this->_devices.constFind(id);

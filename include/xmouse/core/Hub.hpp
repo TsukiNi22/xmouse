@@ -126,7 +126,8 @@ struct Foreign {
 struct Presence {
     QString id = ""; // owner
     QString on = ""; // device its cursor is on
-    QPoint global; // position in the global space
+    QPoint global; // position in the global space when it was told
+    QPoint local; // the same on the device it is on (desktop pixels): drawn there, so it follows a device moved on the layout
     int flags = 0; // XMOUSE_PRESENCE_*
     qint64 seen = 0; // ms
     quint16 seq = 0;
@@ -409,6 +410,7 @@ class Hub: public QObject {
         void setLaser(const bool enabled); // my cursor leaves a trail on the screens it crosses
         void follow(const QString& id); // the map and the overlays point at this member ("" = nobody)
         _cold _nodiscard QPoint pointerGlobal(void) const; // my cursor in the global space
+        _hot _nodiscard QPoint presenceGlobal(const Presence& p) const; // where a cursor is now (its device may have moved since)
 
         /* access */
         void setPrivateMode(const bool enabled);

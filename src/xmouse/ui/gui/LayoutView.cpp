@@ -157,7 +157,7 @@ void xmouse::ui::gui::LayoutView::paintEvent(QPaintEvent*)
     // Cursors of every member (the live map): a dot in its color, its name, where it is
     for (const core::Presence& pr: this->_hub.presence()) {
         const core::Member m = members.value(pr.id);
-        const QPointF at = this->toWidget_(pr.global);
+        const QPointF at = this->toWidget_(this->_hub.presenceGlobal(pr)); // on its device as placed now
         const bool hidden = pr.flags & XMOUSE_PRESENCE_HIDDEN;
         QColor color = m.color.isValid() ? m.color : palette.accent;
 
