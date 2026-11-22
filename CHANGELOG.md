@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.5-pre] - 2026-11-22
 ### Added
 - Panel access request: an **Accept** button (granted at once, no waiting for the delay)
 
