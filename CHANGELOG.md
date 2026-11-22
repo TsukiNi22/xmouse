@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 ### Added
+- **Encrypted UDP** for the moves and the presence (`net::Datagrams`): AES-256-GCM with a key derived from the network key (rotated with it), nonce = salt of the run + counter, probes every second, TCP when it does not pass (`udp` setting)
+- **Prediction and reordering** on lossy links: a late or replayed move is dropped (sequence numbers), a foreign cursor is drawn ahead along its speed while its next packet is late (80 ms at most), a click carries its position
+- **Relay through a member**: two members that cannot reach each other go through one linked to both (`links` and `relay` in the device entries, 3 hops at most), json and binary messages (cursor, clipboard, files, windows)
+- **Layout profiles** of the network (`profile/<name>`): save, apply, delete (Layout page, `profile` command)
+- **Look here** (waves where the cursor is, on its screen and on the maps), **laser pointer** (a fading trail), **follow a member** (arrow at the border of the screen, halo, ring on the map)
+- **Files**: copied files follow the clipboard (fetched at once up to `clipboardFilesLimit`, then pasted like local ones), files dropped on a device of the map, **Send files to...** (tray, map, `send` command), a **drop shelf** at an edge while a file is dragged there; chunked transfers with back pressure, `Downloads/xmouse`, never overwriting, limits; the Files card of the Activity page
+- **Send a link** to a member (asked there by default: `links` = `ask`, `open`, `never`), rights `links` and `windows`
+- **Web pad** `https://device:47900/pad`: pairing with the code + the local approval, then a token; touchpad (acceleration, tap, two fingers scroll / right click, three fingers middle, tap then hold drag), keyboard with sticky modifiers, special keys, combos, F-keys, live map, look here, laser, send a link; the Phones and web pads card of the Network page (QR code, forget)
+- **Android app** (`android/`, `scripts/build_apk.sh`, no Gradle): the pad in a pinned WebView, QR scanner, updates from the device, and its **screen in the layout** (Accessibility service: the foreign cursors drawn over the apps, their clicks / drags / scrolls as touches, their text in the focused field); built by the CI, embedded in every binary, attached to the releases
+- **macOS**: edges with an event tap (cursor dissociated and hidden), injection with CGEvent (double clicks, unicode text), key map; the Accessibility permission asked once; built by the `Build - macOS (CI)` workflow
+- **Windows between devices** with the network wide switch: a window dragged on an edge (GNOME extension 2, Windows) or chosen on the map is streamed to the other device (JPEG frames up to `windowFps`), driven from there, given back by closing it; its document can be opened there instead (handoff); backends `WinWindows`, `ShellWindows`, `X11Windows`
+- GNOME extension 2: window drags given to xmouse (or the usual border when the switch is off), held buttons, windows listed / pictured / focused
 - Linux tarball `xmouse-linux-x86_64.tar.gz` (`scripts/bundle_linux.sh`: the binary stripped, menu entry, icon, GNOME extension, unpacked into `~/.local`) for the distributions without the package repository, built by the CI
 - `SHA256SUMS` of every file of a release, the link on the page of a device
 - `xmouse.exe` carries its icon and its version (Windows resource `packaging/windows/xmouse.rc.in`)
@@ -29,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The Windows binaries are stripped (the zip: 48 MB -> 33 MB)
 - The commands of the page show in full (scrolled, no more cut)
+- The hub is split by feature (`Hub.cpp`, `Hub-cursor`, `Hub-foreign`, `Hub-route`, `Hub-files`, `Hub-pads`, `Hub-windows`)
+- No crossing while a button is held at an edge (a drag): the drop shelf shows there instead
+- The members table tells relayed / udp links, the pads of a device; the macOS card of the device page is available (Homebrew)
+
+### Fixed
+- GNOME extension backend: the motion, button and wheel signals were never connected (`SLOT(this->...)` strings)
+- `scripts/bundle_linux.sh` refuses a Debug / Asan binary (the tests build the same `./xmouse`)
 
 ## [v0.1.1-pre] - 2026-11-22
 ### Changed
