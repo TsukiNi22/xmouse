@@ -225,3 +225,35 @@ TEST(Mesh, MessagesAndBinaryReachTheMember)
     EXPECT_EQ(received.value("x").toInt(), 42);
     EXPECT_EQ(data, QByteArray("\x20\x00\x01", 3));
 }
+
+/* Join with a link (its identity) */
+TEST(Mesh, JoinWithTheIdentityOfTheLink)
+{
+    ensure_app();
+    Device a("alpha");
+    Device b("beta");
+    QJsonObject welcome;
+
+    a.group.create("desk");
+    QObject::connect(&a.mesh, &xmouse::net::Mesh::joinRequest, &a.mesh, [](xmouse::net::Peer* peer) {peer->approve(true);});
+    QObject::connect(&b.mesh, &xmouse::net::Mesh::joined, &b.mesh, [&](const QJsonObject& w, const QString&) {welcome = w;});
+    (void)b.mesh.join("127.0.0.1", a.mesh.port(), a.code.display(), a.cert.fingerprint());
+    ASSERT_TRUE(wait_for([&]() {return !welcome.isEmpty();}));
+}
+
+TEST(Mesh, JoinRefusesAnotherIdentityThanTheLink)
+{
+    ensure_app();
+    Device a("alpha");
+    Device b("beta");
+    QString failure = "";
+    bool asked = false;
+
+    a.group.create("desk");
+    QObject::connect(&a.mesh, &xmouse::net::Mesh::joinRequest, &a.mesh, [&](xmouse::net::Peer* peer) {asked = true; peer->approve(true);});
+    QObject::connect(&b.mesh, &xmouse::net::Mesh::joinFailed, &b.mesh, [&](const QString& reason) {failure = reason;});
+    (void)b.mesh.join("127.0.0.1", a.mesh.port(), a.code.display(), QByteArray(32, 'x')); // the link of another device
+    ASSERT_TRUE(wait_for([&]() {return !failure.isEmpty();}));
+    EXPECT_FALSE(asked); // nothing sent: the code never reached the device
+    EXPECT_TRUE(failure.contains("not the device of the link"));
+}
