@@ -29,6 +29,8 @@ File Description:
 #include "xmouse/platform/IInputInjector.hpp"
 #ifdef _WIN32
     #include "xmouse/platform/windows/SendInputInjector.hpp"
+#elif defined(__APPLE__)
+    #include "xmouse/platform/macos/MacInjector.hpp"
 #elif defined(__linux__)
     #include "xmouse/platform/linux/UInputInjector.hpp"
     #ifdef XMOUSE_HAS_XTEST
@@ -65,8 +67,12 @@ std::unique_ptr<xmouse::platform::IInputInjector> xmouse::platform::create_input
         if (injector->start(screen)) return injector;
         error += injector->error();
         return nullptr;
+    #elif defined(__APPLE__)
+        injector = std::make_unique<MacInjector>();
+        if (injector->start(screen)) return injector;
+        error = injector->error();
+        return nullptr;
     #else
-        // macOS: no backend yet (CGEvent planned), the session stays view only
         (void)screen;
         error = "no input backend on this platform";
         return nullptr;

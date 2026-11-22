@@ -29,6 +29,8 @@ File Description:
     #include <optional>         // std::optional
     #include <QString>          // QString
 
+class QKeyEvent;
+
 namespace xmouse::platform { // namespace start
 //----------------------------------------------------------------//
 /* STRUCT */
@@ -52,6 +54,7 @@ _hot _nodiscard std::optional<KeyInfo> key_info(const QString& code); // nullopt
 _hot _nodiscard std::optional<TextKey> text_key(const QChar character); // US layout, ascii only
 _hot _nodiscard QString code_from_evdev(const int evdev); // linux KEY_* -> KeyboardEvent.code ("" = unknown)
 _hot _nodiscard QString code_from_scancode(const unsigned short scancode, const bool extended); // Windows set 1 -> KeyboardEvent.code
+_hot _nodiscard QString code_from_key_event(const QKeyEvent* event); // a key of a Qt window -> KeyboardEvent.code (native code of the platform, "" = unknown)
 
 } // namespace end
 #endif /* KEYMAP_H */

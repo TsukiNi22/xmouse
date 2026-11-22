@@ -21,6 +21,10 @@ File Description:
 #define _Attribute
 #include <utils/utils.hpp>
 #include "xmouse/platform/Keymap.hpp"
+#ifdef __APPLE__
+    #include "xmouse/platform/macos/MacInjector.hpp"
+#endif
+#include <QKeyEvent>
 #include <QHash>
 
 //----------------------------------------------------------------//
@@ -164,4 +168,17 @@ QString xmouse::platform::code_from_scancode(const unsigned short scancode, cons
     for (const KeyEntry& entry: KEYS)
         if (entry.scancode == wanted) return QString::fromLatin1(entry.code);
     return "";
+}
+
+QString xmouse::platform::code_from_key_event(const QKeyEvent* event)
+{
+    if (!event) return "";
+    #if defined(_WIN32)
+        // lParam bits 16-24: the scan code and its extended flag (0x100)
+        return code_from_scancode(static_cast<unsigned short>(event->nativeScanCode() & 0xff), (event->nativeScanCode() & 0x100) != 0);
+    #elif defined(__APPLE__)
+        return code_from_mac(static_cast<int>(event->nativeVirtualKey()));
+    #else
+        return code_from_evdev(static_cast<int>(event->nativeScanCode()) - 8); // X11 key code = evdev + 8
+    #endif
 }

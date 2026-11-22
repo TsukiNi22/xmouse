@@ -27,6 +27,8 @@ File Description:
 #include "xmouse/platform/GrabCapture.hpp"
 #ifdef _WIN32
     #include "xmouse/platform/windows/HookCapture.hpp"
+#elif defined(__APPLE__)
+    #include "xmouse/platform/macos/MacCapture.hpp"
 #elif defined(XMOUSE_HAS_DBUS)
     #include "xmouse/platform/linux/PortalCapture.hpp"
     #include "xmouse/platform/linux/ShellCapture.hpp"
@@ -37,6 +39,8 @@ std::unique_ptr<xmouse::platform::IInputCapture> xmouse::platform::create_input_
 {
     #ifdef _WIN32
         return std::make_unique<HookCapture>(parent);
+    #elif defined(__APPLE__)
+        return std::make_unique<MacCapture>(parent); // event tap (Accessibility permission)
     #else
         // Wayland: only the compositor knows the pointer, the portal InputCapture is the way (the session type, not the Qt platform: xmouse may run on Xwayland)
         const bool wayland = qEnvironmentVariable("XDG_SESSION_TYPE") == "wayland" || qEnvironmentVariableIsSet("WAYLAND_DISPLAY");
