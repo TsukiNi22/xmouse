@@ -87,6 +87,7 @@ class Overlay final: public QObject {
         QList<OverlayWindow*> _windows;
         QTimer _anim; // 30 ms while a wave / a trail / a follow arrow is shown
         QTimer _frame; // the next frame when the last one is too recent (one per refresh of the screens at most)
+        QTimer _fadeWake; // the moment the next still cursor starts to fade
         qint64 _lastFrame = 0; // ms
         int _frameInterval = 16; // ms, from the fastest screen
         QHash<QString, QList<QPair<qint64, QPoint>>> _trails; // member -> laser points (ms, local desktop pixels)
@@ -102,6 +103,7 @@ class Overlay final: public QObject {
         _cold _nodiscard QList<QWidget*> windows(void) const; // never counted as the panel (click-through)
         _cold _nodiscard QPoint toLocal(const QPoint& global) const; // global space -> desktop pixels of this device
         _cold _nodiscard bool animating(void) const; // a wave, a trail or a follow arrow to draw
+        _cold _nodiscard bool fading(void) const; // a still cursor fading out now
 
         // ------------ Function ---------- //
         /* getter */

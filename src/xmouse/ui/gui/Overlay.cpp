@@ -40,6 +40,8 @@ File Description:
 #define PING_PERIOD 900 // ms of one wave
 #define RAISE_INTERVAL 2000 // ms between two raises of a shown overlay (above a window opened meanwhile; never at every frame)
 #define MIN_FRAME_INTERVAL 4 // ms, the fastest screens
+#define IDLE_HIDE 3000 // ms a cursor stays drawn without moving
+#define IDLE_FADE 600 // ms of its fade out
 
 //----------------------------------------------------------------//
 /* TOOLS */
@@ -47,6 +49,16 @@ File Description:
 _hot static qint64 now_ms(void) {return QDateTime::currentMSecsSinceEpoch();}
 
 _hot static double scale_of(const QScreen* screen) {return screen ? std::clamp(screen->logicalDotsPerInch() / 96.0, 1.0, 3.0) : 1.0;}
+
+// A cursor that does not move fades out (its clicks alone never bring it back: they do not move it), drawn again at
+// once when it moves; one holding a button or asking the panel stays
+_hot static double idle_alpha(const xmouse::core::Foreign& f, const qint64 now)
+{
+    const qint64 idle = now - f.seen;
+
+    if (f.buttons != 0 || f.state == xmouse::core::ForeignState::Asking || idle < IDLE_HIDE) return 1.0;
+    return std::max(0.0, 1.0 - static_cast<double>(idle - IDLE_HIDE) / IDLE_FADE);
+}
 
 // Arrow cursor (12 x 19 at scale 1), tip at (0, 0)
 _hot static QPainterPath arrow_path(const double s)
@@ -125,7 +137,7 @@ QRegion xmouse::ui::gui::OverlayWindow::cursorRegion_(const qint64 now) const
         const QPoint at = pointerMode && !f.passing ? f.local : f.drawn(now);
         const QString extra = state_text(f, this->_hub.config().settings().focusRequestDelay);
         const int label = metrics.horizontalAdvance(extra.isEmpty() ? f.name : f.name + "  -  " + extra) + static_cast<int>(40 * s);
-        if (!screen.contains(at)) continue;
+        if (!screen.contains(at) || idle_alpha(f, now) <= 0.0) continue; // gone after its fade: nothing to repaint
         // The arrow, its halo and its ring around the tip; the name on the right or the left, below or above
         region += QRect(at.x() - screen.x() - label - static_cast<int>(30 * s), at.y() - screen.y() - static_cast<int>(50 * s), 2 * label + static_cast<int>(60 * s), static_cast<int>(100 * s));
     }
@@ -248,7 +260,8 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
         QRect pill = text.translated(at + QPoint(static_cast<int>(14 * s), static_cast<int>(20 * s)) - text.topLeft());
         QColor color = f.color;
 
-        if (!this->rect().contains(at)) continue;
+        if (!this->rect().contains(at) || idle_alpha(f, now) <= 0.0) continue;
+        p.setOpacity(idle_alpha(f, now));
         if (f.state == core::ForeignState::Paused || f.state == core::ForeignState::Asking || f.passing) color = color.darker(160);
 
         // Followed member: a halo around its cursor
@@ -284,6 +297,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
         p.drawRoundedRect(pill, pill.height() / 2.0, pill.height() / 2.0);
         p.setPen(Qt::white);
         p.drawText(pill, Qt::AlignCenter, label);
+        p.setOpacity(1.0);
     }
     this->paintFollow_(p, s);
 }
@@ -298,6 +312,8 @@ xmouse::ui::gui::Overlay::Overlay(core::Hub& hub, QObject* parent)
     this->_anim.setInterval(ANIMATION_INTERVAL);
     this->_frame.setSingleShot(true);
     this->_frame.setTimerType(Qt::PreciseTimer);
+    this->_fadeWake.setSingleShot(true);
+    QObject::connect(&this->_fadeWake, &QTimer::timeout, this, &Overlay::refresh);
     QObject::connect(&this->_anim, &QTimer::timeout, this, &Overlay::tick_);
     QObject::connect(&this->_frame, &QTimer::timeout, this, &Overlay::draw_);
     QObject::connect(&hub, &core::Hub::foreignChanged, this, &Overlay::refresh);
@@ -333,6 +349,17 @@ QPoint xmouse::ui::gui::Overlay::toLocal(const QPoint& global) const
     return global - this->_hub.layout().device(self).position + this->_hub.layout().bounds(self).topLeft();
 }
 
+bool xmouse::ui::gui::Overlay::fading(void) const
+{
+    const qint64 now = now_ms();
+
+    for (const core::Foreign& f: this->_hub.foreign()) {
+        const double alpha = idle_alpha(f, now);
+        if (alpha > 0.0 && alpha < 1.0) return true;
+    }
+    return false;
+}
+
 bool xmouse::ui::gui::Overlay::animating(void) const
 {
     const QString self = this->_hub.group().self();
@@ -363,7 +390,7 @@ void xmouse::ui::gui::Overlay::tick_(void)
         else ++it;
     }
     this->refresh();
-    if (!this->animating()) this->_anim.stop();
+    if (!this->animating() && !this->fading()) this->_anim.stop();
 }
 
 void xmouse::ui::gui::Overlay::refresh(void)
@@ -379,10 +406,20 @@ void xmouse::ui::gui::Overlay::refresh(void)
 
 void xmouse::ui::gui::Overlay::draw_(void)
 {
-    this->_lastFrame = now_ms();
-    if (this->animating() && !this->_anim.isActive()) this->_anim.start();
+    const qint64 now = now_ms();
+    qint64 wake = -1;
+
+    this->_lastFrame = now;
+    if ((this->animating() || this->fading()) && !this->_anim.isActive()) this->_anim.start();
     for (OverlayWindow* w: this->_windows)
         w->refresh();
+
+    // The next cursor to fade: woken then (a still cursor sends nothing that would redraw it)
+    for (const core::Foreign& f: this->_hub.foreign()) {
+        const qint64 left = f.seen + IDLE_HIDE - now;
+        if (left > 0 && f.buttons == 0 && (wake < 0 || left < wake)) wake = left;
+    }
+    if (wake >= 0) this->_fadeWake.start(static_cast<int>(wake) + 1);
 }
 
 QList<QWidget*> xmouse::ui::gui::Overlay::windows(void) const
