@@ -56,9 +56,9 @@ bool xmouse::platform::ShellCapture::start(void)
 
     if (!bus.isConnected()) {this->_error = "no session bus"; return false;}
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Crossed", this, SLOT(onCrossed_(int,int,int,int)));
-    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Motion", this, SLOT(this->onMotion_(double,double)));
-    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Button", this, SLOT(this->onButton_(uint,bool)));
-    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Wheel", this, SLOT(this->onWheel_(int,int)));
+    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Motion", this, SLOT(onMotion_(double,double)));
+    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Button", this, SLOT(onButton_(uint,bool)));
+    ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Wheel", this, SLOT(onWheel_(int,int)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Key", this, SLOT(onKey_(uint,bool)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Ended", this, SLOT(onEnded_()));
     if (!ok) {this->_error = "cannot listen to the GNOME Shell extension"; return false;}
