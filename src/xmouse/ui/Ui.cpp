@@ -36,6 +36,7 @@ File Description:
 #include <QCoreApplication>
 #include <QApplication>
 #include <QMessageBox>
+#include <QDialog>
 #include <memory>
 #include <QTimer>
 
@@ -103,8 +104,12 @@ static void snapshot_if_asked(xmouse::ui::gui::MainWindow* window)
 
     if (path.isEmpty()) return;
     window->showPage(qEnvironmentVariableIntValue("XMOUSE_SNAPSHOT_PAGE"));
+    if (qEnvironmentVariableIsSet("XMOUSE_SNAPSHOT_QR")) QMetaObject::invokeMethod(window, "showQr_", Qt::QueuedConnection, Q_ARG(int, -1));
     QTimer::singleShot(2000, window, [window, path]() {
-        window->grab().save(path);
+        QWidget* shown = window;
+        for (QWidget* top: QApplication::topLevelWidgets())
+            if (top != window && top->isVisible() && qobject_cast<QDialog*>(top)) shown = top; // a dialog opened for the snapshot
+        shown->grab().save(path);
         QCoreApplication::quit();
     });
 }

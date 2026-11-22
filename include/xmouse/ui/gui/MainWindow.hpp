@@ -30,6 +30,7 @@ File Description:
     #include "LayoutView.hpp"           // xmouse::ui::gui::LayoutView
     #include "Overlay.hpp"              // xmouse::ui::gui::Overlay
     #include <QSystemTrayIcon>          // QSystemTrayIcon
+    #include <QProgressBar>             // QProgressBar
     #include <QStackedWidget>           // QStackedWidget
     #include <QTableWidget>             // QTableWidget
     #include <QListWidget>              // QListWidget
@@ -68,15 +69,25 @@ class MainWindow final: public QMainWindow {
         QLabel* _noticeText = nullptr;
 
         /* network page */
-        QStackedWidget* _networkStack = nullptr; // 0 = no network (create / join), 1 = in a network
-        QLabel* _networkTitle = nullptr;
+        QWidget* _aloneTop = nullptr; // no network: create one
+        QWidget* _joinedTop = nullptr; // in a network: code + status
+        QLabel* _identity = nullptr; // "This device is ..." under the title
         QLabel* _code = nullptr;
-        QLabel* _codeLeft = nullptr;
-        QLabel* _qr = nullptr;
-        QLabel* _link = nullptr;
+        QProgressBar* _codeBar = nullptr; // time left of the code
+        QLabel* _codeTimer = nullptr;
+        QLabel* _fingerprint = nullptr;
+        QLabel* _statusEdges = nullptr;
+        QLabel* _statusInput = nullptr;
+        QLabel* _statusTls = nullptr;
+        QLabel* _statusMembers = nullptr;
+        QComboBox* _exposure = nullptr; // "Open to"
+        QLabel* _exposureStatus = nullptr;
+        QWidget* _endpointList = nullptr; // one row per address
+        QString _endpointKey = ""; // the rows are rebuilt only when an address changes
+        QWidget* _membersCard = nullptr;
         QTableWidget* _members = nullptr;
+        QLabel* _connectTitle = nullptr;
         QListWidget* _nearby = nullptr;
-        QListWidget* _nearbyAlone = nullptr;
         QLineEdit* _createName = nullptr;
         QLineEdit* _joinAddress = nullptr;
         QLineEdit* _joinCode = nullptr;
@@ -107,6 +118,9 @@ class MainWindow final: public QMainWindow {
         void refreshMembers_(void);
         void refreshNearby_(void);
         void refreshCode_(void);
+        void refreshStatus_(void);
+        void refreshEndpoints_(void);
+        Q_INVOKABLE void showQr_(const int endpoint); // QR code of an address + the code (-1 = the first one another device can use)
         void refreshWhere_(void);
         void refreshBackends_(void);
         void onJoinApproval_(net::Peer* peer);

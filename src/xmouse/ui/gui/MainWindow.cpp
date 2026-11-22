@@ -37,11 +37,14 @@ File Description:
 #include <QClipboard>
 #include <QJsonArray>
 #include <functional>
+#include <QUrlQuery>
 #include <QDateTime>
 #include <QPainter>
+#include <QDialog>
 #include <QFrame>
 #include <QStyle>
 #include <QMenu>
+#include <QUrl>
 
 //----------------------------------------------------------------//
 /* TOOLS */
@@ -314,6 +317,8 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     this->_tick.setInterval(1000);
     QObject::connect(&this->_tick, &QTimer::timeout, this, [this]() {
         this->refreshCode_();
+        this->refreshStatus_();
+        this->refreshEndpoints_();
         if (this->_accessBanner->isVisible()) {
             const core::Foreign f = this->_hub.foreign().value(this->_accessId);
             const qint64 left = this->_hub.config().settings().focusRequestDelay - (QDateTime::currentMSecsSinceEpoch() - f.askedAt) / 1000;
@@ -344,20 +349,21 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
     QWidget* alone = new QWidget();
     QVBoxLayout* aloneLayout = new QVBoxLayout(alone);
     QWidget* joined = new QWidget();
-    QVBoxLayout* joinedLayout = new QVBoxLayout(joined);
+    QHBoxLayout* joinedLayout = new QHBoxLayout(joined);
+    QWidget* head = make_page_head("Network", "");
     QVBoxLayout* body = nullptr;
     QFrame* card = nullptr;
 
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(14);
-    layout->addWidget(make_page_head("Network", "The devices whose screens and cursors are linked. Every link is TLS 1.3 with a post-quantum key exchange, a device joins with the one time code (or the QR code) of any member."));
-    this->_networkStack = new QStackedWidget(page);
+    layout->setSpacing(16);
+    this->_identity = head->findChildren<QLabel*>().last();
+    this->_identity->setTextFormat(Qt::RichText);
+    layout->addWidget(head);
     aloneLayout->setContentsMargins(0, 0, 0, 0);
-    aloneLayout->setSpacing(14);
     joinedLayout->setContentsMargins(0, 0, 0, 0);
-    joinedLayout->setSpacing(14);
+    joinedLayout->setSpacing(16);
 
-    // Not in a network: create one, or join one
+    // No network: this device creates it (the others join with its code)
     card = make_panel("Create a network", body);
     this->_createName = new QLineEdit();
     this->_createName->setPlaceholderText(this->_hub.config().deviceName() + " network");
@@ -365,81 +371,122 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
     QHBoxLayout* createRow = new QHBoxLayout();
     createRow->addWidget(this->_createName, 1);
     createRow->addWidget(create);
-    body->addWidget(make_label("This device becomes the first member: the others join with its code.", "muted"));
+    body->addWidget(make_label("This device becomes the first member: the others join with its code. There is no server: the network lives as long as one of its members runs.", "muted"));
     body->addLayout(createRow);
     QObject::connect(create, &QPushButton::clicked, this, [this]() {this->_hub.createNetwork(this->_createName->text());});
+    QObject::connect(this->_createName, &QLineEdit::returnPressed, create, &QPushButton::click);
     aloneLayout->addWidget(card);
 
-    // Join (shown in both states: joining another network leaves the current one)
-    const std::function<QFrame*(QListWidget*&)> joinCard = [this](QListWidget*& nearby) {
-        QVBoxLayout* b = nullptr;
-        QFrame* c = make_panel("Join a network", b);
-        QHBoxLayout* row = new QHBoxLayout();
-        QPushButton* join = make_button("Join", "primary", "control");
-        QLineEdit* address = new QLineEdit();
-        QLineEdit* code = new QLineEdit();
-        if (!this->_joinAddress) {this->_joinAddress = address; this->_joinCode = code;}
-        address->setPlaceholderText("address[:port] or xmouse:// link");
-        code->setPlaceholderText("K7F-29Q-XM4");
-        code->setObjectName("codeInput");
-        code->setMaximumWidth(170);
-        row->addWidget(address, 1);
-        row->addWidget(code);
-        row->addWidget(join);
-        b->addWidget(make_label("The code (or the QR code) is shown on the Network page of a member.", "muted"));
-        b->addLayout(row);
-        nearby = new QListWidget();
-        nearby->setMaximumHeight(130);
-        b->addWidget(make_label("Devices on this LAN (click to fill the address)", "muted"));
-        b->addWidget(nearby);
-        QObject::connect(join, &QPushButton::clicked, this, [this, address, code]() {
-            this->_joinAddress = address;
-            this->_joinCode = code;
-            this->joinFromFields_();
+    // In a network: the connection code (left) and the state of this device (right)
+    {
+        QVBoxLayout* code = nullptr;
+        QFrame* codeCard = make_panel("Connection code", code);
+        QHBoxLayout* buttons = new QHBoxLayout();
+        QPushButton* copy = make_button("Copy", "", "copy");
+        QPushButton* qr = make_button("QR code", "", "qr");
+        QPushButton* renew = make_button("New code", "ghost", "refresh");
+        QVBoxLayout* status = nullptr;
+        QFrame* statusCard = make_panel("Status", status);
+        QFormLayout* form = new QFormLayout();
+
+        codeCard->setProperty("accent", true);
+        code->addWidget(make_label("Give it to the device that joins (the address and this code, or the QR code): it works once, then changes", "muted"));
+        this->_code = make_label("---", "code");
+        code->addWidget(this->_code);
+        this->_codeBar = new QProgressBar(codeCard);
+        this->_codeBar->setTextVisible(false);
+        this->_codeBar->setFixedHeight(3);
+        code->addWidget(this->_codeBar);
+        this->_codeTimer = make_label("", "muted");
+        code->addWidget(this->_codeTimer);
+        this->_fingerprint = make_label("", "muted");
+        this->_fingerprint->setToolTip(security::fingerprint_text(this->_hub.fingerprint()));
+        code->addWidget(this->_fingerprint);
+        code->addStretch();
+        buttons->addWidget(copy);
+        buttons->addWidget(qr);
+        buttons->addWidget(renew);
+        buttons->addStretch();
+        code->addLayout(buttons);
+        copy->setToolTip("Copy the code");
+        qr->setToolTip("A QR code with an address of this device and the code: scanned by the phone app, or its link pasted in Connect to a network");
+        QObject::connect(copy, &QPushButton::clicked, this, [this, copy]() {
+            QGuiApplication::clipboard()->setText(this->_hub.code().display());
+            copy->setText("Copied");
+            QTimer::singleShot(1500, copy, [copy]() {copy->setText("Copy");});
         });
-        QObject::connect(code, &QLineEdit::returnPressed, join, &QPushButton::click);
-        QObject::connect(nearby, &QListWidget::itemClicked, this, [address](QListWidgetItem* item) {address->setText(item->data(Qt::UserRole).toString());});
-        return c;
-    };
-    aloneLayout->addWidget(joinCard(this->_nearbyAlone));
-    this->_joinStatus = make_label("", "muted");
-    aloneLayout->addWidget(this->_joinStatus);
-    aloneLayout->addStretch();
+        QObject::connect(qr, &QPushButton::clicked, this, [this]() {this->showQr_(-1);});
+        QObject::connect(renew, &QPushButton::clicked, this, [this]() {this->_hub.code().rotate(); this->refreshCode_();});
+        QObject::connect(&this->_hub.code(), &security::PairingCode::changed, this, &MainWindow::refreshCode_);
 
-    // In a network: add a device (code + QR), the members
-    this->_networkTitle = make_label("", "title");
-    joinedLayout->addWidget(this->_networkTitle);
-    card = make_panel("Add a device", body);
-    QHBoxLayout* pair = new QHBoxLayout();
-    QVBoxLayout* pairText = new QVBoxLayout();
-    QHBoxLayout* pairButtons = new QHBoxLayout();
-    QPushButton* copy = make_button("Copy the link", "ghost", "copy");
-    QPushButton* renew = make_button("New code", "ghost", "refresh");
-    this->_code = make_label("", "code");
-    this->_codeLeft = make_label("", "muted");
-    this->_link = make_label("", "mono");
-    this->_qr = new QLabel();
-    this->_qr->setObjectName("qr");
-    this->_qr->setFixedSize(168, 168);
-    this->_qr->setScaledContents(true);
-    pairText->addWidget(make_label("On the new device: xmouse, Join a network, this address and this code (or scan the QR code with the phone app). Used once, then a new code.", "muted"));
-    pairText->addWidget(this->_code);
-    pairText->addWidget(this->_codeLeft);
-    pairText->addWidget(this->_link);
-    pairButtons->addWidget(copy);
-    pairButtons->addWidget(renew);
-    pairButtons->addStretch();
-    pairText->addLayout(pairButtons);
-    pairText->addStretch();
-    pair->addLayout(pairText, 1);
-    pair->addWidget(this->_qr, 0, Qt::AlignTop);
-    body->addLayout(pair);
-    QObject::connect(copy, &QPushButton::clicked, this, [this]() {QGuiApplication::clipboard()->setText(this->_hub.joinLink());});
-    QObject::connect(renew, &QPushButton::clicked, this, [this]() {this->_hub.code().rotate(); this->refreshCode_();});
-    QObject::connect(&this->_hub.code(), &security::PairingCode::changed, this, &MainWindow::refreshCode_);
-    joinedLayout->addWidget(card);
+        form->setVerticalSpacing(12);
+        form->setHorizontalSpacing(18);
+        form->setLabelAlignment(Qt::AlignLeft | Qt::AlignTop);
+        this->_statusEdges = make_label("-");
+        this->_statusEdges->setWordWrap(true);
+        this->_statusInput = make_label("-");
+        this->_statusInput->setWordWrap(true);
+        this->_statusTls = make_label(security::tls_summary());
+        this->_statusTls->setWordWrap(true);
+        this->_statusMembers = make_label("-");
+        form->addRow(make_label("Edges", "muted"), this->_statusEdges);
+        form->addRow(make_label("Input", "muted"), this->_statusInput);
+        form->addRow(make_label("Encryption", "muted"), this->_statusTls);
+        form->addRow(make_label("Members", "muted"), this->_statusMembers);
+        status->addLayout(form);
+        status->addStretch();
+        joinedLayout->addWidget(codeCard, 3);
+        joinedLayout->addWidget(statusCard, 2);
+    }
+    this->_aloneTop = alone;
+    this->_joinedTop = joined;
+    layout->addWidget(alone);
+    layout->addWidget(joined); // only one of the two shown (refreshNetwork_): a hidden one takes no room
 
-    card = make_panel("Members", body);
+    // Who can reach this device: the paths of the exposure, chosen like in xdesk (the LAN is always open)
+    {
+        QFrame* reach = make_card();
+        QVBoxLayout* reachLayout = new QVBoxLayout(reach);
+        QHBoxLayout* reachHead = new QHBoxLayout();
+
+        reachLayout->setContentsMargins(18, 14, 18, 8);
+        reachLayout->setSpacing(6);
+        this->_exposure = new QComboBox();
+        this->_exposure->addItem("LAN only", "lan");
+        this->_exposure->addItem("LAN + Tailscale", "tailscale");
+        this->_exposure->addItem("LAN + internet (UPnP router port)", "upnp");
+        this->_exposure->addItem("LAN + internet (bore.pub tunnel)", "bore");
+        this->_exposure->addItem("LAN + internet (ngrok tunnel)", "ngrok");
+        this->_exposure->addItem("LAN + internet (port forwarded by hand)", "manual");
+        this->_exposure->setItemData(0, "Only the devices on the same network", Qt::ToolTipRole);
+        this->_exposure->setItemData(1, "Also your devices signed in to the same tailnet (WireGuard)", Qt::ToolTipRole);
+        this->_exposure->setItemData(2, "Also the devices on the internet: xmouse asks the router to open the port", Qt::ToolTipRole);
+        this->_exposure->setItemData(3, "Also the devices on the internet, through bore.pub (TLS stays end to end)", Qt::ToolTipRole);
+        this->_exposure->setItemData(4, "Also the devices on the internet, through ngrok (TLS stays end to end, account needed)", Qt::ToolTipRole);
+        this->_exposure->setItemData(5, "Also the devices on the internet, through the port you forwarded on the router (public address in the settings)", Qt::ToolTipRole);
+        this->_exposure->setMinimumWidth(250);
+        reachHead->addWidget(make_label("Who can reach this device", "subtitle"));
+        reachHead->addStretch();
+        reachHead->addWidget(make_label("Open to", "muted"));
+        reachHead->addWidget(this->_exposure);
+        reachLayout->addLayout(reachHead);
+        this->_exposureStatus = make_label("", "muted");
+        reachLayout->addWidget(this->_exposureStatus);
+        this->_endpointList = new QWidget(reach);
+        new QVBoxLayout(this->_endpointList);
+        this->_endpointList->layout()->setContentsMargins(0, 0, 0, 0);
+        this->_endpointList->layout()->setSpacing(0);
+        reachLayout->addWidget(this->_endpointList);
+        QObject::connect(this->_exposure, &QComboBox::activated, this, [this](const int) {
+            this->_hub.setExposure(core::exposure_from(this->_exposure->currentData().toString()));
+            this->refreshEndpoints_();
+        });
+        QObject::connect(&this->_hub.exposure(), &net::Exposure::changed, this, &MainWindow::refreshEndpoints_);
+        layout->addWidget(reach);
+    }
+
+    // Members of the network
+    this->_membersCard = make_panel("Members", body);
     this->_members = new QTableWidget(0, 7);
     this->_members->setHorizontalHeaderLabels({"Device", "System", "Link", "Latency", "Address", "Allowed here", ""});
     this->_members->verticalHeader()->hide();
@@ -448,18 +495,45 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
     this->_members->horizontalHeader()->setStretchLastSection(false);
     this->_members->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     this->_members->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    this->_members->setMinimumHeight(220);
+    this->_members->setMinimumHeight(200);
     Theme::decorate(this->_members);
     body->addWidget(this->_members);
-    joinedLayout->addWidget(card);
-    QListWidget* nearbyJoined = nullptr;
-    joinedLayout->addWidget(joinCard(nearbyJoined));
-    this->_nearby = nearbyJoined;
-    joinedLayout->addStretch();
+    layout->addWidget(this->_membersCard);
 
-    this->_networkStack->addWidget(alone);
-    this->_networkStack->addWidget(joined);
-    layout->addWidget(this->_networkStack);
+    // Connect to a network (the part of xmouse): the address of a member and its code, or its link / QR code
+    {
+        QFrame* connect = make_panel("Connect to a network", body);
+        QHBoxLayout* row = new QHBoxLayout();
+        QPushButton* join = make_button("Join", "primary", "control");
+
+        this->_connectTitle = connect->findChildren<QLabel*>().first();
+        this->_joinAddress = new QLineEdit();
+        this->_joinCode = new QLineEdit();
+        this->_joinAddress->setPlaceholderText("address[:port] of a member, or its xmouse:// link");
+        this->_joinCode->setPlaceholderText("K7F-29Q-XM4");
+        this->_joinCode->setObjectName("codeInput");
+        this->_joinCode->setMaximumWidth(170);
+        row->addWidget(this->_joinAddress, 1);
+        row->addWidget(this->_joinCode);
+        row->addWidget(join);
+        body->addWidget(make_label("The address and the code are on the Network page of any member (Connection code, Who can reach this device). The link of its QR code fills both.", "muted"));
+        body->addLayout(row);
+        this->_joinStatus = make_label("", "muted");
+        body->addWidget(this->_joinStatus);
+        this->_nearby = new QListWidget();
+        this->_nearby->setMaximumHeight(120);
+        body->addWidget(make_label("Devices running xmouse on this LAN (click to fill the address)", "muted"));
+        body->addWidget(this->_nearby);
+        QObject::connect(join, &QPushButton::clicked, this, &MainWindow::joinFromFields_);
+        QObject::connect(this->_joinCode, &QLineEdit::returnPressed, join, &QPushButton::click);
+        QObject::connect(this->_joinAddress, &QLineEdit::textChanged, this, [this](const QString& text) {
+            const QString code = QUrlQuery(QUrl(text.trimmed())).queryItemValue("code");
+            if (text.trimmed().startsWith("xmouse://") && !code.isEmpty()) this->_joinCode->setText(code); // a pasted link brings its code
+        });
+        QObject::connect(this->_nearby, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {this->_joinAddress->setText(item->data(Qt::UserRole).toString());});
+        layout->addWidget(connect);
+    }
+    layout->addStretch();
     QObject::connect(&this->_hub.mesh(), &net::Mesh::announced, this, &MainWindow::refreshNearby_);
     return page;
 }
@@ -546,15 +620,13 @@ QWidget* xmouse::ui::gui::MainWindow::buildSettings_(void)
     port->setRange(1, 65535);
     port->setValue(s.port);
     form->addRow("Port (restart)", port);
-    QComboBox* exposure = new QComboBox();
-    for (const char* mode: {"lan", "tailscale", "upnp", "bore", "ngrok", "manual"})
-        exposure->addItem(mode);
-    exposure->setCurrentText(core::exposure_name(s.exposure));
-    form->addRow("Reachable through (restart)", exposure);
+    QLineEdit* publicHost = new QLineEdit(s.publicHost);
+    publicHost->setPlaceholderText("public address (port forwarded by hand)");
+    form->addRow("Public address", publicHost);
     body->addLayout(form);
     QObject::connect(this->_deviceName, &QLineEdit::editingFinished, this, [this]() {this->_hub.renameDevice(this->_deviceName->text());});
     QObject::connect(port, &QSpinBox::valueChanged, this, [this, save](const int v) {this->_hub.config().settings().port = static_cast<std::uint16_t>(v); save();});
-    QObject::connect(exposure, &QComboBox::currentTextChanged, this, [this, save](const QString& v) {this->_hub.config().settings().exposure = core::exposure_from(v); save();});
+    QObject::connect(publicHost, &QLineEdit::editingFinished, this, [this, publicHost, save]() {this->_hub.config().settings().publicHost = publicHost->text().trimmed(); save();});
     layout->addWidget(card);
 
     card = make_panel("Access", body);
@@ -616,33 +688,186 @@ void xmouse::ui::gui::MainWindow::refreshNetwork_(void)
     const bool joined = this->_hub.group().joined();
     const QString name = this->_hub.state().value("net/name").toString(this->_hub.group().name());
 
-    this->_networkStack->setCurrentIndex(joined ? 1 : 0);
+    this->_aloneTop->setVisible(!joined);
+    this->_joinedTop->setVisible(joined);
+    this->_membersCard->setVisible(joined);
+    this->_connectTitle->setText(joined ? "CONNECT TO ANOTHER NETWORK" : "CONNECT TO A NETWORK");
+    this->_identity->setText("This device is <b>" + this->_hub.config().deviceName().toHtmlEscaped() + "</b>" + (joined ? ", in the network <b>" + name.toHtmlEscaped() + "</b>" : QString(", in no network yet: create one, or connect to the network of another device")));
     this->_leave->setText(joined ? "Leave the network" : "Create or join");
     this->_leave->setIcon(Theme::icon("power", joined ? QColor(Qt::white) : Theme::palette().accentText));
     set_prop(this->_leave, "on", joined); // the #share style: true = red, false = green
-    this->_networkTitle->setText(name);
     this->_windowMove->blockSignals(true);
     this->_windowMove->setChecked(this->_hub.state().value("net/windowMove").toBool(true));
     this->_windowMove->setEnabled(joined);
     this->_windowMove->blockSignals(false);
     this->refreshCode_();
+    this->refreshStatus_();
+    this->refreshEndpoints_();
     this->refreshMembers_();
     this->refreshNearby_();
 }
 
 void xmouse::ui::gui::MainWindow::refreshCode_(void)
 {
-    const QString link = this->_hub.joinLink();
     const int left = this->_hub.code().secondsLeft();
+    const int lifetime = std::max(1, this->_hub.config().settings().codeLifetime);
 
-    if (!this->_hub.group().joined()) return;
     this->_code->setText(this->_hub.code().display());
-    this->_codeLeft->setText(left < 0 ? "valid until used" : "new code in " + QString::number(left / 60) + " min " + QString::number(left % 60).rightJustified(2, '0') + " s");
-    if (this->_link->toolTip() != link) {
-        this->_link->setText(link.section('?', 0, 0) + "?fp=" + this->_hub.state().value("device/" + this->_hub.group().self()).toObject().value("fp").toString().left(16) + "...");
-        this->_link->setToolTip(link);
-        this->_qr->setPixmap(qr_pixmap(link, 336));
+    this->_codeBar->setVisible(left >= 0);
+    this->_codeBar->setRange(0, lifetime);
+    this->_codeBar->setValue(std::max(0, left));
+    this->_codeTimer->setText(left >= 0 ? "Changes in " + QString::number(left / 60) + ":" + QString::number(left % 60).rightJustified(2, '0') + ", and after each use" : "Changes after each use");
+    this->_fingerprint->setText("Device identity " + security::fingerprint_short(this->_hub.fingerprint()) + "  (the members pin it, the QR code carries it)");
+}
+
+void xmouse::ui::gui::MainWindow::refreshStatus_(void)
+{
+    const QList<core::Member> members = this->_hub.members();
+    int online = 0;
+
+    for (const core::Member& m: members)
+        online += !m.self && m.online;
+    this->_statusEdges->setText(this->_hub.captureName() + (this->_hub.captureError().isEmpty() ? "" : " - " + this->_hub.captureError()));
+    set_tone(this->_statusEdges, this->_hub.captureName() == "none" || !this->_hub.captureError().isEmpty() ? "warning" : "success");
+    this->_statusInput->setText(this->_hub.injectorError().isEmpty() ? this->_hub.injectorName() : "unavailable - " + this->_hub.injectorError());
+    set_tone(this->_statusInput, this->_hub.injectorError().isEmpty() ? "success" : "warning");
+    this->_statusMembers->setText(members.size() <= 1 ? QString("only this device: add one with the code") : QString::number(online) + " online of " + QString::number(members.size() - 1));
+    set_tone(this->_statusMembers, online > 0 ? "success" : "muted");
+}
+
+void xmouse::ui::gui::MainWindow::refreshEndpoints_(void)
+{
+    const QList<net::Endpoint>& endpoints = this->_hub.exposure().endpoints();
+    QLayout* layout = this->_endpointList->layout();
+    QString key = "";
+
+    this->_exposure->setCurrentIndex(std::max(0, this->_exposure->findData(core::exposure_name(this->_hub.config().settings().exposure))));
+    this->_exposureStatus->setText(this->_hub.exposure().status() + (this->_hub.group().joined() ? "." : ". The others reach this device through these paths once it is in a network."));
+
+    // Rebuilt only when an address changes (refreshed every second)
+    for (const net::Endpoint& e: endpoints)
+        key += "\n" + e.label + "|" + e.host + "|" + QString::number(e.port) + "|" + e.reach + "|" + e.ip;
+    if (key == this->_endpointKey) return;
+    this->_endpointKey = key;
+    while (QLayoutItem* item = layout->takeAt(0)) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
     }
+    if (endpoints.isEmpty()) {
+        layout->addWidget(make_label("Looking for the addresses of this device...", "muted"));
+        return;
+    }
+    for (int i = 0; i < endpoints.size(); ++i) {
+        const net::Endpoint& e = endpoints[i];
+        const QString address = "xmouse://" + e.host + ":" + QString::number(e.port);
+        const QString kind = e.label == "Tailscale" ? "tailscale" : (e.label == "LAN" ? "lan" : (e.label == "This PC" ? "local" : "internet"));
+        QFrame* row = new QFrame(this->_endpointList);
+        QHBoxLayout* rowLayout = new QHBoxLayout(row);
+        QVBoxLayout* texts = new QVBoxLayout();
+        QLabel* tag = make_label(e.label == "This PC" ? QString("THIS DEVICE") : e.label.toUpper(), "tag");
+        QLabel* reach = make_label(e.reach + (e.ip.isEmpty() ? QString() : "  ·  IP " + e.ip), "muted");
+        QPushButton* copy = make_button("", "ghost", "copy");
+        QPushButton* qr = make_button("", "ghost", "qr");
+
+        // <tag> <address / who can use it> <copy> <qr>
+        row->setObjectName("endpoint");
+        row->setProperty("last", i == endpoints.size() - 1);
+        row->setAttribute(Qt::WA_StyledBackground, true);
+        rowLayout->setContentsMargins(0, 10, 0, 10);
+        rowLayout->setSpacing(14);
+        tag->setProperty("kind", kind);
+        tag->setAlignment(Qt::AlignCenter);
+        tag->setFixedWidth(104);
+        texts->setSpacing(3);
+        texts->addWidget(make_label(address, "address"));
+        texts->addWidget(reach);
+        copy->setToolTip("Copy " + e.host + ":" + QString::number(e.port) + " (Connect to a network on the other device)");
+        qr->setToolTip("QR code of this address (with the code)");
+        qr->setVisible(kind != "local" && this->_hub.group().joined());
+        rowLayout->addWidget(tag, 0, Qt::AlignVCenter);
+        rowLayout->addLayout(texts, 1);
+        rowLayout->addWidget(copy);
+        rowLayout->addWidget(qr);
+        QObject::connect(copy, &QPushButton::clicked, this, [copy, text = e.host + ":" + QString::number(e.port)]() {
+            QGuiApplication::clipboard()->setText(text);
+            copy->setText("Copied");
+            QTimer::singleShot(1500, copy, [copy]() {copy->setText("");});
+        });
+        QObject::connect(qr, &QPushButton::clicked, this, [this, i]() {this->showQr_(i);});
+        layout->addWidget(row);
+    }
+}
+
+void xmouse::ui::gui::MainWindow::showQr_(const int endpoint)
+{
+    const QList<net::Endpoint> endpoints = this->_hub.exposure().endpoints();
+    QDialog* dialog = nullptr;
+    QVBoxLayout* layout = nullptr;
+    QComboBox* address = nullptr;
+    QLabel* image = nullptr;
+    QLabel* link = nullptr;
+    QPushButton* copy = nullptr;
+    QPushButton* close = nullptr;
+    QHBoxLayout* buttons = nullptr;
+    std::function<void(void)> draw;
+    int first = -1;
+
+    if (!this->_hub.group().joined()) {
+        QMessageBox::information(this, "QR code", "Create a network first: the QR code holds an address of this device and the code of the network.");
+        return;
+    }
+    dialog = new QDialog(this);
+    layout = new QVBoxLayout(dialog);
+    address = new QComboBox(dialog);
+    image = new QLabel(dialog);
+    link = make_label("", "mono");
+    copy = make_button("Copy the link", "ghost", "copy");
+    close = make_button("Close", "ghost");
+    buttons = new QHBoxLayout();
+    dialog->setWindowTitle("QR code - xmouse");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setFixedWidth(440);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(10);
+    layout->addWidget(make_label("Join this network", "title"));
+    layout->addWidget(make_label("Scan it with the phone app, or paste its link in Connect to a network on the other device: the address, the code and the identity of this device are inside.", "muted"));
+
+    // One entry per address another device can use (the chosen one, else the first that is not this device only)
+    for (int i = 0; i < endpoints.size(); ++i) {
+        if (endpoints[i].label == "This PC") continue;
+        if (i == endpoint || (endpoint < 0 && first < 0)) first = address->count();
+        address->addItem(endpoints[i].label + "  ·  " + endpoints[i].host + ":" + QString::number(endpoints[i].port), i);
+    }
+    address->setCurrentIndex(std::max(0, first));
+    layout->addWidget(address);
+    image->setObjectName("qr");
+    image->setAlignment(Qt::AlignCenter);
+    layout->addWidget(image, 0, Qt::AlignHCenter);
+    link->setWordWrap(true);
+    link->setAlignment(Qt::AlignCenter);
+    layout->addWidget(link);
+    buttons->addWidget(copy);
+    buttons->addStretch();
+    buttons->addWidget(close);
+    layout->addLayout(buttons);
+    draw = [this, address, image, link, endpoints]() {
+        const int index = address->currentData().toInt();
+        const QString text = index >= 0 && index < endpoints.size() ? this->_hub.joinLink(endpoints[index].host, endpoints[index].port) : this->_hub.joinLink();
+        image->setPixmap(qr_pixmap(text, 300));
+        link->setText(text.section('?', 0, 0) + "  ·  code " + this->_hub.code().display()); // the identity is too long to show: in the tooltip and the copy
+        link->setToolTip(text);
+        link->setProperty("full", text);
+    };
+    draw();
+    QObject::connect(address, &QComboBox::currentIndexChanged, dialog, [draw](const int) {draw();});
+    QObject::connect(&this->_hub.code(), &security::PairingCode::changed, dialog, [draw](const QString&) {draw();}); // a used / expired code: a new QR
+    QObject::connect(copy, &QPushButton::clicked, dialog, [link, copy]() {
+        QGuiApplication::clipboard()->setText(link->property("full").toString());
+        copy->setText("Copied");
+        QTimer::singleShot(1500, copy, [copy]() {copy->setText("Copy the link");});
+    });
+    QObject::connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+    dialog->show();
 }
 
 void xmouse::ui::gui::MainWindow::refreshMembers_(void)
@@ -698,14 +923,11 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
 
 void xmouse::ui::gui::MainWindow::refreshNearby_(void)
 {
-    for (QListWidget* list: {this->_nearby, this->_nearbyAlone}) {
-        if (!list) continue;
-        list->clear();
-        for (const net::Announce& a: this->_hub.nearby()) {
-            QListWidgetItem* item = new QListWidgetItem(a.name + "  -  " + a.host + ":" + QString::number(a.port) + (a.network.isEmpty() ? "" : "  (" + a.network + ")"));
-            item->setData(Qt::UserRole, a.host + ":" + QString::number(a.port));
-            list->addItem(item);
-        }
+    this->_nearby->clear();
+    for (const net::Announce& a: this->_hub.nearby()) {
+        QListWidgetItem* item = new QListWidgetItem(a.name + "  -  " + a.host + ":" + QString::number(a.port) + (a.network.isEmpty() ? "  (no network)" : "  (network " + a.network + ")"));
+        item->setData(Qt::UserRole, a.host + ":" + QString::number(a.port));
+        this->_nearby->addItem(item);
     }
 }
 
