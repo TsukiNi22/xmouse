@@ -1,0 +1,6 @@
+[xmouse]
+name=xmouse repository
+baseurl=https://tsukini22.github.io/xmouse/fedora/$releasever/$basearch
+enabled=1
+gpgcheck=1
+gpgkey=https://tsukini22.github.io/xmouse/RPM-GPG-KEY-tsukini
