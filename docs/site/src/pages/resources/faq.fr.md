@@ -8,7 +8,7 @@ Chaque entrée : ce que vous voyez, pourquoi, quoi faire.
 
 ## Le bureau demande d'autoriser la capture des entrées à chaque lancement {#capture-dialog}
 
-Sous GNOME Wayland sans l'extension xmouse, xmouse utilise le portail de capture des entrées, qui demande à chaque lancement (GNOME n'a pas de « se souvenir » pour lui). Installez l'extension et **déconnectez-vous puis reconnectez-vous une fois** : GNOME ne charge une nouvelle extension qu'à la connexion.
+Sous GNOME Wayland sans l'extension xmouse, xmouse utilise le portail de capture des entrées, qui demande à chaque lancement (GNOME n'a pas de « se souvenir » pour lui). Installez l'extension et **déconnectez-vous puis reconnectez-vous une fois** : GNOME ne charge une nouvelle extension qu'à la connexion. Une fois l'extension installée, xmouse n'utilise plus du tout le portail (il pouvait laisser le pointeur caché ou figé) : pas de bord jusqu'à la prochaine connexion, le statut le dit ; `XMOUSE_PORTAL=1` force le portail.
 
 ```bash "Terminal"
 scripts/install.sh --gnome

@@ -10,7 +10,7 @@ Each entry: what you see, why, what to do.
 
 ## The desktop asks to allow the input capture at every start {#capture-dialog}
 
-On GNOME Wayland without the xmouse extension, xmouse uses the input capture portal, which asks at every start (GNOME has no "remember" for it). Install the extension and **log out and back in once**: GNOME loads a new extension only at login.
+On GNOME Wayland without the xmouse extension, xmouse uses the input capture portal, which asks at every start (GNOME has no "remember" for it). Install the extension and **log out and back in once**: GNOME loads a new extension only at login. Once the extension is installed, xmouse no longer uses the portal at all (the portal could leave the pointer hidden or frozen): no edge until the next login, the status says it; `XMOUSE_PORTAL=1` forces the portal.
 
 ```bash "Terminal"
 scripts/install.sh --gnome
