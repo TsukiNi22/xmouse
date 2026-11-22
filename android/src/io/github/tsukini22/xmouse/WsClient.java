@@ -1,6 +1,7 @@
 /*
  * Minimal websocket client (RFC 6455, text frames) over the pinned TLS of the device: no library in the APK.
- * One thread reads; send() may be called from any thread.
+ * One thread reads, one thread writes: send() and close() may be called from any thread, the main one included
+ * (Android ends the app on a network write there).
 */
 package io.github.tsukini22.xmouse;
 
@@ -13,6 +14,9 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 import javax.net.ssl.SSLSocket;
 
@@ -30,6 +34,11 @@ final class WsClient {
     private final String _fp;
     private final Listener _listener;
     private final SecureRandom _random = new SecureRandom();
+    private final ExecutorService _writer = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "xmouse-ws-write");
+        t.setDaemon(true);
+        return t;
+    });
     private SSLSocket _socket;
     private OutputStream _out;
     private volatile boolean _closed = false;
@@ -47,20 +56,38 @@ final class WsClient {
     }
 
     void close() {
+        Runnable shut = () -> {
+            try {
+                if (this._socket != null) this._socket.close(); // may write the close alert of TLS: never on the main thread
+            } catch (IOException e) {
+                // closed anyway
+            }
+        };
         this._closed = true;
         try {
-            if (this._socket != null) this._socket.close();
-        } catch (IOException e) {
-            // closed anyway
+            this._writer.execute(shut);
+        } catch (RejectedExecutionException e) {
+            new Thread(shut, "xmouse-ws-close").start();
         }
+        this._writer.shutdown();
     }
 
-    synchronized void send(String text) {
-        if (this._out == null || this._closed) return;
+    void send(String text) {
+        final byte[] data = text.getBytes(StandardCharsets.UTF_8);
+        if (this._closed) return;
         try {
-            this.writeFrame(0x1, text.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            this.close();
+            this._writer.execute(() -> {
+                synchronized (this) {
+                    if (this._out == null || this._closed) return;
+                    try {
+                        this.writeFrame(0x1, data);
+                    } catch (IOException e) {
+                        this.close();
+                    }
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // closed meanwhile
         }
     }
 
