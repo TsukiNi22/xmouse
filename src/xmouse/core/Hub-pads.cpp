@@ -136,6 +136,7 @@ void xmouse::core::Hub::onPadClosed_(net::WebSocket* ws)
         if (it->display == ws) {
             it->display = nullptr;
             this->_log.info("pads", id, it->name + ": screen gone");
+            if (this->_away && this->_target == id) this->comeBack(); // my cursor was on it: back here, never held on a screen gone
             this->_publishSoon.start(); // links: the others stop reaching its screen
             this->updateEdges_();
         }
@@ -304,7 +305,12 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
         return;
     }
     if (type == "deny") {this->sendTo_(o.value("id").toString(), QJsonObject{{"t", "deny"}, {"reason", o.value("reason").toString().left(120)}}, pad); return;}
-    if (type == "access") {this->sendTo_(o.value("id").toString(), QJsonObject{{"t", "access"}, {"text", o.value("text").toString().left(200)}}, pad); return;}
+    if (type == "access") {
+        // About my own cursor on its screen (why a click does nothing there): told here
+        if (o.value("id").toString() == this->_group.self()) {emit this->notice(it->name + ": " + o.value("text").toString().left(200)); return;}
+        this->sendTo_(o.value("id").toString(), QJsonObject{{"t", "access"}, {"text", o.value("text").toString().left(200)}}, pad);
+        return;
+    }
 }
 
 void xmouse::core::Hub::publishPad_(const QString& pad)

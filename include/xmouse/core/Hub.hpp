@@ -242,6 +242,14 @@ class Hub: public QObject {
         quint16 _presenceSeq = 0;
         int _presenceTick = 0; // ticks of the presence timer (the home pointer is read every other one)
         QPoint _lastHomePointer; // last local pointer told at home
+        QPoint _awayPointer; // the real pointer of this device when the cursor left (it moves while away: the cursor comes back)
+        bool _awayWatch = false; // _awayPointer known (a capture that tells the pointer)
+        int _awayTick = 0; // ticks of the presence timer while away (the real pointer is read every 4th one)
+        int _awayLost = 0; // reads in a row where a held pointer was found elsewhere
+        bool _slowTarget = false; // the cursor is on a phone (pad or member): its moves at the rate of a screen
+        qint64 _lastSlowMove = 0; // ms
+        qint64 _padPresenceAt = 0; // ms, last map update for the own cursor of a pad
+        bool _padPresencePending = false;
         QSet<QString> _keysDown; // keys held while away (released on the way back)
         int _buttonsDown = 0;
         qint64 _pingUntil = 0; // ms: "look here" wave told until then
@@ -322,6 +330,8 @@ class Hub: public QObject {
         void leaveTo_(const QPoint& global, const QString& device, const QPoint& local); // the cursor goes to device (capture or pad)
         void flushMove_(void);
         void sendPresence_(void);
+        void checkAway_(void); // away: the real pointer moves although nothing holds it / the capture was lost -> the cursor comes back
+        void keepAway_(void); // the layout changed while away: the cursor stays on its device (closest point) or comes back
         void padMotion_(const QString& pad, const double dx, const double dy); // a pad moves the cursor of this device (or its own one, phantom / private mode)
         void padButton_(const QString& pad, const net::MouseButton button, const bool down);
         void padWheel_(const QString& pad, const int dx, const int dy);

@@ -34,6 +34,11 @@ File Description:
 
 #define BACKPRESSURE_LIMIT (256 * 1024) // bytes waiting on a link before the moves are skipped (the next one carries the position)
 #define PING_DURATION 1500 // ms a "look here" wave is told
+#define SLOW_MOVE_INTERVAL 15 // ms between two moves sent to a phone (its screen draws at 60 Hz: more only loads it)
+#define AWAY_CHECK_TICKS 4 // presence ticks (50 ms) between two reads of the real pointer while away (200 ms)
+#define AWAY_PAD_MOVE 24 // px the real pointer may move while the cursor is away with a pad (the person took the mouse)
+#define AWAY_LOST_MOVE 120 // px a held pointer may be found away from where it is held (twice in a row: the capture is lost)
+#define PAD_PRESENCE_INTERVAL 33 // ms between two map updates for the own cursor of a pad
 
 //----------------------------------------------------------------//
 /* CROSSING */
@@ -50,6 +55,15 @@ void xmouse::core::Hub::onCrossed_(const QPoint& local, const QPoint& push)
         this->_capture->release(local - push * 2);
         return;
     }
+
+    // Away with a pad, the real mouse pushes an edge now: it drives the cursor from where it is
+    if (this->_away) {
+        this->_awayByPad = false;
+        this->_awayPointer = local;
+        this->_awayWatch = this->_capture->knowsPointer();
+        this->_awayLost = 0;
+        return;
+    }
     this->_awayByPad = false;
     this->leaveTo_(global + push, hit->device, hit->local);
 }
@@ -58,6 +72,10 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
 {
     this->_away = true;
     this->_target = device;
+    this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
+    this->_awayWatch = this->_capture && this->_capture->knowsPointer();
+    this->_awayPointer = this->_awayWatch ? this->_capture->pointer() : QPoint();
+    this->_awayLost = 0;
     this->_global = QPointF(global);
     this->_targetLocal = local;
     this->_keysDown.clear();
@@ -81,7 +99,7 @@ void xmouse::core::Hub::onMotion_(const double dx, const double dy)
     to = this->_layout.move(from, this->_global.toPoint() - from);
     if (to != this->_global.toPoint()) this->_global = QPointF(to); // stopped on a border: no hidden drift
     hit = this->_layout.hit(to);
-    if (!hit) return;
+    if (!hit) {this->keepAway_(); return;} // between the screens: its device changed under it
     if (hit->device == this->_group.self()) {this->goHome_(to); return;}
     if (hit->device != this->_target) {
         if (!this->reachable(hit->device)) {this->_global = QPointF(from); return;} // an unreachable device is a wall
@@ -98,6 +116,8 @@ void xmouse::core::Hub::flushMove_(void)
     if (!this->_away) {this->_flush.stop(); return;}
     if (!this->_moveDirty) return;
     if (this->pendingTo_(this->_target) > BACKPRESSURE_LIMIT) return; // a slow link: the next flush sends the latest position
+    if (this->_slowTarget && now_ms() - this->_lastSlowMove < SLOW_MOVE_INTERVAL) return; // a phone: the latest position, 60 times a second
+    this->_lastSlowMove = now_ms();
     this->sendHot_(this->_target, net::ByteWriter(net::Binary::Pointer).u16(++this->_seq).i32(this->_targetLocal.x()).i32(this->_targetLocal.y()).data());
     this->_moveDirty = false;
 }
@@ -112,8 +132,55 @@ void xmouse::core::Hub::switchTarget_(const QString& device)
     this->_buttonsDown = 0;
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
     this->_target = device;
+    this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
     emit this->awayChanged();
+}
+
+void xmouse::core::Hub::keepAway_(void)
+{
+    const QPoint at = this->_global.toPoint();
+    std::optional<Hit> hit;
+    QPoint to;
+
+    if (!this->_away) return;
+    // Its device left the layout (a screen lent no more, removed): back here, never held on nothing
+    if (!this->_layout.contains(this->_target) || this->_layout.bounds(this->_target).isEmpty()) {
+        this->_log.info("input", this->_target, "the device of the cursor left the layout: the cursor comes back");
+        this->comeBack();
+        return;
+    }
+
+    // Its screens changed (a phone turned, a device moved): the cursor stays on it, at the closest point
+    hit = this->_layout.hit(at);
+    if (hit && hit->device == this->_target) return;
+    to = this->_layout.clampTo(this->_target, at);
+    hit = this->_layout.hit(to);
+    if (!hit || hit->device != this->_target) {this->comeBack(); return;}
+    this->_global = QPointF(to);
+    this->_targetLocal = hit->local;
+    this->_moveDirty = true;
+    this->_presenceDirty = true;
+    if (!this->_flush.isActive()) this->_flush.start();
+}
+
+void xmouse::core::Hub::checkAway_(void)
+{
+    QPoint now;
+    int moved = 0;
+
+    // The real pointer of this device, read 5 times a second while away: left with a pad, it moves = the person took
+    // the mouse here; captured, it is found far from where it is held twice in a row = the capture was lost (the
+    // compositor, an old extension): the cursor comes back where the pointer is, never stuck away
+    if (!this->_awayWatch || !this->_capture || (++this->_awayTick % AWAY_CHECK_TICKS) != 0) return;
+    now = this->_capture->pointer();
+    if (this->injectingNow()) {this->_awayPointer = now; return;} // a foreign cursor moved it (pointer mode)
+    moved = (now - this->_awayPointer).manhattanLength();
+    if (moved < (this->_awayByPad ? AWAY_PAD_MOVE : AWAY_LOST_MOVE)) {this->_awayLost = 0; return;}
+    if (!this->_awayByPad && ++this->_awayLost < 2) return;
+    this->_log.info("input", this->_target, this->_awayByPad ? "the real mouse moved here: the cursor comes back" : "the capture of the pointer was lost: the cursor comes back");
+    this->_homePad.clear(); // the person drives, not the pad
+    this->goHome_(this->_layout.toGlobal(this->_group.self(), now));
 }
 
 void xmouse::core::Hub::goHome_(const QPoint& global)
@@ -205,6 +272,7 @@ void xmouse::core::Hub::sendPresence_(void)
     int flags = 0;
 
     if (!this->_group.joined()) return;
+    if (this->_away) this->checkAway_();
     // At home: the pointer the platform tells is followed live (10 Hz), not only once a second
     if (!this->_away && this->_capture && this->_capture->knowsPointer() && (++this->_presenceTick % 2) == 0) {
         const QPoint now = this->localPointer_();
@@ -314,7 +382,19 @@ void xmouse::core::Hub::padPhantomAt_(const QString& pad, const QPoint& local)
     }
     this->foreignPointer_(pad, local, 0, false);
     this->_presence[pad] = Presence{pad, self, this->_layout.toGlobal(self, this->_foreign.value(pad).local), this->_foreign.value(pad).local, 0, now_ms(), 0}; // on the map too
-    emit this->presenceChanged();
+
+    // The maps at 30 Hz at most (the overlay draws every move), the last position always told
+    if (now_ms() - this->_padPresenceAt >= PAD_PRESENCE_INTERVAL) {
+        this->_padPresenceAt = now_ms();
+        emit this->presenceChanged();
+    } else if (!this->_padPresencePending) {
+        this->_padPresencePending = true;
+        QTimer::singleShot(PAD_PRESENCE_INTERVAL, this, [this]() {
+            this->_padPresencePending = false;
+            this->_padPresenceAt = now_ms();
+            emit this->presenceChanged();
+        });
+    }
 }
 
 void xmouse::core::Hub::padMotion_(const QString& pad, const double dx, const double dy)

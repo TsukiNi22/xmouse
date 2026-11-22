@@ -431,6 +431,7 @@ void xmouse::core::Hub::rebuildLayout_(void)
     }
     this->refreshCandidates_();
     this->updateEdges_();
+    if (this->_away) this->keepAway_(); // the device of my cursor changed under it
     emit this->layoutChanged();
     emit this->membersChanged();
     emit this->presenceChanged(); // the cursors follow their devices
