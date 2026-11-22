@@ -63,6 +63,7 @@ class UInputInjector final: public IInputInjector {
         _hot void mouseWheel(const int dx, const int dy) override;
         _hot void key(const QString& code, const bool down) override;
         _hot void text(const QString& text) override;
+        _hot _nodiscard QString characterOf(const QString& code, const bool shift, const bool altgr) const override; // on the layout of the session
         _cold void releaseAll(void) override;
 
         // ------------ Function ---------- //

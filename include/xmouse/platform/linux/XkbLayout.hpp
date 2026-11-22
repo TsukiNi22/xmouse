@@ -53,6 +53,7 @@ class XkbLayout {
     private:
         QHash<uint, LayoutKey> _keys; // unicode -> the simplest key typing it
         QHash<uint, LayoutKey> _dead; // dead keysym (dead_circumflex...) -> key
+        QHash<quint32, uint> _chars; // key (evdev << 2 | shift | altgr << 1) -> the character it types (every key, not only the simplest)
         QString _name = ""; // "fr(oss)", empty = not loaded
 
     public:
@@ -61,6 +62,7 @@ class XkbLayout {
         _cold bool load(const QString& layout, const QString& variant); // this one ("fr", "oss")
         _hot _nodiscard std::optional<LayoutKey> find(const uint ucs) const;
         _hot _nodiscard std::optional<LayoutKey> dead(const uint keysym) const;
+        _hot _nodiscard std::optional<uint> character(const int evdev, const bool shift, const bool altgr) const; // what this key types (the inverse of find)
 
         // ------------ Function ---------- //
         /* getter */

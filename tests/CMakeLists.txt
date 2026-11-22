@@ -57,6 +57,9 @@ set(SRC
     xmouse/net/Mesh.cpp
     xmouse/net/Datagrams.cpp
 )
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND SRC xmouse/platform/XkbLayout.cpp) # Platform (sub-part: platform, the keyboard layout of linux)
+endif()
 add_executable(${TARGET} ${SRC} ${SRC_PROJECT})
 
 # =========================

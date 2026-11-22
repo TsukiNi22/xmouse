@@ -113,6 +113,7 @@ bool xmouse::platform::XkbLayout::load(const QString& layoutId, const QString& v
 
     this->_keys.clear();
     this->_dead.clear();
+    this->_chars.clear();
     this->_name.clear();
     if (layout.first.isEmpty() || !library.load()) return false;
     const XkbContextNew contextNew = reinterpret_cast<XkbContextNew>(library.resolve("xkb_context_new"));
@@ -164,6 +165,8 @@ bool xmouse::platform::XkbLayout::load(const QString& layoutId, const QString& v
             }
             const std::uint32_t ucs = toUtf32(sym);
             if (ucs == 0 || ucs < 0x20) continue;
+            const quint32 slot = static_cast<quint32>(evdev) << 2 | (key.shift ? 1u : 0u) | (key.altgr ? 2u : 0u);
+            if (!this->_chars.contains(slot)) this->_chars.insert(slot, ucs);
             const std::optional<LayoutKey> known = this->find(ucs);
             if (!known || (known->shift ? 1 : 0) + (known->altgr ? 2 : 0) > cost) this->_keys.insert(ucs, key);
         }
@@ -179,6 +182,14 @@ std::optional<xmouse::platform::LayoutKey> xmouse::platform::XkbLayout::find(con
     const QHash<uint, LayoutKey>::const_iterator it = this->_keys.constFind(ucs);
 
     if (it == this->_keys.constEnd()) return std::nullopt;
+    return it.value();
+}
+
+std::optional<uint> xmouse::platform::XkbLayout::character(const int evdev, const bool shift, const bool altgr) const
+{
+    const QHash<quint32, uint>::const_iterator it = this->_chars.constFind(static_cast<quint32>(evdev) << 2 | (shift ? 1u : 0u) | (altgr ? 2u : 0u));
+
+    if (it == this->_chars.constEnd()) return std::nullopt;
     return it.value();
 }
 
