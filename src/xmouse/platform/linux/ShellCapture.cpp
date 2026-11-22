@@ -24,7 +24,9 @@ File Description:
 #include "xmouse/platform/Keymap.hpp"
 #include <QDBusPendingCallWatcher>
 #include <QDBusConnection>
+#include <QStandardPaths>
 #include <QDBusMessage>
+#include <QFileInfo>
 #include <QTimer>
 
 //----------------------------------------------------------------//
@@ -56,6 +58,13 @@ bool xmouse::platform::ShellCapture::available(void)
     return v >= XMOUSE_SHELL_MIN_VERSION && v <= XMOUSE_SHELL_VERSION;
 }
 
+bool xmouse::platform::ShellCapture::installed(void)
+{
+    const QString file = "/gnome-shell/extensions/xmouse@tsukini22.github.io/extension.js";
+
+    return QFileInfo::exists(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + file) || QFileInfo::exists("/usr/share" + file);
+}
+
 int xmouse::platform::ShellCapture::heldButtons(void) const
 {
     QDBusMessage call = QDBusMessage::createMethodCall(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "GetButtons");
@@ -79,6 +88,10 @@ bool xmouse::platform::ShellCapture::start(void)
 
     if (!bus.isConnected()) {this->_error = "no session bus"; return false;}
     this->_version = version();
+    if (this->_version == 0) { // installed, not loaded yet: no edge rather than the portal (it may keep the pointer hidden / frozen)
+        this->_error = "the xmouse GNOME extension is installed but GNOME has not loaded it yet: log out and back in once (no edge until then)";
+        return false;
+    }
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Crossed", this, SLOT(onCrossed_(int,int,int,int)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Motion", this, SLOT(onMotion_(double,double)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Button", this, SLOT(onButton_(uint,bool)));
@@ -115,6 +128,7 @@ void xmouse::platform::ShellCapture::call_(const QString& method, const QList<QV
 
 void xmouse::platform::ShellCapture::setEdges(const QList<core::Edge>& edges)
 {
+    if (this->_version == 0) return; // the extension does not answer (not loaded yet)
     QList<int> flat;
 
     // 5 integers per edge (x1, y1, x2, y2, side), the barrier on the line just outside the screen

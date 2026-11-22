@@ -83,6 +83,7 @@ class ShellCapture final: public IInputCapture {
         void release(const QPoint& local) override;
         _cold _nodiscard QPoint pointer(void) const override; // GetPointer (a short synchronous call)
         _cold _nodiscard static bool available(void); // the extension answers with a version this build speaks
+        _cold _nodiscard static bool installed(void); // its files are there (GNOME loads a new extension only at the next login)
         _cold _nodiscard static uint version(void); // 0 = no extension
         _cold _nodiscard int heldButtons(void) const override; // GetButtons (extension 2), -1 with an older one
         _cold void setWindowMove(const bool enabled) override; // SetWindowMove (extension 2)
@@ -92,7 +93,7 @@ class ShellCapture final: public IInputCapture {
         _cold _nodiscard bool capturing(void) const override    {return this->_capturing;};
         _cold _nodiscard QString name(void) const override      {return "gnome-shell";};
         _cold _nodiscard QString error(void) const override     {return this->_error;};
-        _cold _nodiscard bool knowsPointer(void) const override {return true;};
+        _cold _nodiscard bool knowsPointer(void) const override {return this->_version > 0;}; // the extension answers
 
         // ---------- Constructor --------- //
         explicit ShellCapture(QObject* parent = nullptr): IInputCapture(parent) { /* Nothing */ };

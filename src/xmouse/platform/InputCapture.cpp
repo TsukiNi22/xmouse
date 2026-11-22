@@ -45,8 +45,11 @@ std::unique_ptr<xmouse::platform::IInputCapture> xmouse::platform::create_input_
         // Wayland: only the compositor knows the pointer, the portal InputCapture is the way (the session type, not the Qt platform: xmouse may run on Xwayland)
         const bool wayland = qEnvironmentVariable("XDG_SESSION_TYPE") == "wayland" || qEnvironmentVariableIsSet("WAYLAND_DISPLAY");
         #if defined(XMOUSE_HAS_DBUS)
-            // GNOME: the xmouse extension when it is enabled (no dialog), else the portal (a dialog per run on GNOME 50)
-            if (wayland && ShellCapture::available()) return std::make_unique<ShellCapture>(parent);
+            // GNOME: the xmouse extension when it is enabled (no dialog). Installed but not loaded yet (GNOME loads it at
+            // the next login): no edge until then rather than the portal, which asks at every run and may keep the
+            // pointer hidden or frozen (XMOUSE_PORTAL=1 forces it). Elsewhere (KDE, wlroots): the portal
+            const bool portal = qEnvironmentVariableIsSet("XMOUSE_PORTAL");
+            if (wayland && !portal && (ShellCapture::available() || ShellCapture::installed())) return std::make_unique<ShellCapture>(parent);
             if (wayland) return std::make_unique<PortalCapture>(parent);
         #else
             (void)wayland;

@@ -354,6 +354,7 @@ void xmouse::core::Hub::startCapture_(void)
         this->_captureError = this->_capture->error();
         this->_log.warn("input", "", "no edge capture: " + this->_captureError + " (the cursor of this device cannot leave it)");
         this->setStatus_("edges unavailable: " + this->_captureError);
+        QTimer::singleShot(1500, this, [this]() {emit this->notice("Edges: " + this->_captureError);}); // once the panel is up
     }
 }
 

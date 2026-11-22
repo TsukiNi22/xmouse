@@ -90,6 +90,7 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
 {
     this->_away = true;
     this->_target = device;
+    this->_log.info("input", device, "my cursor goes to " + this->_layout.device(device).name + (this->_awayByPad ? " (a pad drives it)" : " (captured)"));
     this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
     this->_awayWatch = this->_capture && this->_capture->knowsPointer();
     this->_awayPointer = this->_awayWatch ? this->_capture->pointer() : QPoint();
@@ -223,6 +224,7 @@ void xmouse::core::Hub::goHome_(const QPoint& global)
     const QPoint local = hit && hit->device == self ? hit->local : this->_layout.bounds(self).center();
 
     if (!this->_away) return;
+    this->_log.info("input", this->_target, "my cursor comes back from " + this->_layout.device(this->_target).name);
     for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
         if (this->_buttonsDown & (1 << b)) this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
     for (const QString& code: this->_keysDown)
