@@ -138,6 +138,7 @@ void xmouse::core::Hub::onPadClosed_(net::WebSocket* ws)
             this->_publishSoon.start(); // links: the others stop reaching its screen
             this->updateEdges_();
         }
+        if (!it->control && !it->display) this->publishPad_(id); // offline in the members
         emit this->padsChanged();
     }
     ws->deleteLater();
@@ -169,6 +170,7 @@ void xmouse::core::Hub::onPadText_(net::WebSocket* ws, const QString& text)
             }
             pad.seen = now_ms();
             this->savePads_();
+            this->publishPad_(pad.id); // in the members (and its screen in the layout once lent) as soon as it is there
             send_json(ws, QJsonObject{{"t", "welcome"}, {"id", pad.id}, {"device", this->_config.deviceName()}, {"network", this->_group.joined() ? this->_group.name() : QString()}, {"version", XMOUSE_VERSION}, {"role", role}});
             this->_log.info("pads", pad.id, pad.name + " connected (" + role + ", " + ws->peerAddress().toString() + ")");
             emit this->padsChanged();
@@ -232,6 +234,7 @@ void xmouse::core::Hub::approvePad(const QString& pending, const bool accepted)
     this->savePads_();
     send_json(ws, QJsonObject{{"t", "paired"}, {"id", pad.id}, {"token", token}, {"device", this->_config.deviceName()}, {"network", this->_group.joined() ? this->_group.name() : QString()}, {"version", XMOUSE_VERSION}, {"fp", QString::fromLatin1(this->_certificate.fingerprint().toHex())}});
     this->_log.info("pads", pad.id, pad.name + " paired (" + pad.kind + ")");
+    this->publishPad_(pad.id);
     emit this->notice(pad.name + " can now drive this device");
     emit this->padsChanged();
 }
@@ -264,6 +267,7 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
     auto it = this->_pads.find(pad);
 
     if (it == this->_pads.end()) return;
+
     if (type == "move") {this->padMotion_(std::clamp(o.value("dx").toDouble(), -4000.0, 4000.0), std::clamp(o.value("dy").toDouble(), -4000.0, 4000.0)); return;}
     if (type == "button") {
         const int b = o.value("b").toInt(-1);
@@ -319,6 +323,7 @@ void xmouse::core::Hub::publishPad_(const QString& pad)
     entry["addresses"] = QJsonArray();
     entry["port"] = 0;
     entry["joined"] = QString::number(p.created);
+    entry["online"] = p.control != nullptr || p.display != nullptr; // the pad is connected now (touchpad or screen)
     this->broadcastDelta_(this->_state.set("device/" + pad, entry));
     this->rebuildLayout_();
 }
@@ -412,7 +417,7 @@ void xmouse::core::Hub::sendPadMaps_(void)
     }
     for (const Presence& p: this->_presence)
         cursors.append(QJsonObject{{"id", p.id}, {"name", this->_layout.device(p.id).name}, {"color", colorOf(p.id).name()}, {"x", p.global.x()}, {"y", p.global.y()}, {"on", p.on}, {"flags", p.flags}});
-    map = QJsonObject{{"t", "map"}, {"devices", devices}, {"cursors", cursors}, {"me", QJsonObject{{"id", this->_group.self()}, {"away", this->_away}, {"target", this->_layout.device(this->_target).name}, {"laser", this->_laser}, {"x", this->pointerGlobal().x()}, {"y", this->pointerGlobal().y()}}}, {"network", this->_group.joined() ? this->_group.name() : QString()}};
+    map = QJsonObject{{"t", "map"}, {"devices", devices}, {"cursors", cursors}, {"me", QJsonObject{{"id", this->_group.self()}, {"away", this->_away}, {"target", this->_layout.device(this->_target).name}, {"laser", this->_laser}, {"x", this->pointerGlobal().x()}, {"y", this->pointerGlobal().y()}}}, {"network", this->_group.joined() ? this->_group.name() : QString()}, {"device", this->_config.deviceName()}, {"private", this->_config.settings().privateMode}};
     for (const Pad& p: this->_pads)
         send_json(p.control, map);
 }

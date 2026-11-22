@@ -100,7 +100,9 @@
             case "map":
                 map = o;
                 drawMap();
-                $("where").textContent = o.me && o.me.away ? "Cursor on " + o.me.target : "Cursor on " + (deviceName(o.me && o.me.id) || "this device");
+                if (o.private && !(o.me && o.me.away)) $("where").textContent = "Private mode on " + (o.device || "the device") + ": the cursor passes over it, its clicks act on the other devices only";
+                else $("where").textContent = o.me && o.me.away ? "Cursor on " + o.me.target : "Cursor on " + (deviceName(o.me && o.me.id) || o.device || "this device");
+                $("surface").classList.toggle("paused", Boolean(o.private) && !(o.me && o.me.away));
                 break;
             case "link":
                 if (confirm((o.from || "A member") + " sends a link:\n" + o.url + "\n\nOpen it?")) window.open(o.url, "_blank", "noopener");

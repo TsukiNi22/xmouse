@@ -102,6 +102,7 @@ button.danger { color: var(--danger); }
     justify-content: center;
 }
 .surface.dragging { outline: 3px solid var(--accent); }
+.surface.paused { opacity: 0.45; }
 .hint { color: var(--muted); text-align: center; font-size: 0.85rem; padding: 0 24px; pointer-events: none; }
 
 .buttons { display: grid; grid-template-columns: 1fr 0.7fr 1fr 1fr; gap: 8px; padding: 0 10px 10px; }

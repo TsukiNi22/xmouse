@@ -712,7 +712,8 @@ QList<xmouse::core::Member> xmouse::core::Hub::members(void) const
         m.via = d.value("via").toString();
         m.self = id == this->_group.self();
         m.online = m.self || route.kind != RouteKind::None;
-        m.relayed = route.kind == RouteKind::Relay;
+        if (!m.via.isEmpty()) m.online = d.value("online").toBool(false) && (m.via == this->_group.self() || this->reachable(m.via)); // a pad: connected to its device now
+        m.relayed = route.kind == RouteKind::Relay && m.via.isEmpty();
         m.udp = this->udpUp(id);
         m.rtt = peer ? peer->rtt() : -1;
         m.port = static_cast<quint16>(d.value("port").toInt());
