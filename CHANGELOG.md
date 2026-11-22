@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.10-pre] - 2026-11-22
 ### Added
 - **The keys of a computer on a phone screen**: Enter runs the action of the field (send, search, next; a new line in a multi-line field), the arrows / Home / End move in the text (with Shift: select) or move the focus outside a field (Android 13+), Delete, Tab (next field), Page Up / Down (a page), Alt+Tab (recent apps), Print Screen (screenshot), play / pause; the back button of the mouse goes back, the forward one no longer taps
 - **Still cursors fade out**: a foreign cursor that does not move for 3 s fades (on the computers and the phones), back at once when it moves; its clicks alone do not bring it back
