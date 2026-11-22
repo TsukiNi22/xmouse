@@ -34,7 +34,9 @@ File Description:
 #include "xmouse/net/Protocol.hpp"
 #include "xmouse/core/Tools.hpp"
 #include "xmouse/core/Hub.hpp"
+#include <QGuiApplication>
 #include <QJsonDocument>
+#include <QClipboard>
 #include <QJsonArray>
 #include <QSaveFile>
 #include <algorithm>
@@ -324,6 +326,24 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
     }
 }
 
+void xmouse::core::Hub::clipToPads_(const QString& only)
+{
+    QString text;
+    QString hash;
+
+    // The phone screens are not members: the text of the clipboard goes to them (to paste there), once per change
+    if (!this->_config.settings().clipboard) return;
+    if (this->_clipboard.backend() == "qt") text = is_gui() && QGuiApplication::clipboard() ? QGuiApplication::clipboard()->text() : QString();
+    else text = this->_clipboard.text();
+    if (text.isEmpty() || text.toUtf8().size() > XMOUSE_MAX_CLIPBOARD) return;
+    hash = QString::fromLatin1(security::sha256(text.toUtf8()).toHex());
+    for (const Pad& p: this->_pads) {
+        if (!p.display || (!only.isEmpty() && p.id != only) || this->_padClip.value(p.id) == hash) continue;
+        this->_padClip[p.id] = hash;
+        send_json(p.display, QJsonObject{{"t", "clip"}, {"text", text}});
+    }
+}
+
 void xmouse::core::Hub::tellShowOnly_(const QString& device)
 {
     const auto it = this->_pads.constFind(device);
@@ -410,7 +430,8 @@ void xmouse::core::Hub::deliverBinaryToPad_(const QString& pad, const QString& f
         case net::Binary::Key: {
             const bool down = r.u8() != 0;
             const QString code = r.text8();
-            if (r.ok()) send_json(p.display, QJsonObject{{"t", "key"}, {"id", from}, {"code", code}, {"down", down}});
+            const QString character = this->_injector ? this->_injector->characterOf(code, false, false) : QString(); // Ctrl + the letter of the layout (azerty Ctrl+A is KeyQ)
+            if (r.ok()) send_json(p.display, QJsonObject{{"t", "key"}, {"id", from}, {"code", code}, {"down", down}, {"char", character}});
             break;
         }
         case net::Binary::Text:

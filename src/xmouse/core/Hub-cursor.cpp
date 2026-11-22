@@ -20,6 +20,7 @@ File Description:
 
 #define _Attribute
 #include <utils/utils.hpp>
+#include "xmouse/platform/Keymap.hpp"
 #include "xmouse/net/Protocol.hpp"
 #include "xmouse/core/Tools.hpp"
 #include "xmouse/core/Hub.hpp"
@@ -39,6 +40,23 @@ File Description:
 #define AWAY_PAD_MOVE 24 // px the real pointer may move while the cursor is away with a pad (the person took the mouse)
 #define AWAY_LOST_MOVE 120 // px a held pointer may be found away from where it is held (twice in a row: the capture is lost)
 #define PAD_PRESENCE_INTERVAL 33 // ms between two map updates for the own cursor of a pad
+
+//----------------------------------------------------------------//
+/* TOOLS */
+
+// The character of a key on the US layout (no layout known here): built once from the ascii table of Keymap
+_hot static QString us_character(const QString& code, const bool shift)
+{
+    static QHash<QString, QString> table;
+
+    if (table.isEmpty()) {
+        for (char16_t c = 0x20; c < 0x7f; ++c) {
+            const std::optional<xmouse::platform::TextKey> key = xmouse::platform::text_key(QChar(c));
+            if (key) table.insert(key->code + (key->shift ? "+" : ""), QString(QChar(c)));
+        }
+    }
+    return table.value(code + (shift ? "+" : ""));
+}
 
 //----------------------------------------------------------------//
 /* CROSSING */
@@ -79,9 +97,11 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
     this->_global = QPointF(global);
     this->_targetLocal = local;
     this->_keysDown.clear();
+    this->_textKeys.clear();
     this->_buttonsDown = 0;
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", local.x()}, {"y", local.y()}, {"name", this->_config.deviceName()}});
     this->tellShowOnly_(device);
+    if (this->_pads.contains(device)) this->clipToPads_(device); // the clipboard of this device is there to paste
     this->_moveDirty = true;
     this->_presenceDirty = true;
     this->_flush.start();
@@ -134,8 +154,10 @@ void xmouse::core::Hub::switchTarget_(const QString& device)
     this->sendTo_(this->_target, QJsonObject{{"t", "leave"}});
     this->_target = device;
     this->_slowTarget = this->_pads.contains(device) || this->_state.value("device/" + device).toObject().value("kind").toString() == "phone";
+    this->_textKeys.clear();
     this->sendTo_(this->_target, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
     this->tellShowOnly_(device);
+    if (this->_pads.contains(device)) this->clipToPads_(device);
     emit this->awayChanged();
 }
 
@@ -268,7 +290,33 @@ void xmouse::core::Hub::onKey_(const QString& code, const bool down)
         this->comeBack();
         return;
     }
+
+    // A phone types characters, not keys: a key of the layout of this device becomes its character (azerty, Shift,
+    // AltGr), the special keys and the shortcuts stay keys
+    if (this->_slowTarget && !down && this->_textKeys.remove(code)) return; // its character went at the press
+    if (this->_slowTarget && down) {
+        const QString text = this->keyText_(code);
+        if (!text.isEmpty()) {
+            this->_textKeys.insert(code);
+            this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Text).bytes(text.toUtf8()).data());
+            return;
+        }
+    }
     this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Key).u8(down ? 1 : 0).text8(code).data());
+}
+
+QString xmouse::core::Hub::keyText_(const QString& code) const
+{
+    const bool shift = this->_keysDown.contains("ShiftLeft") || this->_keysDown.contains("ShiftRight");
+    const bool altgr = this->_keysDown.contains("AltRight");
+    QString text;
+
+    for (const char* shortcut: {"ControlLeft", "ControlRight", "AltLeft", "MetaLeft", "MetaRight"})
+        if (this->_keysDown.contains(shortcut)) return "";
+    if (this->_injector) text = this->_injector->characterOf(code, shift, altgr);
+    if (text.isEmpty() && !altgr) text = us_character(code, shift);
+    if (text.isEmpty() || !text.front().isPrint()) return ""; // Enter, Tab, Backspace...: keys
+    return text;
 }
 
 //----------------------------------------------------------------//

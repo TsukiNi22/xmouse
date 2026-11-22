@@ -76,6 +76,7 @@ void xmouse::core::Hub::onLocalClipboard_(void)
     QString mime;
     QString hash;
 
+    this->clipToPads_();
     if (!this->_config.settings().clipboard || !this->_group.joined() || this->_mesh.ids().isEmpty()) return;
     if (this->_clipboard.backend() == "qt") {
         const QMimeData* m = QGuiApplication::clipboard()->mimeData();

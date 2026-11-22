@@ -257,7 +257,9 @@ class Hub: public QObject {
         bool _awayWatch = false; // _awayPointer known (a capture that tells the pointer)
         int _awayTick = 0; // ticks of the presence timer while away (the real pointer is read every 4th one)
         int _awayLost = 0; // reads in a row where a held pointer was found elsewhere
-        bool _slowTarget = false; // the cursor is on a phone (pad or member): its moves at the rate of a screen
+        bool _slowTarget = false; // the cursor is on a phone (pad or member): its moves at the rate of a screen, its keys as text
+        QSet<QString> _textKeys; // keys held whose character went to the phone (their release is not sent)
+        QHash<QString, QString> _padClip; // pad -> hash of the clipboard text it was given
         qint64 _lastSlowMove = 0; // ms
         qint64 _padPresenceAt = 0; // ms, last map update for the own cursor of a pad
         bool _padPresencePending = false;
@@ -345,6 +347,8 @@ class Hub: public QObject {
         void flushMove_(void);
         void sendPresence_(void);
         void checkAway_(void); // away: the real pointer moves although nothing holds it / the capture was lost -> the cursor comes back
+        _hot _nodiscard QString keyText_(const QString& code) const; // the character a key types here ("" = a special key / a shortcut)
+        void clipToPads_(const QString& only = ""); // the clipboard text to the phone screens (only: this one, when a cursor enters it)
         void keepAway_(void); // the layout changed while away: the cursor stays on its device (closest point) or comes back
         void padMotion_(const QString& pad, const double dx, const double dy); // a pad moves the cursor of this device (or its own one, phantom / private mode)
         void padButton_(const QString& pad, const net::MouseButton button, const bool down);
