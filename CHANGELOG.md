@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.7-pre] - 2026-11-22
 ### Added
 - A phone screen that only shows the cursors (no Accessibility service) is told: its mode in the log of the computer, a notice the first time a cursor goes there (its clicks, scroll and keys do nothing there, and how to turn the touch on), a toast on the phone at the first click
 - Android: **Let them touch** guided: the steps to turn on the Accessibility service "xmouse screen", with the "Allow restricted settings" step of an app installed from the browser (buttons to the Accessibility settings and to the App info page)
