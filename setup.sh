@@ -46,7 +46,7 @@ for arg in "$@"; do
             ;;
     esac
 done
-PACKAGE="xmouse"
+PACKAGE="${PREFIX}${PACKAGE}${CHANNEL}"
 
 if [[ -z "$SUDO" ]] && [[ "$(id -u)" -ne 0 ]]; then
     echo "Error: --no-sudo requires the script to be run as root." >&2
