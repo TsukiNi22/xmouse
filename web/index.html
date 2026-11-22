@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>xmouse</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <main>
+        <header>
+            <img src="/icon.svg" alt="" width="40" height="40">
+            <div>
+                <h1>xmouse</h1>
+                <p class="muted" id="device">A device of a network of screens</p>
+            </div>
+        </header>
+
+        <section class="card accent" id="codeCard" hidden>
+            <p class="label">Connection code</p>
+            <p class="code" id="code">---</p>
+            <p class="muted">It works once, then changes. The link of this page holds it with the address and the identity of the device.</p>
+            <div class="row">
+                <button class="btn" id="copyLink" type="button">Copy the link</button>
+            </div>
+        </section>
+
+        <section class="install" aria-labelledby="installTitle">
+            <p class="label" id="installTitle">Install xmouse</p>
+            <article class="platform hero" id="hero"></article>
+            <p class="label">Other platforms</p>
+            <div class="platforms" id="others"></div>
+        </section>
+
+        <section class="card">
+            <p class="label">Join this network</p>
+            <ol>
+                <li>Install xmouse on the device to add (above).</li>
+                <li>Open xmouse, page <b>Network</b>, <b>Connect to a network</b>.</li>
+                <li>Paste the link of this page: the address, the code and the identity of the device are inside. Or type the address <span class="mono" id="address"></span> and the code.</li>
+                <li>Accept the new device here if this device asks it.</li>
+            </ol>
+        </section>
+
+        <p class="muted small" id="footer">Every link of xmouse is end to end TLS 1.3 with a post-quantum key exchange.</p>
+    </main>
+    <script src="/app.js"></script>
+</body>
+</html>
