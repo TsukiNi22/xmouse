@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 ### Added
+- **The Android app as a member** (This phone in a network): it creates its own network or joins one with the code / QR code, computers join it with its link, approvals by dialog or notification, its touchpad drives its own cursor across every device, its screen lent to the layout, text of the clipboard and links of the members; the member core in plain Java (`android/src/.../core`: JSON, Argon2id, the link handshake, the replicated state, the layout, the mesh, the node), its identity in the Android KeyStore, a foreground service; `scripts/check_android_core.sh` checks it against xmouse
 - Foreign cursors: **pointer** mode (default: the cursor of a member moves the real pointer of the device) and **phantom** mode (drawn over the apps, the real pointer stays yours), `foreignMode` in the settings
 - Android: the screen lent **without Accessibility** (phantom: the cursors drawn over the apps, "Display over other apps", a foreground service), the Accessibility service taking over to touch; the update checked at every launch / return to the app
 - Map: **Recenter** button in the corner, the background dragged to move the view, wheel zoom
