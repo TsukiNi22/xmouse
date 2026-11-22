@@ -40,13 +40,36 @@ xmouse::platform::ShellCapture::~ShellCapture()
     this->stop();
 }
 
-bool xmouse::platform::ShellCapture::available(void)
+uint xmouse::platform::ShellCapture::version(void)
 {
     QDBusMessage call = QDBusMessage::createMethodCall(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Version");
     const QDBusMessage reply = QDBusConnection::sessionBus().call(call, QDBus::Block, 1000);
 
-    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return false;
-    return reply.arguments().front().toUInt() == XMOUSE_SHELL_VERSION;
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return 0;
+    return reply.arguments().front().toUInt();
+}
+
+bool xmouse::platform::ShellCapture::available(void)
+{
+    const uint v = version();
+
+    return v >= XMOUSE_SHELL_MIN_VERSION && v <= XMOUSE_SHELL_VERSION;
+}
+
+int xmouse::platform::ShellCapture::heldButtons(void) const
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "GetButtons");
+    QDBusMessage reply;
+
+    if (this->_version < 2) return -1;
+    reply = QDBusConnection::sessionBus().call(call, QDBus::Block, POINTER_TIMEOUT);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return -1;
+    return static_cast<int>(reply.arguments().front().toUInt());
+}
+
+void xmouse::platform::ShellCapture::setWindowMove(const bool enabled)
+{
+    if (this->_version >= 2) this->call_("SetWindowMove", {enabled});
 }
 
 bool xmouse::platform::ShellCapture::start(void)
@@ -55,10 +78,12 @@ bool xmouse::platform::ShellCapture::start(void)
     bool ok = true;
 
     if (!bus.isConnected()) {this->_error = "no session bus"; return false;}
+    this->_version = version();
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Crossed", this, SLOT(onCrossed_(int,int,int,int)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Motion", this, SLOT(onMotion_(double,double)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Button", this, SLOT(onButton_(uint,bool)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Wheel", this, SLOT(onWheel_(int,int)));
+    if (this->_version >= 2) ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "WindowCrossed", this, SLOT(onWindowCrossed_(qulonglong,int,int,int,int)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Key", this, SLOT(onKey_(uint,bool)));
     ok &= bus.connect(XMOUSE_SHELL_SERVICE, XMOUSE_SHELL_PATH, XMOUSE_SHELL_INTERFACE, "Ended", this, SLOT(onEnded_()));
     if (!ok) {this->_error = "cannot listen to the GNOME Shell extension"; return false;}

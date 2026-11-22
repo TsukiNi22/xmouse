@@ -36,7 +36,8 @@ File Description:
     #define XMOUSE_SHELL_SERVICE "org.gnome.Shell"
     #define XMOUSE_SHELL_PATH "/io/github/tsukini22/xmouse"
     #define XMOUSE_SHELL_INTERFACE "io.github.tsukini22.xmouse.Shell1"
-    #define XMOUSE_SHELL_VERSION 1 // version of the D-Bus interface of the extension this build speaks
+    #define XMOUSE_SHELL_VERSION 2 // version of the D-Bus interface of the extension this build speaks (2: windows, buttons)
+    #define XMOUSE_SHELL_MIN_VERSION 1 // oldest extension still used (edges only)
     #define XMOUSE_SHELL_EXTENSION "xmouse@tsukini22.github.io"
 
 namespace xmouse::platform { // namespace start
@@ -54,6 +55,7 @@ class ShellCapture final: public IInputCapture {
 
     private:
         bool _capturing = false;
+        uint _version = 0; // of the extension running (Version)
         QPoint _last; // last pointer known (answer of GetPointer, or the point of a release)
         QString _error = "";
 
@@ -65,6 +67,7 @@ class ShellCapture final: public IInputCapture {
         void onCrossed_(const int x, const int y, const int dx, const int dy);
         void onKey_(const uint evdev, const bool down);
         void onEnded_(void);
+        void onWindowCrossed_(const qulonglong window, const int x, const int y, const int dx, const int dy) {if (!this->_capturing) emit this->windowCrossed(window, QPoint(x, y), QPoint(dx, dy));};
 
         // ------------ Function ---------- //
         /* events */
@@ -79,7 +82,10 @@ class ShellCapture final: public IInputCapture {
         void setEdges(const QList<core::Edge>& edges) override;
         void release(const QPoint& local) override;
         _cold _nodiscard QPoint pointer(void) const override; // GetPointer (a short synchronous call)
-        _cold _nodiscard static bool available(void); // the extension answers with the expected version
+        _cold _nodiscard static bool available(void); // the extension answers with a version this build speaks
+        _cold _nodiscard static uint version(void); // 0 = no extension
+        _cold _nodiscard int heldButtons(void) const override; // GetButtons (extension 2), -1 with an older one
+        _cold void setWindowMove(const bool enabled) override; // SetWindowMove (extension 2)
 
         // ------------ Function ---------- //
         /* getter */

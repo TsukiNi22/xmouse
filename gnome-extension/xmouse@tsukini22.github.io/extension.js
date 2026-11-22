@@ -7,7 +7,8 @@
  *
  * File Description:
  *  GNOME Shell side of xmouse: pointer barriers on the edges opening on the other devices, capture of the mouse and
- *  the keyboard once the pointer pushes one (modal grab, hidden and held pointer), pointer position; no portal dialog
+ *  the keyboard once the pointer pushes one (modal grab, hidden and held pointer), pointer position; no portal dialog;
+ *  a window dragged on an edge given to xmouse (network switch on), the windows listed / pictured for the streams
 */
 
 //----------------------------------------------------------------//
@@ -25,7 +26,7 @@ import St from "gi://St";
 //----------------------------------------------------------------//
 /* CONSTANT */
 
-const VERSION = 1; // of the D-Bus interface (xmouse checks it)
+const VERSION = 2; // of the D-Bus interface (xmouse checks it): 2 = windows, held buttons
 const OBJECT_PATH = "/io/github/tsukini22/xmouse";
 const INTERFACE_NAME = "io.github.tsukini22.xmouse.Shell1";
 const CALLER_NAME = "xmouse"; // only this program may arm the edges (basename of /proc/<pid>/exe)
@@ -49,12 +50,18 @@ const INTERFACE = `
         <method name="GetPointer"><arg type="i" direction="out" name="x"/><arg type="i" direction="out" name="y"/></method>
         <method name="SetBarriers"><arg type="ai" direction="in" name="edges"/></method>
         <method name="Release"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/></method>
+        <method name="GetButtons"><arg type="u" direction="out" name="buttons"/></method>
+        <method name="SetWindowMove"><arg type="b" direction="in" name="enabled"/></method>
+        <method name="ListWindows"><arg type="a(tssuiiii)" direction="out" name="windows"/></method>
+        <method name="CaptureWindow"><arg type="t" direction="in" name="id"/><arg type="s" direction="out" name="path"/></method>
+        <method name="ActivateWindow"><arg type="t" direction="in" name="id"/></method>
         <signal name="Crossed"><arg type="i" name="x"/><arg type="i" name="y"/><arg type="i" name="dx"/><arg type="i" name="dy"/></signal>
         <signal name="Motion"><arg type="d" name="dx"/><arg type="d" name="dy"/></signal>
         <signal name="Button"><arg type="u" name="button"/><arg type="b" name="down"/></signal>
         <signal name="Wheel"><arg type="i" name="dx"/><arg type="i" name="dy"/></signal>
         <signal name="Key"><arg type="u" name="evdev"/><arg type="b" name="down"/></signal>
         <signal name="Ended"/>
+        <signal name="WindowCrossed"><arg type="t" name="window"/><arg type="i" name="x"/><arg type="i" name="y"/><arg type="i" name="dx"/><arg type="i" name="dy"/></signal>
     </interface>
 </node>`;
 
@@ -71,6 +78,19 @@ function buttonOf(button) {
         case 9:                        return 4; // forward
         default:                       return -1;
     }
+}
+
+// A grab that moves a window (mouse or keyboard move)
+function isMoveOp(op) {
+    const moves = [Meta.GrabOp.MOVING, Meta.GrabOp.KEYBOARD_MOVING, Meta.GrabOp.MOVING_UNCONSTRAINED];
+    return moves.some((m) => m !== undefined && op === m);
+}
+
+// The normal windows of the session (no panel, no dock, no minimized one)
+function normalWindows() {
+    return global.get_window_actors()
+        .map((actor) => actor.get_meta_window())
+        .filter((w) => w && w.get_window_type() === Meta.WindowType.NORMAL && !w.is_skip_taskbar() && !w.minimized);
 }
 
 // Program behind a bus name ("" when it cannot be read)
@@ -103,6 +123,16 @@ class XmouseService {
         this._cursorHidden = false;
         this._events = 0; // events received by the current capture
         this._watchdog = 0;
+        this._windowMove = false; // a dragged window on an edge goes to xmouse (else the usual border)
+        this._dragged = null; // window being moved now
+        this._sent = null; // window already given during this drag
+        this._grabBeginId = global.display.connect("grab-op-begin", (display, window, op) => {
+            if (window && isMoveOp(op)) this._dragged = window;
+        });
+        this._grabEndId = global.display.connect("grab-op-end", () => {
+            this._dragged = null;
+            this._sent = null;
+        });
         this._lockId = Main.sessionMode.connect("updated", () => {
             if (Main.sessionMode.isLocked) this._end(); // the lock screen takes the input back
         });
@@ -113,6 +143,8 @@ class XmouseService {
         this._clearBarriers();
         this._unwatch();
         Main.sessionMode.disconnect(this._lockId);
+        global.display.disconnect(this._grabBeginId);
+        global.display.disconnect(this._grabEndId);
         this._impl.unexport();
     }
 
@@ -143,6 +175,60 @@ class XmouseService {
 
         if (!this._allowed(invocation)) return;
         this._release(x, y);
+        invocation.return_value(null);
+    }
+
+    GetButtonsAsync(params, invocation) {
+        if (!this._allowed(invocation)) return;
+        const [, , mods] = global.get_pointer();
+        let bits = 0;
+        if (mods & Clutter.ModifierType.BUTTON1_MASK) bits |= 1; // left
+        if (mods & Clutter.ModifierType.BUTTON2_MASK) bits |= 2; // middle
+        if (mods & Clutter.ModifierType.BUTTON3_MASK) bits |= 4; // right
+        invocation.return_value(new GLib.Variant("(u)", [bits]));
+    }
+
+    SetWindowMoveAsync(params, invocation) {
+        const [enabled] = params;
+        if (!this._allowed(invocation)) return;
+        this._watch(invocation.get_sender());
+        this._windowMove = enabled;
+        invocation.return_value(null);
+    }
+
+    ListWindowsAsync(params, invocation) {
+        if (!this._allowed(invocation)) return;
+        const list = normalWindows().map((w) => {
+            const r = w.get_frame_rect();
+            return [w.get_id(), w.get_title() ?? "", w.get_wm_class() ?? "", Math.max(0, w.get_pid()), r.x, r.y, r.width, r.height];
+        });
+        invocation.return_value(new GLib.Variant("(a(tssuiiii))", [list]));
+    }
+
+    // Picture of a window (its actor, even when covered) in the runtime folder of the session, read and removed by xmouse
+    CaptureWindowAsync(params, invocation) {
+        const [id] = params;
+        if (!this._allowed(invocation)) return;
+        const window = normalWindows().find((w) => w.get_id() === id);
+        let path = "";
+        try {
+            const actor = window ? window.get_compositor_private() : null;
+            const surface = actor ? actor.get_image(null) : null;
+            if (surface) {
+                path = GLib.build_filenamev([GLib.get_user_runtime_dir(), `xmouse-window-${id}.png`]);
+                surface.writeToPNG(path);
+            }
+        } catch (e) {
+            path = "";
+        }
+        invocation.return_value(new GLib.Variant("(s)", [path]));
+    }
+
+    ActivateWindowAsync(params, invocation) {
+        const [id] = params;
+        if (!this._allowed(invocation)) return;
+        const window = normalWindows().find((w) => w.get_id() === id);
+        if (window) window.activate(global.get_current_time());
         invocation.return_value(null);
     }
 
@@ -223,6 +309,16 @@ class XmouseService {
         const push = {[SIDE_LEFT]: [-1, 0], [SIDE_RIGHT]: [1, 0], [SIDE_TOP]: [0, -1], [SIDE_BOTTOM]: [0, 1]}[side];
 
         if (this._grab !== null || this._owner === null || Main.sessionMode.isLocked) return;
+        // A window being dragged: given to xmouse (switch on), else the usual border of the screen; never a capture
+        if (this._dragged !== null) {
+            if (this._windowMove && this._sent !== this._dragged) {
+                this._sent = this._dragged;
+                this._emit("WindowCrossed", "(tiiii)", [this._dragged.get_id(), Math.round(event.x), Math.round(event.y), push[0], push[1]]);
+            }
+            return;
+        }
+        // A button held (a file / a selection dragged): no crossing, xmouse shows its drop shelf at this edge instead
+        if (global.get_pointer()[2] & Clutter.ModifierType.BUTTON1_MASK) return;
         this._origin = [Math.round(event.x), Math.round(event.y)];
         this._actor = new St.Widget({reactive: true, can_focus: true, opacity: 0, x: 0, y: 0, width: global.stage.width, height: global.stage.height});
         Main.uiGroup.add_child(this._actor);

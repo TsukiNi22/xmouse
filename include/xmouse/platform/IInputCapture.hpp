@@ -59,6 +59,8 @@ class IInputCapture: public QObject {
         _cold _nodiscard virtual QString error(void) const = 0;
         _cold _nodiscard virtual bool knowsPointer(void) const = 0; // pointer() is reliable (restore after a foreign click)
         _cold _nodiscard virtual QPoint pointer(void) const = 0; // local pointer position when knowsPointer()
+        _cold _nodiscard virtual int heldButtons(void) const {return -1;}; // bits of the buttons held now (MouseButton), -1 = unknown (the drop shelf needs it)
+        _cold virtual void setWindowMove(const bool enabled) {(void)enabled;}; // a window dragged on an edge: windowCrossed (true) or the usual border of the OS (false)
 
         // ---------- Constructor --------- //
         explicit IInputCapture(QObject* parent = nullptr): QObject(parent) { /* Nothing */ };
@@ -75,6 +77,7 @@ class IInputCapture: public QObject {
         void wheel(const int dx, const int dy); // 1/120 of a notch
         void key(const QString& code, const bool down); // KeyboardEvent.code
         void ended(void); // the capture was taken away (compositor, lock screen, Ctrl+Alt+Del)
+        void windowCrossed(const quint64 window, const QPoint& local, const QPoint& push); // a window being dragged pushed an edge (setWindowMove(true) only), nothing captured
 };
 
 //----------------------------------------------------------------//

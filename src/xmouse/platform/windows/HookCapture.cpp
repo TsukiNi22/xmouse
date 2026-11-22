@@ -52,6 +52,7 @@ bool xmouse::platform::HookCapture::start(void)
         return false;
     }
     GetCursorPos(&this->_last);
+    this->_moveHook = SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, nullptr, &HookCapture::windowProc_, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     QMetaObject::invokeMethod(this, [this]() {emit this->ready();}, Qt::QueuedConnection);
     return true;
 }
@@ -60,6 +61,9 @@ void xmouse::platform::HookCapture::stop(void)
 {
     if (this->_mouse) UnhookWindowsHookEx(this->_mouse);
     if (this->_keyboard) UnhookWindowsHookEx(this->_keyboard);
+    if (this->_moveHook) UnhookWinEvent(this->_moveHook);
+    this->_moveHook = nullptr;
+    this->_moving = nullptr;
     this->_mouse = nullptr;
     this->_keyboard = nullptr;
     this->_capturing = false;
@@ -72,6 +76,23 @@ QPoint xmouse::platform::HookCapture::pointer(void) const
 
     GetCursorPos(&p);
     return QPoint(p.x, p.y);
+}
+
+int xmouse::platform::HookCapture::heldButtons(void) const
+{
+    int bits = 0;
+
+    if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) bits |= 1 << static_cast<int>(net::MouseButton::Left);
+    if (GetAsyncKeyState(VK_MBUTTON) & 0x8000) bits |= 1 << static_cast<int>(net::MouseButton::Middle);
+    if (GetAsyncKeyState(VK_RBUTTON) & 0x8000) bits |= 1 << static_cast<int>(net::MouseButton::Right);
+    return bits;
+}
+
+void CALLBACK xmouse::platform::HookCapture::windowProc_(HWINEVENTHOOK, DWORD event, HWND window, LONG object, LONG, DWORD, DWORD)
+{
+    if (!g_capture || object != OBJID_WINDOW) return;
+    if (event == EVENT_SYSTEM_MOVESIZESTART) g_capture->_moving = window;
+    else if (event == EVENT_SYSTEM_MOVESIZEEND) {g_capture->_moving = nullptr; g_capture->_sent = nullptr;}
 }
 
 void xmouse::platform::HookCapture::release(const QPoint& local)
@@ -112,6 +133,16 @@ bool xmouse::platform::HookCapture::onMouse_(const WPARAM message, const MSLLHOO
             else if (e.side == core::Side::Bottom && p.y >= e.line - 1 && p.y > last.y && p.x >= e.from && p.x <= e.to) push = QPoint(0, 1);
             else if (e.side == core::Side::Top && p.y <= e.line && p.y < last.y && p.x >= e.from && p.x <= e.to) push = QPoint(0, -1);
             else continue;
+            // A window dragged on the edge: given to the other device (switch on), or the usual border (off)
+            if (this->_moving) {
+                if (this->_windowMove && this->_sent != this->_moving) {
+                    const quint64 window = reinterpret_cast<quint64>(this->_moving);
+                    this->_sent = this->_moving;
+                    QMetaObject::invokeMethod(this, [this, window, p, push]() {emit this->windowCrossed(window, QPoint(p.x, p.y), push);}, Qt::QueuedConnection);
+                }
+                return false;
+            }
+            if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) return false; // a drag (a file, a selection): no crossing, the drop shelf of xmouse shows here
             this->_capturing = true;
             this->_frozen = p;
             QMetaObject::invokeMethod(this, [this, p, push]() {emit this->crossed(QPoint(p.x, p.y), push);}, Qt::QueuedConnection);

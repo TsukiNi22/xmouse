@@ -46,6 +46,10 @@ class HookCapture final: public IInputCapture {
     private:
         HHOOK _mouse = nullptr;
         HHOOK _keyboard = nullptr;
+        HWINEVENTHOOK _moveHook = nullptr; // start / end of a window being moved or resized
+        HWND _moving = nullptr; // window being dragged now
+        HWND _sent = nullptr; // window already given to windowCrossed during this drag
+        bool _windowMove = false; // a dragged window on an edge goes to the other device (else the usual border)
         QList<core::Edge> _edges;
         POINT _frozen = {0, 0}; // where the cursor is held
         POINT _last = {0, 0};
@@ -55,6 +59,7 @@ class HookCapture final: public IInputCapture {
         // ---------- Pre-Function -------- //
         static LRESULT CALLBACK mouseProc_(int code, WPARAM wParam, LPARAM lParam);
         static LRESULT CALLBACK keyboardProc_(int code, WPARAM wParam, LPARAM lParam);
+        static void CALLBACK windowProc_(HWINEVENTHOOK hook, DWORD event, HWND window, LONG object, LONG child, DWORD thread, DWORD time);
         _hot bool onMouse_(const WPARAM message, const MSLLHOOKSTRUCT* data); // true = swallowed
         _hot bool onKey_(const WPARAM message, const KBDLLHOOKSTRUCT* data);
 
@@ -64,6 +69,8 @@ class HookCapture final: public IInputCapture {
         void stop(void) override;
         void release(const QPoint& local) override;
         _cold _nodiscard QPoint pointer(void) const override;
+        _cold _nodiscard int heldButtons(void) const override; // GetAsyncKeyState of the buttons
+        _cold void setWindowMove(const bool enabled) override {this->_windowMove = enabled;};
 
         // ------------ Function ---------- //
         /* setter */
