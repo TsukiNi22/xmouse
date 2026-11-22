@@ -30,6 +30,7 @@ File Description:
     #include <QWidget>                  // QWidget
     #include <QPointF>                  // QPointF
     #include <QString>                  // QString
+    #include <QTimer>                   // QTimer
     #include <QPoint>                   // QPoint
 
 namespace xmouse::ui::gui { // namespace start
@@ -50,6 +51,8 @@ class LayoutView final: public QWidget {
         double _scale = 0.1; // widget pixels per global pixel
         QPointF _offset; // widget position of the global (0, 0)
         bool _editable = true;
+        QString _dropTarget = ""; // device under files being dragged over the map
+        QTimer _anim; // 30 ms while a "look here" wave is shown
 
         // ---------- Pre-Function -------- //
         void fit_(void); // _view, _scale, _offset from the layout
@@ -65,6 +68,11 @@ class LayoutView final: public QWidget {
         void mousePressEvent(QMouseEvent* event) override;
         void mouseMoveEvent(QMouseEvent* event) override;
         void mouseReleaseEvent(QMouseEvent* event) override;
+        void contextMenuEvent(QContextMenuEvent* event) override; // follow, send files / a link, show a window there
+        void dragEnterEvent(QDragEnterEvent* event) override;
+        void dragMoveEvent(QDragMoveEvent* event) override;
+        void dragLeaveEvent(QDragLeaveEvent* event) override;
+        void dropEvent(QDropEvent* event) override; // files dropped on a device: sent to it
 
     public:
         // ------------ Function ---------- //

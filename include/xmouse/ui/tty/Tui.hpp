@@ -46,6 +46,7 @@ class Tui final: public QObject {
         std::jthread _reader; // stdin lines (portable: no socket notifier on a Windows console)
         QPointer<net::Peer> _pendingJoin; // device waiting the accept / refuse
         QString _pendingAccess = ""; // foreign cursor asking the panel
+        QString _pendingPad = ""; // phone / pad waiting for accept / refuse
 
         // ---------- Pre-Function -------- //
         void command_(const QString& line);

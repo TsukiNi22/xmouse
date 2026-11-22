@@ -27,11 +27,13 @@ File Description:
     #define _Attribute
     #include <utils/utils.hpp>          // _cold, _nodiscard
     #include "../../core/Hub.hpp"       // xmouse::core::Hub
+    #include "WindowViewer.hpp"         // xmouse::ui::gui::WindowViewer
     #include "LayoutView.hpp"           // xmouse::ui::gui::LayoutView
+    #include "DropShelf.hpp"            // xmouse::ui::gui::DropShelf
     #include "Overlay.hpp"              // xmouse::ui::gui::Overlay
     #include <QSystemTrayIcon>          // QSystemTrayIcon
-    #include <QProgressBar>             // QProgressBar
     #include <QStackedWidget>           // QStackedWidget
+    #include <QProgressBar>             // QProgressBar
     #include <QTableWidget>             // QTableWidget
     #include <QListWidget>              // QListWidget
     #include <QPushButton>              // QPushButton
@@ -41,8 +43,10 @@ File Description:
     #include <QComboBox>                // QComboBox
     #include <algorithm>                // std::clamp
     #include <QSpinBox>                 // QSpinBox
+    #include <QPointer>                 // QPointer
     #include <QLabel>                   // QLabel
     #include <QTimer>                   // QTimer
+    #include <QHash>                    // QHash
 
 namespace xmouse::ui::gui { // namespace start
 
@@ -55,6 +59,8 @@ class MainWindow final: public QMainWindow {
     private:
         core::Hub& _hub;
         Overlay _overlay;
+        DropShelf _shelf;
+        QHash<QString, QPointer<WindowViewer>> _viewers; // windows of the other devices streamed here
         QListWidget* _nav = nullptr;
         QStackedWidget* _pages = nullptr;
         QSystemTrayIcon* _tray = nullptr;
@@ -91,15 +97,21 @@ class MainWindow final: public QMainWindow {
         QLineEdit* _createName = nullptr;
         QLineEdit* _joinAddress = nullptr;
         QLineEdit* _joinCode = nullptr;
+        QWidget* _padsCard = nullptr; // phones and web pads of this device
+        QTableWidget* _pads = nullptr;
         QLabel* _joinStatus = nullptr;
 
         /* layout page */
         LayoutView* _layoutView = nullptr;
         QLabel* _where = nullptr; // where each cursor is
         QCheckBox* _windowMove = nullptr;
+        QComboBox* _profiles = nullptr; // saved layouts
+        QComboBox* _follow = nullptr; // member followed
+        QPushButton* _laser = nullptr;
 
         /* activity page */
         QListWidget* _log = nullptr;
+        QListWidget* _transfers = nullptr; // files being sent / received
 
         /* settings page */
         QLineEdit* _deviceName = nullptr;
@@ -123,6 +135,15 @@ class MainWindow final: public QMainWindow {
         Q_INVOKABLE void showQr_(const int endpoint); // QR code of an address + the code (-1 = the first one another device can use)
         void refreshWhere_(void);
         void refreshBackends_(void);
+        void refreshPads_(void);
+        void refreshProfiles_(void);
+        void refreshFollow_(void);
+        void refreshTransfers_(void);
+        void showPadQr_(void); // QR code of the link that pairs a phone / browser
+        void onPadApproval_(const QString& pending, const QString& name, const QString& kind);
+        void onLink_(const QString& id, const QString& name, const QString& url);
+        void sendFilesTo_(void); // tray: pick a member, then files
+        void sendLinkTo_(void); // tray: pick a member, then a link
         void onJoinApproval_(net::Peer* peer);
         void showNotice_(const QString& text, const QString& tone = "accent");
         void reportPanel_(void); // geometry + focus of the panel to the hub

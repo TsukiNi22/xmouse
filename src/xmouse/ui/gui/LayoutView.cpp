@@ -23,10 +23,17 @@ File Description:
 #include "xmouse/ui/gui/LayoutView.hpp"
 #include "xmouse/ui/gui/Theme.hpp"
 #include "xmouse/net/Protocol.hpp"
+#include <QContextMenuEvent>
 #include <QFontMetrics>
+#include <QInputDialog>
 #include <QMouseEvent>
+#include <QFileDialog>
+#include <QMimeData>
+#include <QDateTime>
 #include <QPainter>
+#include <QMenu>
 #include <cmath>
+#include <QUrl>
 
 //----------------------------------------------------------------//
 /* DEFINE */
@@ -46,6 +53,20 @@ xmouse::ui::gui::LayoutView::LayoutView(core::Hub& hub, QWidget* parent)
     QObject::connect(&hub, &core::Hub::presenceChanged, this, qOverload<>(&QWidget::update));
     QObject::connect(&hub, &core::Hub::foreignChanged, this, qOverload<>(&QWidget::update));
     QObject::connect(&hub, &core::Hub::membersChanged, this, qOverload<>(&QWidget::update));
+    QObject::connect(&hub, &core::Hub::followChanged, this, qOverload<>(&QWidget::update));
+    this->setAcceptDrops(true);
+    this->_anim.setInterval(30);
+    QObject::connect(&this->_anim, &QTimer::timeout, this, [this]() {
+        bool waving = false;
+        for (const core::Presence& pr: this->_hub.presence())
+            if (pr.flags & XMOUSE_PRESENCE_PING) waving = true;
+        if (!waving) this->_anim.stop();
+        this->update();
+    });
+    QObject::connect(&hub, &core::Hub::presenceChanged, this, [this]() {
+        for (const core::Presence& pr: this->_hub.presence())
+            if ((pr.flags & XMOUSE_PRESENCE_PING) && !this->_anim.isActive()) this->_anim.start();
+    });
 }
 
 void xmouse::ui::gui::LayoutView::fit_(void)
@@ -104,10 +125,15 @@ void xmouse::ui::gui::LayoutView::paintEvent(QPaintEvent*)
             p.setPen(QPen(fill, m.self ? 2.4 : 1.4));
             p.setBrush(inside);
             p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 4, 4);
+            if (it.key() == this->_dropTarget) { // files dragged over it: they go there
+                p.setPen(QPen(palette.accent, 3, Qt::DashLine));
+                p.setBrush(Qt::NoBrush);
+                p.drawRoundedRect(r.adjusted(3, 3, -3, -3), 4, 4);
+            }
             p.setPen(palette.text);
             font.setBold(true);
             p.setFont(font);
-            if (first) p.drawText(r.adjusted(8, 6, -8, -6), Qt::AlignTop | Qt::AlignLeft, m.name + (m.self ? "  (this device)" : "") + (m.online ? "" : "  - offline"));
+            if (first) p.drawText(r.adjusted(8, 6, -8, -6), Qt::AlignTop | Qt::AlignLeft, m.name + (m.self ? "  (this device)" : "") + (m.kind == "phone" ? "  - phone" : "") + (m.online ? (m.relayed ? "  - relayed" : "") : "  - offline"));
             p.setFont(small);
             p.setPen(palette.muted);
             p.drawText(r.adjusted(8, 6, -8, -6), Qt::AlignBottom | Qt::AlignLeft, it->screens[i].name + "  " + QString::number(it->screens[i].rect.width()) + " x " + QString::number(it->screens[i].rect.height()));
@@ -124,6 +150,19 @@ void xmouse::ui::gui::LayoutView::paintEvent(QPaintEvent*)
 
         if (hidden && !m.self) continue; // on its own device: its OS draws it, the map shows it only for this device
         if (!this->rect().contains(at.toPoint())) continue;
+        if (pr.flags & XMOUSE_PRESENCE_PING) { // "look here": waves around it
+            const double t = static_cast<double>(QDateTime::currentMSecsSinceEpoch() % 900) / 900.0;
+            QColor ring = color;
+            ring.setAlphaF(1.0 - t);
+            p.setPen(QPen(ring, 2));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(at, 6 + 22 * t, 6 + 22 * t);
+        }
+        if (pr.id == this->_hub.following()) { // followed: a ring
+            p.setPen(QPen(color, 2, Qt::DotLine));
+            p.setBrush(Qt::NoBrush);
+            p.drawEllipse(at, 12, 12);
+        }
         p.setPen(QPen(Qt::white, 1.5));
         p.setBrush(color);
         p.drawEllipse(at, (pr.flags & XMOUSE_PRESENCE_DOWN) ? 7.0 : 5.0, (pr.flags & XMOUSE_PRESENCE_DOWN) ? 7.0 : 5.0);
@@ -176,4 +215,75 @@ void xmouse::ui::gui::LayoutView::mouseReleaseEvent(QMouseEvent* event)
     if (check.overlaps(id)) {this->update(); return;} // dropped over another screen: back where it was
     if (this->_dragPosition != this->_dragOrigin) this->_hub.placeDevice(id, this->_dragPosition);
     this->update();
+}
+
+//----------------------------------------------------------------//
+/* MENU AND DROPS */
+
+void xmouse::ui::gui::LayoutView::contextMenuEvent(QContextMenuEvent* event)
+{
+    const QString id = this->deviceAt_(event->pos());
+    const QString name = this->_hub.layout().device(id).name;
+    QMenu menu(this);
+
+    if (id.isEmpty() || id == this->_hub.group().self() || !this->_hub.reachable(id)) return;
+    menu.addAction(this->_hub.following() == id ? "Stop following " + name : "Follow the cursor of " + name, this, [this, id]() {
+        this->_hub.follow(this->_hub.following() == id ? QString() : id);
+    });
+    menu.addSeparator();
+    menu.addAction("Send files to " + name + "...", this, [this, id]() {
+        const QStringList files = QFileDialog::getOpenFileNames(this, "Send files to " + this->_hub.layout().device(id).name);
+        if (!files.isEmpty()) (void)this->_hub.sendFiles(id, files);
+    });
+    menu.addAction("Send a link to " + name + "...", this, [this, id]() {
+        bool ok = false;
+        const QString url = QInputDialog::getText(this, "Send a link", "Link opened on " + this->_hub.layout().device(id).name + " (https://...)", QLineEdit::Normal, "https://", &ok);
+        if (ok && !url.trimmed().isEmpty()) this->_hub.sendLink(id, url);
+    });
+    if (this->_hub.windowMoveEnabled() && !this->_hub.windows().isEmpty()) {
+        menu.addAction("Show a window of this device on " + name + "...", this, [this, id]() {
+            const QList<platform::WindowInfo> windows = this->_hub.windows();
+            QStringList titles;
+            bool ok = false;
+            for (const platform::WindowInfo& w: windows)
+                titles.append(w.title.left(80) + (w.app.isEmpty() ? QString() : "  (" + w.app + ")"));
+            const QString chosen = QInputDialog::getItem(this, "Show a window", "Window streamed to " + this->_hub.layout().device(id).name + " (driven from there)", titles, 0, false, &ok);
+            if (ok && titles.contains(chosen)) (void)this->_hub.streamWindow(id, windows[titles.indexOf(chosen)].id);
+        });
+    }
+    menu.exec(event->globalPos());
+}
+
+void xmouse::ui::gui::LayoutView::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls()) event->acceptProposedAction();
+}
+
+void xmouse::ui::gui::LayoutView::dragMoveEvent(QDragMoveEvent* event)
+{
+    const QString id = this->deviceAt_(event->position().toPoint());
+    const bool ok = !id.isEmpty() && id != this->_hub.group().self() && this->_hub.reachable(id);
+
+    if (ok != (this->_dropTarget == id) || (!ok && !this->_dropTarget.isEmpty())) {this->_dropTarget = ok ? id : QString(); this->update();}
+    if (ok) event->acceptProposedAction();
+    else event->ignore();
+}
+
+void xmouse::ui::gui::LayoutView::dragLeaveEvent(QDragLeaveEvent*)
+{
+    this->_dropTarget.clear();
+    this->update();
+}
+
+void xmouse::ui::gui::LayoutView::dropEvent(QDropEvent* event)
+{
+    const QString id = this->_dropTarget;
+    QStringList files;
+
+    this->_dropTarget.clear();
+    this->update();
+    for (const QUrl& url: event->mimeData()->urls())
+        if (url.isLocalFile()) files.append(url.toLocalFile());
+    if (id.isEmpty() || files.isEmpty()) return;
+    if (!this->_hub.sendFiles(id, files).isEmpty()) event->acceptProposedAction();
 }

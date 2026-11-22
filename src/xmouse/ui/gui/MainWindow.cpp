@@ -25,8 +25,11 @@ File Description:
 #include "xmouse/ui/gui/Theme.hpp"
 #include "xmouse/net/Protocol.hpp"
 #include <qrcodegen/qrcodegen.hpp>
+#include <QDesktopServices>
 #include <QGuiApplication>
 #include <QApplication>
+#include <QInputDialog>
+#include <QFileDialog>
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QScrollArea>
@@ -45,6 +48,7 @@ File Description:
 #include <QStyle>
 #include <QMenu>
 #include <QUrl>
+#include <QDir>
 
 //----------------------------------------------------------------//
 /* TOOLS */
@@ -165,7 +169,7 @@ static QPixmap color_dot(const QColor& color)
 /* CLASS */
 
 xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
-: QMainWindow(parent), _hub{hub}, _overlay{hub}
+: QMainWindow(parent), _hub{hub}, _overlay{hub}, _shelf{hub}
 {
     QWidget* root = new QWidget(this);
     QHBoxLayout* rootLayout = new QHBoxLayout(root);
@@ -306,6 +310,31 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
         this->_accessBanner->hide();
         if (granted) this->showNotice_(this->_accessBanner->property("name").toString() + " can now use the panel (until you use it again)", "warning");
     });
+    QObject::connect(&hub, &core::Hub::padsChanged, this, &MainWindow::refreshPads_);
+    QObject::connect(&hub, &core::Hub::padApproval, this, &MainWindow::onPadApproval_);
+    QObject::connect(&hub, &core::Hub::linkReceived, this, &MainWindow::onLink_);
+    QObject::connect(&hub, &core::Hub::layoutChanged, this, &MainWindow::refreshProfiles_);
+    QObject::connect(&hub, &core::Hub::followChanged, this, &MainWindow::refreshFollow_);
+    QObject::connect(&hub, &core::Hub::transfersChanged, this, &MainWindow::refreshTransfers_);
+    QObject::connect(&hub, &core::Hub::filesReceived, this, [this](const QString& from, const QStringList& paths, const QString& folder) {
+        if (this->_tray) this->_tray->showMessage("Files from " + from, QString::number(paths.size()) + " file(s) in " + folder, QSystemTrayIcon::Information, 6000);
+        this->refreshTransfers_();
+    });
+
+    // Windows of the other devices shown here (one viewer per stream)
+    QObject::connect(&hub, &core::Hub::streamStarted, this, [this](const QString& id, const QString& from, const QString& title, const QString& document) {
+        WindowViewer* viewer = new WindowViewer(this->_hub, id, from, title, document);
+        this->_viewers.insert(id, viewer);
+        viewer->show();
+        viewer->raise();
+    });
+    QObject::connect(&hub, &core::Hub::streamFrame, this, [this](const QString& id, const QImage& frame, const QSize& size) {
+        if (this->_viewers.value(id)) this->_viewers.value(id)->setFrame(frame, size);
+    });
+    QObject::connect(&hub, &core::Hub::streamEnded, this, [this](const QString& id) {
+        QPointer<WindowViewer> viewer = this->_viewers.take(id);
+        if (viewer) viewer->ended();
+    });
     QObject::connect(&hub.log(), &core::AuditLog::entry, this, [this](const QJsonObject& e) {
         const QString line = QDateTime::fromMSecsSinceEpoch(e.value("ts").toVariant().toLongLong()).toString("HH:mm:ss") + "  " + e.value("cat").toString().leftJustified(8) + "  " + e.value("msg").toString();
         this->_log->addItem(line);
@@ -330,6 +359,10 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     this->buildTray_();
     this->refreshNetwork_();
     this->refreshBackends_();
+    this->refreshPads_();
+    this->refreshProfiles_();
+    this->refreshFollow_();
+    this->refreshTransfers_();
     for (const QJsonObject& e: hub.log().recent(300))
         emit hub.log().entry(e);
 }
@@ -500,6 +533,30 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
     body->addWidget(this->_members);
     layout->addWidget(this->_membersCard);
 
+    // Phones and web pads: they drive the cursor of this device (touchpad, keyboard), a phone also lends its screen
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+        QPushButton* add = make_button("Pair a phone or a browser", "primary", "qr");
+
+        this->_padsCard = make_panel("Phones and web pads", body);
+        body->addWidget(make_label("A phone (the xmouse app, or its browser) or any browser becomes a touchpad and a keyboard for this device; the Android app also puts its screen in the layout, the cursors of the network go on it. Scan the QR code with it, then accept it here.", "muted"));
+        this->_pads = new QTableWidget(0, 4);
+        this->_pads->setHorizontalHeaderLabels({"Pad", "Kind", "Now", ""});
+        this->_pads->verticalHeader()->hide();
+        this->_pads->setSelectionMode(QAbstractItemView::NoSelection);
+        this->_pads->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        this->_pads->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        this->_pads->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+        this->_pads->setMinimumHeight(110);
+        Theme::decorate(this->_pads);
+        body->addWidget(this->_pads);
+        row->addWidget(add);
+        row->addStretch();
+        body->addLayout(row);
+        QObject::connect(add, &QPushButton::clicked, this, &MainWindow::showPadQr_);
+        layout->addWidget(this->_padsCard);
+    }
+
     // Connect to a network (the part of xmouse): the address of a member and its code, or its link / QR code
     {
         QFrame* connect = make_panel("Connect to a network", body);
@@ -554,11 +611,53 @@ QWidget* xmouse::ui::gui::MainWindow::buildLayout_(void)
     this->_layoutView = new LayoutView(this->_hub, card);
     body->addWidget(this->_layoutView, 1);
     actions->addWidget(reset);
+    actions->addSpacing(8);
+    actions->addWidget(make_label("Profile", "muted"));
+    this->_profiles = new QComboBox();
+    this->_profiles->setMinimumWidth(150);
+    this->_profiles->setToolTip("Saved layouts of the network (desk, travel...): applied for every member");
+    actions->addWidget(this->_profiles);
+    {
+        QPushButton* apply = make_button("Apply", "ghost");
+        QPushButton* save = make_button("Save as...", "ghost");
+        QPushButton* drop = make_button("Delete", "ghost");
+        actions->addWidget(apply);
+        actions->addWidget(save);
+        actions->addWidget(drop);
+        QObject::connect(apply, &QPushButton::clicked, this, [this]() {if (!this->_profiles->currentText().isEmpty()) this->_hub.applyProfile(this->_profiles->currentText());});
+        QObject::connect(drop, &QPushButton::clicked, this, [this]() {if (!this->_profiles->currentText().isEmpty()) this->_hub.deleteProfile(this->_profiles->currentText());});
+        QObject::connect(save, &QPushButton::clicked, this, [this]() {
+            bool ok = false;
+            const QString name = QInputDialog::getText(this, "Save the layout", "Name of this layout (the same name replaces it)", QLineEdit::Normal, this->_profiles->currentText(), &ok);
+            if (ok && !name.trimmed().isEmpty()) this->_hub.saveProfile(name);
+        });
+    }
     actions->addStretch();
-    this->_windowMove = new QCheckBox("Windows can move between devices (whole network)");
-    this->_windowMove->setToolTip("Off: dragging a window to an edge behaves as usual. The move itself (handoff / streamed window) comes in v0.4");
-    actions->addWidget(this->_windowMove);
     body->addLayout(actions);
+    {
+        QHBoxLayout* presence = new QHBoxLayout();
+        QPushButton* ping = make_button("Look here", "ghost", "control");
+        ping->setToolTip("A wave where your cursor is, on its screen and on every map");
+        this->_laser = make_button("Laser", "ghost");
+        this->_laser->setCheckable(true);
+        this->_laser->setToolTip("Your cursor leaves a red trail on the screens it crosses");
+        this->_follow = new QComboBox();
+        this->_follow->setToolTip("An arrow at the border of your screen points at the cursor of this member");
+        presence->addWidget(ping);
+        presence->addWidget(this->_laser);
+        presence->addSpacing(8);
+        presence->addWidget(make_label("Follow", "muted"));
+        presence->addWidget(this->_follow);
+        presence->addStretch();
+        this->_windowMove = new QCheckBox("Windows can move between devices (whole network)");
+        this->_windowMove->setToolTip("On: a window dragged on an edge goes to the device on the other side (streamed there, driven from there; its document can be opened there). Off: the edge behaves as usual. Right click a device on the map to show a window there.");
+        presence->addWidget(this->_windowMove);
+        body->addLayout(presence);
+        body->addWidget(make_label("Right click a device: follow its cursor, send it files or a link, show one of your windows there. Drop files on a device to send them.", "muted"));
+        QObject::connect(ping, &QPushButton::clicked, &this->_hub, &core::Hub::ping);
+        QObject::connect(this->_laser, &QPushButton::toggled, &this->_hub, &core::Hub::setLaser);
+        QObject::connect(this->_follow, &QComboBox::activated, this, [this](const int index) {this->_hub.follow(this->_follow->itemData(index).toString());});
+    }
     layout->addWidget(card, 3);
     card = make_panel("Where the cursors are", body);
     this->_where = make_label("", "");
@@ -580,7 +679,26 @@ QWidget* xmouse::ui::gui::MainWindow::buildActivity_(void)
 
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(14);
-    layout->addWidget(make_page_head("Activity", "Links, joins, cursors entering this device, access requests to the panel (also in " + core::Config::logDir() + ")."));
+    layout->addWidget(make_page_head("Activity", "Links, joins, cursors entering this device, access requests to the panel, files (also in " + core::Config::logDir() + ")."));
+    {
+        QHBoxLayout* row = new QHBoxLayout();
+        QPushButton* cancel = make_button("Cancel the selected transfer", "ghost");
+        QPushButton* folder = make_button("Open the received files", "ghost");
+
+        card = make_panel("Files", body);
+        this->_transfers = new QListWidget();
+        this->_transfers->setMaximumHeight(140);
+        body->addWidget(this->_transfers);
+        row->addWidget(cancel);
+        row->addWidget(folder);
+        row->addStretch();
+        body->addLayout(row);
+        layout->addWidget(card);
+        QObject::connect(cancel, &QPushButton::clicked, this, [this]() {
+            if (this->_transfers->currentItem()) this->_hub.cancelTransfer(this->_transfers->currentItem()->data(Qt::UserRole).toString());
+        });
+        QObject::connect(folder, &QPushButton::clicked, this, [this]() {QDesktopServices::openUrl(QUrl::fromLocalFile(this->_hub.downloadDir()));});
+    }
     card = make_panel("Journal", body);
     this->_log = new QListWidget();
     this->_log->setObjectName("mono");
@@ -648,6 +766,55 @@ QWidget* xmouse::ui::gui::MainWindow::buildSettings_(void)
     body->addWidget(make_label("Ctrl + Alt + Shift brings the cursor of this device back at once.", "muted"));
     layout->addWidget(card);
 
+    card = make_panel("Network", body);
+    body->addWidget(check("Moves and presence by encrypted udp when it passes (tcp otherwise)", s.udp, "AES-256-GCM with a key of the network; the late packets are dropped and the cursor is drawn ahead while one is missing (restart)"));
+    body->addWidget(check("Carry the messages of two members that cannot reach each other (relay)", s.relay, "The members not linked directly reach each other through this device (still end to end in the network)"));
+    layout->addWidget(card);
+
+    card = make_panel("Files and links", body);
+    form = new QFormLayout();
+    {
+        QSpinBox* clipLimit = new QSpinBox();
+        QSpinBox* filesLimit = new QSpinBox();
+        QLineEdit* folder = new QLineEdit(s.downloadDir);
+        QComboBox* links = new QComboBox();
+        clipLimit->setRange(0, 4096);
+        clipLimit->setSuffix(" MiB");
+        clipLimit->setValue(s.clipboardFilesLimit);
+        filesLimit->setRange(1, 1024 * 1024);
+        filesLimit->setSuffix(" MiB");
+        filesLimit->setValue(s.filesLimit);
+        folder->setPlaceholderText(this->_hub.downloadDir());
+        links->addItem("Ask what to do", "ask");
+        links->addItem("Open them at once", "open");
+        links->addItem("Refuse them", "never");
+        links->setCurrentIndex(std::max(0, links->findData(s.links)));
+        form->addRow("Copied files fetched at once up to", clipLimit);
+        form->addRow("Biggest transfer accepted", filesLimit);
+        form->addRow("Received files go to", folder);
+        form->addRow("Links sent by the members", links);
+        QObject::connect(clipLimit, &QSpinBox::valueChanged, this, [this, save](const int v) {this->_hub.config().settings().clipboardFilesLimit = v; save();});
+        QObject::connect(filesLimit, &QSpinBox::valueChanged, this, [this, save](const int v) {this->_hub.config().settings().filesLimit = v; save();});
+        QObject::connect(folder, &QLineEdit::editingFinished, this, [this, folder, save]() {this->_hub.config().settings().downloadDir = folder->text().trimmed(); save();});
+        QObject::connect(links, &QComboBox::currentIndexChanged, this, [this, links, save](const int) {this->_hub.config().settings().links = links->currentData().toString(); save();});
+    }
+    body->addLayout(form);
+    layout->addWidget(card);
+
+    card = make_panel("Phones, pads and windows", body);
+    body->addWidget(check("A phone or a browser may pair with the code and drive this device", s.pads, "The page /pad of this device and the Android app; each new one is accepted here"));
+    form = new QFormLayout();
+    {
+        QSpinBox* fps = new QSpinBox();
+        fps->setRange(1, 30);
+        fps->setSuffix(" frames / s");
+        fps->setValue(s.windowFps);
+        form->addRow("A window streamed from here", fps);
+        QObject::connect(fps, &QSpinBox::valueChanged, this, [this, save](const int v) {this->_hub.config().settings().windowFps = v; save();});
+    }
+    body->addLayout(form);
+    layout->addWidget(card);
+
     card = make_panel("Backends", body);
     this->_backends = make_label("", "mono");
     this->_backends->setWordWrap(true);
@@ -665,6 +832,15 @@ void xmouse::ui::gui::MainWindow::buildTray_(void)
     this->_tray = new QSystemTrayIcon(QIcon(Theme::logo(64)), this);
     menu->addAction("Show the panel", this, [this]() {this->showNormal(); this->raise(); this->activateWindow();});
     menu->addAction("Bring my cursor back", &this->_hub, &core::Hub::comeBack);
+    menu->addAction("Look here (wave)", &this->_hub, &core::Hub::ping);
+    {
+        QAction* laser = menu->addAction("Laser pointer");
+        laser->setCheckable(true);
+        QObject::connect(laser, &QAction::toggled, this->_laser, &QPushButton::setChecked);
+        QObject::connect(this->_laser, &QPushButton::toggled, laser, &QAction::setChecked);
+    }
+    menu->addAction("Send files to...", this, &MainWindow::sendFilesTo_);
+    menu->addAction("Send a link to...", this, &MainWindow::sendLinkTo_);
     QAction* priv = menu->addAction("Private mode");
     priv->setCheckable(true);
     priv->setChecked(this->_hub.config().settings().privateMode);
@@ -891,16 +1067,16 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
 
         this->_members->setItem(row, 0, name);
         this->_members->setItem(row, 1, new QTableWidgetItem(m.os + "  " + m.version));
-        this->_members->setItem(row, 2, new QTableWidgetItem(m.self ? "-" : (m.online ? "online" : "offline")));
+        this->_members->setItem(row, 2, new QTableWidgetItem(m.self ? "-" : (!m.online ? "offline" : (!m.via.isEmpty() ? m.kind + " of " + this->_hub.layout().device(m.via).name : (m.relayed ? "relayed" : (m.udp ? "online, udp" : "online"))))));
         this->_members->setItem(row, 3, new QTableWidgetItem(m.self || m.rtt < 0 ? "-" : QString::number(m.rtt) + " ms"));
         this->_members->setItem(row, 4, new QTableWidgetItem(m.self ? "" : this->_hub.mesh().addressesOf(m.id).join(", ")));
         rightsLayout->setContentsMargins(4, 0, 4, 0);
         rightsLayout->setSpacing(8);
         if (!m.self) {
-            const std::array<std::pair<QString, int>, 4> boxes = {std::pair<QString, int>{"Mouse", 0}, {"Keys", 1}, {"Clipboard", 2}, {"Files", 3}};
+            const std::array<std::pair<QString, int>, 6> boxes = {std::pair<QString, int>{"Mouse", 0}, {"Keys", 1}, {"Clipboard", 2}, {"Files", 3}, {"Links", 4}, {"Windows", 5}};
             for (const auto& [label, index]: boxes) {
                 QCheckBox* box = new QCheckBox(label);
-                const bool values[] = {r.mouse, r.keyboard, r.clipboard, r.files};
+                const bool values[] = {r.mouse, r.keyboard, r.clipboard, r.files, r.links, r.windows};
                 box->setChecked(values[index]);
                 rightsLayout->addWidget(box);
                 QObject::connect(box, &QCheckBox::toggled, this, [this, id = m.id, index](const bool on) {
@@ -908,7 +1084,9 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
                     if (index == 0) rr.mouse = on;
                     else if (index == 1) rr.keyboard = on;
                     else if (index == 2) rr.clipboard = on;
-                    else rr.files = on;
+                    else if (index == 3) rr.files = on;
+                    else if (index == 4) rr.links = on;
+                    else rr.windows = on;
                     this->_hub.setRights(id, rr);
                 });
             }
@@ -925,6 +1103,7 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
     }
     this->refreshWhere_();
     this->refreshBackends_();
+    this->refreshFollow_();
 }
 
 void xmouse::ui::gui::MainWindow::refreshNearby_(void)
@@ -1009,6 +1188,183 @@ void xmouse::ui::gui::MainWindow::onJoinApproval_(net::Peer* peer)
     if (this->_tray) this->_tray->showMessage("A device wants to join", peer->name() + " gave the right code", QSystemTrayIcon::Warning, 8000);
 }
 
+void xmouse::ui::gui::MainWindow::refreshPads_(void)
+{
+    const QList<core::Pad> pads = this->_hub.pads();
+
+    if (!this->_pads) return;
+    this->_pads->setRowCount(static_cast<int>(pads.size()));
+    for (int row = 0; row < pads.size(); ++row) {
+        const core::Pad& pad = pads[row];
+        QPushButton* remove = make_button("Forget", "ghost");
+        QString now = pad.control || pad.display ? "connected" : "offline";
+
+        if (pad.display && pad.screenOn) now += ", screen " + QString::number(pad.screen.width()) + " x " + QString::number(pad.screen.height()) + " in the layout";
+        this->_pads->setItem(row, 0, new QTableWidgetItem(pad.name));
+        this->_pads->setItem(row, 1, new QTableWidgetItem(pad.kind == "phone" ? "phone (app)" : "browser"));
+        this->_pads->setItem(row, 2, new QTableWidgetItem(now));
+        QObject::connect(remove, &QPushButton::clicked, this, [this, id = pad.id, name = pad.name]() {
+            if (QMessageBox::question(this, "Forget " + name, name + " can no longer drive this device (it pairs again with a new code).") == QMessageBox::Yes) this->_hub.removePad(id);
+        });
+        this->_pads->setCellWidget(row, 3, remove);
+    }
+}
+
+void xmouse::ui::gui::MainWindow::refreshProfiles_(void)
+{
+    const QString current = this->_profiles ? this->_profiles->currentText() : QString();
+    const QStringList names = this->_hub.profiles();
+
+    if (!this->_profiles) return;
+    this->_profiles->blockSignals(true);
+    this->_profiles->clear();
+    this->_profiles->addItems(names);
+    if (names.contains(current)) this->_profiles->setCurrentText(current);
+    this->_profiles->setEnabled(!names.isEmpty());
+    this->_profiles->blockSignals(false);
+}
+
+void xmouse::ui::gui::MainWindow::refreshFollow_(void)
+{
+    if (!this->_follow) return;
+    this->_follow->blockSignals(true);
+    this->_follow->clear();
+    this->_follow->addItem("Nobody", QString());
+    for (const core::Member& m: this->_hub.members())
+        if (!m.self && m.online) this->_follow->addItem(QIcon(color_dot(m.color)), m.name, m.id);
+    this->_follow->setCurrentIndex(std::max(0, this->_follow->findData(this->_hub.following())));
+    this->_follow->blockSignals(false);
+}
+
+void xmouse::ui::gui::MainWindow::refreshTransfers_(void)
+{
+    if (!this->_transfers) return;
+    this->_transfers->clear();
+    for (const core::Transfer& t: this->_hub.transfers()) {
+        const qint64 percent = t.total > 0 ? t.done * 100 / t.total : 100;
+        QListWidgetItem* item = new QListWidgetItem(QString(t.incoming ? "From " : "To ") + t.peerName + ":  " + QString::number(t.files.size()) + " file(s), " + QString::number(percent) + "%" + (t.files.size() == 1 ? "  (" + t.files.front().name + ")" : QString()));
+        item->setData(Qt::UserRole, t.id);
+        this->_transfers->addItem(item);
+    }
+    if (this->_transfers->count() == 0) this->_transfers->addItem("No file on the way. Drop files on a device of the Layout page, copy files (they follow the clipboard), or drag one to an edge.");
+}
+
+void xmouse::ui::gui::MainWindow::showPadQr_(void)
+{
+    QDialog* dialog = new QDialog(this);
+    QVBoxLayout* layout = new QVBoxLayout(dialog);
+    QLabel* image = new QLabel(dialog);
+    QLabel* link = make_label("", "mono");
+    QPushButton* copy = make_button("Copy the link", "ghost", "copy");
+    QPushButton* close = make_button("Close", "ghost");
+    QHBoxLayout* buttons = new QHBoxLayout();
+    const std::function<void(void)> draw = [this, image, link]() {
+        const QString text = this->_hub.padLink();
+        image->setPixmap(qr_pixmap(text, 300));
+        link->setText(text.section('?', 0, 0) + "  ·  code " + this->_hub.code().display());
+        link->setToolTip(text);
+        link->setProperty("full", text);
+    };
+
+    if (!this->_hub.config().settings().pads) {QMessageBox::information(this, "Phones and pads", "The pads are refused by the settings of this device (Settings > Phones, pads and windows)."); return;}
+    dialog->setWindowTitle("Pair a phone or a browser - xmouse");
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setFixedWidth(440);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(10);
+    layout->addWidget(make_label("Drive this device from a phone", "title"));
+    layout->addWidget(make_label("Scan it with the camera of the phone (or the xmouse app): the page of this device opens as a touchpad and a keyboard. Accept it here once.", "muted"));
+    image->setObjectName("qr");
+    image->setAlignment(Qt::AlignCenter);
+    layout->addWidget(image, 0, Qt::AlignHCenter);
+    link->setWordWrap(true);
+    link->setAlignment(Qt::AlignCenter);
+    layout->addWidget(link);
+    buttons->addWidget(copy);
+    buttons->addStretch();
+    buttons->addWidget(close);
+    layout->addLayout(buttons);
+    draw();
+    QObject::connect(&this->_hub.code(), &security::PairingCode::changed, dialog, [draw](const QString&) {draw();});
+    QObject::connect(copy, &QPushButton::clicked, dialog, [link, copy]() {
+        QGuiApplication::clipboard()->setText(link->property("full").toString());
+        copy->setText("Copied");
+        QTimer::singleShot(1500, copy, [copy]() {copy->setText("Copy the link");});
+    });
+    QObject::connect(close, &QPushButton::clicked, dialog, &QDialog::close);
+    dialog->show();
+}
+
+void xmouse::ui::gui::MainWindow::onPadApproval_(const QString& pending, const QString& name, const QString& kind)
+{
+    QMessageBox* box = new QMessageBox(QMessageBox::Question, "A pad wants to drive this device", "", QMessageBox::NoButton, this);
+
+    box->setText("The " + kind.toHtmlEscaped() + " <b>" + name.toHtmlEscaped() + "</b> gave the right code and wants to drive the cursor and the keyboard of this device.<br><br>Refused by default in 30 s.");
+    box->addButton("Accept", QMessageBox::AcceptRole);
+    box->addButton("Refuse", QMessageBox::RejectRole);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(box, &QMessageBox::buttonClicked, this, [this, box, pending](QAbstractButton* button) {
+        this->_hub.approvePad(pending, box->buttonRole(button) == QMessageBox::AcceptRole);
+    });
+    QTimer::singleShot(30000, box, &QMessageBox::close);
+    box->show();
+    box->raise();
+    if (this->_tray) this->_tray->showMessage("A pad wants to drive this device", name + " gave the right code", QSystemTrayIcon::Warning, 8000);
+}
+
+void xmouse::ui::gui::MainWindow::onLink_(const QString& id, const QString& name, const QString& url)
+{
+    QMessageBox* box = new QMessageBox(QMessageBox::Question, "Link from " + name, "", QMessageBox::NoButton, this);
+    QPushButton* open = box->addButton("Open", QMessageBox::AcceptRole);
+    QPushButton* copy = box->addButton("Copy", QMessageBox::ActionRole);
+
+    (void)id;
+    box->addButton("Ignore", QMessageBox::RejectRole);
+    box->setText("<b>" + name.toHtmlEscaped() + "</b> sends you a link:<br><br><span style='font-family: monospace'>" + url.toHtmlEscaped() + "</span>");
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(box, &QMessageBox::buttonClicked, this, [open, copy, url](QAbstractButton* button) {
+        if (button == open) QDesktopServices::openUrl(QUrl(url));
+        else if (button == copy) QGuiApplication::clipboard()->setText(url);
+    });
+    box->show();
+    box->raise();
+    if (this->_tray) this->_tray->showMessage("Link from " + name, url, QSystemTrayIcon::Information, 6000);
+}
+
+void xmouse::ui::gui::MainWindow::sendFilesTo_(void)
+{
+    QStringList names;
+    QStringList ids;
+    QString chosen;
+    QStringList files;
+    bool ok = false;
+
+    for (const core::Member& m: this->_hub.members())
+        if (!m.self && m.online) {names.append(m.name); ids.append(m.id);}
+    if (names.isEmpty()) {QMessageBox::information(this, "Send files", "No member online."); return;}
+    chosen = QInputDialog::getItem(this, "Send files", "To", names, 0, false, &ok);
+    if (!ok) return;
+    files = QFileDialog::getOpenFileNames(this, "Send files to " + chosen);
+    if (!files.isEmpty()) (void)this->_hub.sendFiles(ids[names.indexOf(chosen)], files);
+}
+
+void xmouse::ui::gui::MainWindow::sendLinkTo_(void)
+{
+    QStringList names;
+    QStringList ids;
+    QString chosen;
+    QString url;
+    bool ok = false;
+
+    for (const core::Member& m: this->_hub.members())
+        if (!m.self && m.online) {names.append(m.name); ids.append(m.id);}
+    if (names.isEmpty()) {QMessageBox::information(this, "Send a link", "No member online."); return;}
+    chosen = QInputDialog::getItem(this, "Send a link", "To", names, 0, false, &ok);
+    if (!ok) return;
+    url = QInputDialog::getText(this, "Send a link", "Link opened on " + chosen, QLineEdit::Normal, QGuiApplication::clipboard()->text().startsWith("http") ? QGuiApplication::clipboard()->text() : QString("https://"), &ok);
+    if (ok && !url.trimmed().isEmpty()) this->_hub.sendLink(ids[names.indexOf(chosen)], url);
+}
+
 //----------------------------------------------------------------//
 /* EVENTS */
 
@@ -1020,6 +1376,7 @@ void xmouse::ui::gui::MainWindow::reportPanel_(void)
     for (QWidget* top: QApplication::topLevelWidgets()) {
         if (!top->isVisible() || top->testAttribute(Qt::WA_TransparentForMouseEvents)) continue;
         if (top->windowFlags() & Qt::WindowTransparentForInput) continue;
+        if (top->property("xmouse_not_panel").toBool()) continue; // streamed windows, drop shelf: used like any app
         rects.append(top->frameGeometry());
     }
     this->_hub.setPanelRects(rects);

@@ -44,6 +44,12 @@ xmouse::ui::tty::Tui::Tui(core::Hub& hub, QObject* parent)
         this->print_("? " + name + " asks the access to this panel: granted in " + QString::number(seconds) + " s, type 'deny' to refuse");
     });
     QObject::connect(&hub, &core::Hub::accessEnded, this, [this](const QString&, const bool granted) {this->print_(granted ? "access granted" : "access ended");});
+    QObject::connect(&hub, &core::Hub::padApproval, this, [this](const QString& pending, const QString& name, const QString& kind) {
+        this->_pendingPad = pending;
+        this->print_("? the " + kind + " " + name + " gave the right code to drive this device: type 'pad accept' or 'pad refuse' (refused in 30 s)");
+    });
+    QObject::connect(&hub, &core::Hub::linkReceived, this, [this](const QString&, const QString& name, const QString& url) {this->print_("! " + name + " sent a link: " + url);});
+    QObject::connect(&hub, &core::Hub::filesReceived, this, [this](const QString& from, const QStringList& paths, const QString&) {this->print_("! files of " + from + ":\n    " + paths.join("\n    "));});
     QObject::connect(&hub.log(), &core::AuditLog::entry, this, [this](const QJsonObject& e) {
         if (e.value("cat").toString() == "network" || e.value("level").toString() != "info") this->print_("  [" + e.value("cat").toString() + "] " + e.value("msg").toString());
     });
@@ -85,6 +91,14 @@ void xmouse::ui::tty::Tui::help_(void) const
         "  remove <member>            remove a member (the key of the network changes)\n"
         "  leave                      leave the network\n"
         "  back                       bring the cursor of this device back\n"
+        "  ping | laser on|off        \"look here\" wave / laser trail of my cursor\n"
+        "  follow <member>|off        point at the cursor of a member (panel overlays, pads)\n"
+        "  profile [save|apply|delete <name>]  saved layouts of the network\n"
+        "  link <member> <url>        open a web link on a member\n"
+        "  send <member> <file>...    send files to a member (its Downloads/xmouse)\n"
+        "  transfers                  files being sent / received\n"
+        "  pads | padlink             phones / web pads of this device, the link that pairs a new one\n"
+        "  pad accept|refuse|remove <name>  answer a new pad, forget one\n"
         "  quit");
 }
 
@@ -104,7 +118,7 @@ void xmouse::ui::tty::Tui::status_(void) const
 void xmouse::ui::tty::Tui::members_(void) const
 {
     for (const core::Member& m: this->_hub.members())
-        this->print_("  " + m.id.left(8) + "  " + m.name.leftJustified(20) + " " + m.os.leftJustified(8) + (m.self ? " this device" : (m.online ? " online " + (m.rtt >= 0 ? QString::number(m.rtt) + " ms" : QString()) : " offline")));
+        this->print_("  " + m.id.left(8) + "  " + m.name.leftJustified(20) + " " + m.os.leftJustified(8) + (m.self ? " this device" : (m.online ? (m.relayed ? " relayed" : " online ") + (m.rtt >= 0 ? QString::number(m.rtt) + " ms" : QString()) + (m.udp ? " udp" : "") : " offline")) + (m.via.isEmpty() ? QString() : " (" + m.kind + " of " + this->_hub.layout().device(m.via).name + ")"));
 }
 
 void xmouse::ui::tty::Tui::layout_(void) const
@@ -140,6 +154,29 @@ void xmouse::ui::tty::Tui::command_(const QString& line)
     else if (cmd == "remove" && args.size() == 2 && !member(args[1]).isEmpty()) this->_hub.removeMember(member(args[1]));
     else if (cmd == "leave") this->_hub.leave();
     else if (cmd == "back") this->_hub.comeBack();
-    else if (cmd == "quit" || cmd == "exit") QCoreApplication::quit();
+    else if (cmd == "ping") this->_hub.ping();
+    else if (cmd == "laser" && args.size() == 2) this->_hub.setLaser(args[1] == "on");
+    else if (cmd == "follow" && args.size() == 2) this->_hub.follow(args[1] == "off" ? QString() : member(args[1]));
+    else if (cmd == "profile" && args.size() == 1) this->print_("profiles: " + (this->_hub.profiles().isEmpty() ? QString("none") : this->_hub.profiles().join(", ")));
+    else if (cmd == "profile" && args.size() >= 3 && args[1] == "save") this->_hub.saveProfile(args.mid(2).join(' '));
+    else if (cmd == "profile" && args.size() >= 3 && args[1] == "apply") this->_hub.applyProfile(args.mid(2).join(' '));
+    else if (cmd == "profile" && args.size() >= 3 && args[1] == "delete") this->_hub.deleteProfile(args.mid(2).join(' '));
+    else if (cmd == "link" && args.size() == 3 && !member(args[1]).isEmpty()) this->_hub.sendLink(member(args[1]), args[2]);
+    else if (cmd == "send" && args.size() >= 3 && !member(args[1]).isEmpty()) {
+        if (this->_hub.sendFiles(member(args[1]), args.mid(2)).isEmpty()) this->print_("nothing sent (offline, or no readable file)");
+    } else if (cmd == "transfers") {
+        for (const core::Transfer& t: this->_hub.transfers())
+            this->print_("  " + QString(t.incoming ? "<- " : "-> ") + t.peerName + "  " + QString::number(t.files.size()) + " file(s)  " + QString::number(t.total > 0 ? t.done * 100 / t.total : 100) + "%");
+        if (this->_hub.transfers().isEmpty()) this->print_("no transfer");
+    } else if (cmd == "pads") {
+        for (const core::Pad& p: this->_hub.pads())
+            this->print_("  " + p.name.leftJustified(20) + " " + p.kind.leftJustified(6) + (p.control || p.display ? " connected" : " offline") + (p.screenOn ? " (screen " + QString::number(p.screen.width()) + " x " + QString::number(p.screen.height()) + ")" : ""));
+        if (this->_hub.pads().isEmpty()) this->print_("no pad: 'padlink' gives the link to open on a phone");
+    } else if (cmd == "padlink") this->print_("open on the phone / browser: " + this->_hub.padLink());
+    else if (cmd == "pad" && args.size() == 2 && (args[1] == "accept" || args[1] == "refuse") && !this->_pendingPad.isEmpty()) {this->_hub.approvePad(this->_pendingPad, args[1] == "accept"); this->_pendingPad.clear();}
+    else if (cmd == "pad" && args.size() >= 3 && args[1] == "remove") {
+        for (const core::Pad& p: this->_hub.pads())
+            if (p.name.compare(args.mid(2).join(' '), Qt::CaseInsensitive) == 0) this->_hub.removePad(p.id);
+    } else if (cmd == "quit" || cmd == "exit") QCoreApplication::quit();
     else this->print_("unknown or incomplete command (help)");
 }
