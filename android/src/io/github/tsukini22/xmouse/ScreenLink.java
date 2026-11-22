@@ -65,6 +65,7 @@ final class ScreenLink {
     private static final long[] RECONNECT = {1000, 2000, 4000, 8000, 15000}; // ms
     private static final long IDLE_HIDE = 3000; // ms a cursor stays drawn without moving
     private static final long IDLE_FADE = 600; // ms of its fade out (a click alone never brings it back)
+    private static final long KEEP_ON = 300000; // ms the screen stays on after the last input of a cursor (else Android turns it off and locks it under the cursor)
 
     private final Context _context;
     private final Actions _actions;
@@ -74,6 +75,8 @@ final class ScreenLink {
     private final Set<String> _told = new HashSet<>(); // members told that this phone only shows their cursor
     private WsClient _ws;
     private CursorView _view;
+    private WindowManager.LayoutParams _params; // of the overlay (keep the screen on)
+    private boolean _keepOn = false;
     private float _density = 1;
     private int _tries = 0;
     private boolean _stopped = false;
@@ -128,6 +131,7 @@ final class ScreenLink {
         if (this._local && node != null) node.setScreen(0, 0, 1);
         if (_active == this) _active = null;
         this._stopped = true;
+        this._ui.removeCallbacks(this._keepOff);
         if (this._ws != null) this._ws.close();
         this._ws = null;
         if (this._view != null) {
@@ -232,6 +236,10 @@ final class ScreenLink {
         String type = o.optString("t");
         String id = o.optString("id");
         switch (type) {
+            case "enter": case "pointer": case "button": case "wheel": case "key": case "text": this.used(); break;
+            default: break;
+        }
+        switch (type) {
             case "welcome":
                 this.sendScreen();
                 break;
@@ -250,6 +258,7 @@ final class ScreenLink {
             }
             case "leave":
                 this._cursors.remove(id);
+                if (this._cursors.isEmpty()) {this._ui.removeCallbacks(this._keepOff); this.keepOn(false);} // no cursor: the timeout of Android
                 break;
             case "pointer": {
                 Cursor c = this._cursors.get(id);
@@ -429,7 +438,30 @@ final class ScreenLink {
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT);
         this._view = new CursorView(this._context);
+        this._params = params;
         ((WindowManager) this._context.getSystemService(Context.WINDOW_SERVICE)).addView(this._view, params);
+    }
+
+    // A cursor drives this screen from a computer: the screen stays on (no touch on the phone resets its timeout),
+    // until KEEP_ON after its last input or its leave, then the timeout of Android again
+    private final Runnable _keepOff = () -> this.keepOn(false);
+
+    private void used() {
+        this._ui.removeCallbacks(this._keepOff);
+        this._ui.postDelayed(this._keepOff, KEEP_ON);
+        this.keepOn(true);
+    }
+
+    private void keepOn(boolean on) {
+        if (on == this._keepOn || this._view == null || this._params == null) return;
+        if (on) this._params.flags |= WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+        else this._params.flags &= ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+        try {
+            ((WindowManager) this._context.getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(this._view, this._params);
+            this._keepOn = on;
+        } catch (Exception e) {
+            // the overlay is gone
+        }
     }
 
     // The cursors of the members: an arrow in their color and their name
