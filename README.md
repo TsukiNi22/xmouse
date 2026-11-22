@@ -6,6 +6,7 @@
 A network of screens: link your devices once (one time code or QR code, like [xdesk](https://github.com/TsukiNi22/xdesk)), place their screens on a shared layout, and **one cursor, one keyboard and one clipboard** go from one device to the other through the borders of the screens.
 Every member sees the cursors of the others on its screens, with their name (like a shared document); a foreign cursor clicks and types where it is, but never touches the panel of xmouse without an access request (60 s, refusable).
 Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X25519 + ML-KEM-768)**, a device joins with an **Argon2id** proof of the code bound to the certificate of the member.
+The moves go by **encrypted UDP** when it passes (drawn ahead while a packet is late), two members that cannot reach each other go **through a member**, files follow the clipboard or a drag, a **phone** (Android app or any browser) becomes a touchpad and lends its screen, and a **window** can go to another device.
 
 ### Table of Contents
  - [Features](#features)
@@ -35,10 +36,19 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 | Foreign cursors | Drawn over every app on the screens of the device (arrow + name in the color of the member, click-through overlay); a click moves the real pointer there, clicks, and puts it back (teleported click), a drag follows the cursor that holds the button, the keyboard types where its cursor clicked |
 | Panel protection | Like xdesk: a foreign cursor never clicks / types in the xmouse panel; its first click is held, a second one asks the access, granted after `focusRequestDelay` (60 s by default) unless the person at the device refuses (banner, tray) or uses the panel |
 | Live map | The Layout page shows where the cursor and the keyboard of every member are, live |
-| Rights | Per member, decided on each device only: mouse, keyboard, clipboard, files; **private mode** refuses every foreign cursor (they stay at the edge) |
-| Clipboard | Text and images (PNG) copied on a member land in the clipboard of the others (their rights decide), no echo back |
-| Interfaces | Qt panel (Network, Layout, Activity, Settings, tray, Auto / Light / Dark) or terminal panel (`--tty`, automatic without display: status, code, members, join / accept / private / place commands) |
-| Platforms | Linux Wayland (GNOME: the xmouse GNOME Shell extension, no dialog; else the portal InputCapture + libei, as on KDE; uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (planned v0.4) |
+| Degraded networks | The moves and the presence go by **encrypted UDP** (AES-256-GCM, key derived from the network key) when the probes pass, TCP otherwise; a late / reordered packet is dropped (the newest position only matters) and a foreign cursor is **drawn ahead** along its speed while the next packet is late (80 ms at most); the clicks carry their position (never misplaced by a lost move) |
+| Relay | Two members that cannot reach each other (another LAN, a firewall) go **through a member** linked to both (`links` of every device in the state, 3 hops at most, `relay` can be refused per device); the cursor, the clipboard, the files and the windows all pass |
+| Profiles | Named layouts of the network (desk, travel...): saved, applied and deleted for every member |
+| Presence | **Look here** (a wave where your cursor is, on its screen and every map), **laser** (a red trail on the screens your cursor crosses), **follow** a member (an arrow at the border of your screen points at its cursor, a halo when it is here) |
+| Rights | Per member, decided on each device only: mouse, keyboard, clipboard, files, links, windows; **private mode** refuses every foreign cursor (they stay at the edge) |
+| Clipboard | Text, images (PNG) and **files** copied on a member land in the clipboard of the others (files fetched at once up to `clipboardFilesLimit`, then pasted in a file manager like local ones), no echo back |
+| Files | Drop files on a device of the map, use **Send files to...**, or drag a file to an edge: a **drop shelf** opens there and sends it to the device on the other side (chunked, back pressure, through the relay too; `Downloads/xmouse`, never overwriting) |
+| Links | **Send a link** to a member: opened there (asked by default, or at once, or refused) |
+| Phones and web pads | Any browser (`https://device:47900/pad`) or the **Android app** pairs with the code (and the local approval): touchpad (1 finger moves with acceleration, tap clicks, 2 fingers scroll / right click, 3 fingers middle, tap then hold drags), keyboard with sticky modifiers, special keys, combos and F-keys, the live map, look here / laser; the cursor it drives crosses the borders like the real one |
+| Android screen | The app lends the screen of the phone to the layout (Accessibility service): the cursors of the network are drawn over its apps, their clicks / drags / scrolls become touches, their text goes in the focused field, Esc = back; reached through the device it is paired with; the app updates itself from that device |
+| Windows between devices | With the network wide switch on, a window **dragged on an edge** (GNOME, Windows) or chosen on the map goes to the device on the other side: streamed there (JPEG frames, up to `windowFps`), driven from there (mouse, wheel, keys), given back by closing it; the document it shows can be **opened there instead** (handoff); switch off: the edge behaves as usual |
+| Interfaces | Qt panel (Network, Layout, Activity, Settings, tray, Auto / Light / Dark) or terminal panel (`--tty`, automatic without display: status, code, members, join / accept / private / place / ping / laser / follow / profile / link / send / pads commands) |
+| Platforms | Linux Wayland (GNOME: the xmouse GNOME Shell extension, no dialog; else the portal InputCapture + libei, as on KDE; uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (event tap + CGEvent, Accessibility permission), Android (app), any browser (pad) |
 
 ## Security
 
@@ -50,10 +60,15 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 | Members | 256 bits group key, the same HMAC proof bound to the TLS session, mutual (a fake member is caught) |
 | Removal | The key of the network rotates (epoch + 1) and only goes to the remaining members; the removed device is refused even with the old key |
 | Brute force | `maxAuthFailures` wrong codes from one address -> 1 h ban + new code |
-| Files | `group.json`, `state.json`, `config.json`, the key: `0600`, folders `0700` |
+| UDP | AES-256-GCM, key `HMAC(network key, "xmouse-udp-v1")` (rotated with it), nonce = random salt of the run + counter, the header authenticated; only from members linked right now, only the moves and the presence (everything else stays on TLS); replayed / late packets dropped |
+| Relay | Only members carry messages, only for members of the network (removed ones refused), 3 hops at most; what a relay carries is in the network already (members are trusted with the group key) |
+| Pads | Paired with the one-time code + the local approval (30 s, refused by default), then a 256 bits token (only its sha256 kept, `pads.json` `0600`); the Android app pins the certificate of the device (the fp of its QR code); a pad only drives the device it is paired with |
+| Files | Received names stripped of any folder / special name, never overwriting, a partial file removed; size limits per transfer and for the clipboard; `group.json`, `state.json`, `config.json`, `pads.json`, the key: `0600`, folders `0700` |
+| Links | `http(s)` only, asked by default (`links`: `ask`, `open`, `never`) and per member (rights) |
+| Windows | Off for the whole network with one switch; the viewer drives only the window it was given (clamped to it), per member right `windows`, refused in private mode |
 
 > [!WARNING]
-> A member can move, click and type on the devices whose rights allow it: add only your own devices (or people you trust) to a network, and use the private mode or the rights to limit a device.
+> A member can move, click and type on the devices whose rights allow it, and a pad drives its device: add only your own devices (or people you trust) to a network, and use the private mode or the rights to limit a device.
 
 ## How it works
 
@@ -65,6 +80,9 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
  layout: global position -> device + local        Button / Wheel / Key / Text -> injected (uinput, XTest, SendInput)
  back on A: release the capture            -->    "leave"              -> overlay removed, keys / buttons released
  every member: Presence (20 Hz) -> live map       State deltas (layout, members) gossiped to the members not linked to the sender
+ udp probes answered: Pointer / Presence by udp   AES-256-GCM, newest only; Button carries x, y; a late move is drawn ahead
+ no link to C: {"t": "relay", "to": C} via B      B (linked to C, "links" in its state) forwards it, binary too (files, frames)
+ phone (pad) --wss /padws--> A                    its moves drive the cursor of A; its screen is a device "via A" in the layout
 ```
 
 ## Dependencies
@@ -221,9 +239,16 @@ xmouse --port 47910 --name desk-pc       # port / name of this device for this r
 xmouse --regen-cert                      # new identity (the members must see it join again)
 ```
 
+```text
+terminal panel: ping | laser on|off | follow <member>|off | profile [save|apply|delete <name>]
+                link <member> <url> | send <member> <file>... | transfers | pads | padlink | pad accept|refuse|remove <name>
+```
+
 1. On the first device: **Network** > **Create a network**.
 2. On each other device: **Join a network** with the address and the code shown on a member (or the QR code), accept it on the member.
 3. **Layout**: drag the screens where they are on your desk (their borders snap), the cursor now goes through the borders that touch.
+4. A phone: **Network** > **Pair a phone or a browser**, scan the QR code with the phone (the page opens as a touchpad, or the Android app takes it), accept it. In the app, **This screen in the layout** turns on its Accessibility service: the phone becomes a screen of the network.
+5. Right click a device on the map: follow its cursor, send it files or a link, show one of your windows there.
 
 | Setting (`config.json`) | Default | Content |
 | ----------------------- | ------- | ------- |
@@ -234,7 +259,13 @@ xmouse --regen-cert                      # new identity (the members must see it
 | `joinApproval` | `true` | A device with the right code must also be accepted here |
 | `focusRequest` / `focusRequestDelay` | `true` / `60` | A foreign cursor may ask the access to the panel, granted after this delay unless refused |
 | `privateMode` | `false` | Every foreign cursor is refused |
-| `rights` | all allowed | Per member: `mouse`, `keyboard`, `clipboard`, `files` |
+| `rights` | all allowed | Per member: `mouse`, `keyboard`, `clipboard`, `files`, `links`, `windows` |
+| `udp` / `relay` | `true` / `true` | Moves by encrypted udp when it passes / carry the messages of members that cannot reach each other |
+| `clipboardFilesLimit` / `filesLimit` | `64` / `4096` | MiB: copied files fetched at once / biggest transfer accepted |
+| `downloadDir` | `Downloads/xmouse` | Received files |
+| `links` | `ask` | A link sent by a member: `ask`, `open`, `never` |
+| `pads` | `true` | A phone / browser may pair with the code and drive this device |
+| `windowFps` | `12` | Frames per second of a window streamed from here |
 | `restorePointer` | `true` | The real pointer goes back after a foreign click (X11, Windows) |
 | `clipboard` | `true` | The copies of this device go to the members |
 | `theme` | `system` | `system`, `dark`, `light` |
@@ -281,11 +312,13 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 | Path | Content |
 | ---- | ------- |
 | `src/xmouse/` | Entry: `main.cpp`, `Node-init.cpp` (arguments), `Node.cpp` (commands) |
-| `src/xmouse/core/` | `Hub` (the device in the network), `Layout` (screens in the global space), `State` (replicated, last writer wins), `Config`, `AuditLog` |
-| `src/xmouse/net/` | `Mesh` (links to every member, LAN discovery), `Peer` (one authenticated link), `Server` / `WebSocket` (TLS), `Exposure` (LAN, Tailscale, UPnP, tunnels), `Protocol` |
+| `src/xmouse/core/` | `Hub` (the device in the network: `Hub.cpp` state / network / links, `Hub-cursor` my cursor and the pads driving it, `Hub-foreign` the foreign cursors and their prediction, `Hub-route` relay and udp, `Hub-files` clipboard / files / links, `Hub-pads` phones and web pads, `Hub-windows` streamed windows), `Routing`, `Layout` (screens in the global space), `State` (replicated, last writer wins), `Config`, `AuditLog` |
+| `src/xmouse/net/` | `Mesh` (links to every member, LAN discovery), `Peer` (one authenticated link), `Datagrams` (encrypted udp), `Server` / `WebSocket` (TLS, `/pad`, `/padws`), `Exposure` (LAN, Tailscale, UPnP, tunnels), `Protocol` |
 | `src/xmouse/security/` | `Group` (network key, proofs), `Crypto` (Argon2id, HMAC, TLS), `Certificate`, `PairingCode` |
-| `src/xmouse/platform/` | Edge capture (`ShellCapture` GNOME extension, `PortalCapture` Wayland, `HookCapture` Windows, `GrabCapture` X11 / macOS), injection (`UInputInjector`, `XTestInjector`, `SendInputInjector`), `Clipboard`, `Keymap` |
-| `src/xmouse/ui/` | `gui/` (`MainWindow`, `LayoutView`, `Overlay`, `Theme`), `tty/` (`Tui`) |
+| `src/xmouse/platform/` | Edge capture (`ShellCapture` GNOME extension, `PortalCapture` Wayland, `HookCapture` Windows, `MacCapture` macOS, `GrabCapture` X11), injection (`UInputInjector`, `XTestInjector`, `SendInputInjector`, `MacInjector`), windows (`ShellWindows`, `X11Windows`, `WinWindows`), `Clipboard`, `Keymap` |
+| `src/xmouse/ui/` | `gui/` (`MainWindow`, `LayoutView`, `Overlay`, `WindowViewer`, `DropShelf`, `Theme`), `tty/` (`Tui`) |
+| `android/` | Android app (Java, no Gradle): `MainActivity` (pinned WebView of `/pad`, QR scanner, updates), `ScreenService` (Accessibility: the screen in the layout), `WsClient`, `Pinned` |
+| `scripts/build_apk.sh` | `android/build/xmouse.apk` (aapt2, javac, d8, apksigner; key `android/release.jks`, embedded in the binary by CMake, built by the CI) |
 | `third_party/` | `qrcodegen` (MIT), `libei/libei.h` (MIT, libei is loaded at run time) |
 | `gnome-extension/` | GNOME Shell extension `xmouse@tsukini22.github.io` (barriers, capture, pointer position over D-Bus) |
 | `include/xmouse/` | Public headers |
@@ -296,7 +329,7 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 | `cmake/package/` | CMake package config (`find_package(xmouse)`) and the CPack prefix of the Windows packages |
 | `docs/` | HTML documentation (technical page, project graph), `logo.svg` |
 | `scripts/install.sh` | Build + install in `~/.local`, menu entry, uinput access, GNOME extension, autostart |
-| `web/` | Page served by every device on its address (embedded in the binary) |
+| `web/` | Pages served by every device (embedded in the binary): `index.html` (what it is, install, join), `pad.html` / `pad.js` (the touchpad) |
 | `include/xmouse/exception/generated_external_exception_header.hpp` | Generated at build time from the JSON files (not committed) |
 
 > [!NOTE]
@@ -309,17 +342,20 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 > - Wayland: the overlays run on Xwayland (no layer shell on GNOME): a fullscreen Wayland app may cover them.
 > - One real pointer and one keyboard focus per OS: two foreign cursors clicking at the same moment on one device take turns; the keyboard of a member types where its cursor clicked last.
 > - Windows: the screens must share one scale (the hooks see physical pixels); Ctrl + Alt + Del and the secure desktop end a capture; the MinGW build of Fedora ships OpenSSL 3.2 (no ML-KEM): its links are `X25519` until an OpenSSL >= 3.5 is bundled.
-> - The files of the clipboard, drag and drop, the relay through a member and the phone / web pad come with the next versions (see the roadmap).
+> - Drag and drop to an edge needs the platform to tell the held button (GNOME extension 2, Windows, macOS): elsewhere, drop the files on the map or use Send files to.
+> - Windows between devices: dragged on an edge on GNOME (extension 2) and Windows; the picture of a window needs it on screen (not minimized); macOS shares its cursor, keyboard and clipboard but not its windows.
+> - Android: the foreign cursors touch through the Accessibility service (taps, long presses for the right button, drags, scrolls, text in the focused field, Esc = back); a pad page in a browser drives its device but cannot lend its screen; iOS lets no app do either.
+> - macOS: built from the sources (Homebrew); the Accessibility permission is asked at the first start (edges and injection need it).
 
 ## Roadmap
 
 | Version | Content |
 | ------- | ------- |
-| `v0.1` | Desktop: Linux (Wayland + X11) and Windows, network (code / QR, LAN, Tailscale, UPnP), layout, cursor through the borders, named overlays, teleported clicks, keyboard, text / image clipboard, panel protection (60 s request), rights, private mode, terminal panel |
-| `v0.2` | Encrypted UDP for the moves with prediction / reordering on lossy links, relay through a member, layout profiles, ping "look here", follow a member, laser pointer, files in the clipboard, drag and drop of files, send a link |
-| `v0.3` | Android application (touchpad multi finger, keyboard with special keys and combos, overlay of the foreign cursors) and the web pad |
-| `v0.4` | macOS, windows between devices (handoff of a link / document, streamed window), with the network wide switch |
-| `v1.0.0` | Stable: desktop + Android |
+| `v0.1` ✓ | Desktop: Linux (Wayland + X11) and Windows, network (code / QR, LAN, Tailscale, UPnP), layout, cursor through the borders, named overlays, teleported clicks, keyboard, text / image clipboard, panel protection (60 s request), rights, private mode, terminal panel |
+| `v0.2` ✓ | Encrypted UDP for the moves with prediction / reordering on lossy links, relay through a member, layout profiles, ping "look here", follow a member, laser pointer, files in the clipboard, drag and drop of files, send a link |
+| `v0.3` ✓ | Android application (touchpad multi finger, keyboard with special keys and combos, overlay of the foreign cursors) and the web pad |
+| `v0.4` ✓ | macOS, windows between devices (handoff of a document, streamed window), with the network wide switch |
+| `v1.0.0` | Stable: desktop + Android (`v1.0.0-pre` today: every stage in, stable once checked on real phones and Macs) |
 
 ## Windows (cross compilation)
 > Build for Windows (x86_64) from Linux with the MinGW-w64 toolchain (libutils: `mingw64-libutils` packages in the MinGW sysroot)
