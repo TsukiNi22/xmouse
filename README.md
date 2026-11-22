@@ -225,7 +225,7 @@ xmouse --regen-cert                      # new identity (the members must see it
 | ----------- | ------ |
 | `XMOUSE_HOME` | Another folder for the config and the data (tests, several instances on one PC) |
 | `XMOUSE_QPA` | Force the Qt platform (`wayland`, `xcb`): on Wayland, xmouse runs on Xwayland by default so that the overlays stay above every app |
-| `XMOUSE_SNAPSHOT` / `XMOUSE_SNAPSHOT_PAGE` | Save the window (page `0`-`3`) in this PNG after 2 s, then quit |
+| `XMOUSE_SNAPSHOT` / `XMOUSE_SNAPSHOT_PAGE` / `XMOUSE_SNAPSHOT_QR` | Save the window (page `0`-`3`, or the QR code window) in this PNG after 2 s, then quit |
 
 ### Build
 ```bash
