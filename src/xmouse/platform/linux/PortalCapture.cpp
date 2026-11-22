@@ -23,15 +23,19 @@ File Description:
 #include "xmouse/platform/linux/PortalCapture.hpp"
 #include "xmouse/security/Crypto.hpp"
 #include "xmouse/platform/Keymap.hpp"
+#include "xmouse/core/Config.hpp"
 #include <linux/input-event-codes.h>
 #include <QDBusUnixFileDescriptor>
 #include <QDBusConnection>
 #include <QDBusArgument>
 #include <QDBusMessage>
+#include <QDBusVariant>
 #include <QDBusReply>
+#include <QSaveFile>
 #include <unistd.h>
 #include <libei.h>
 #include <dlfcn.h>
+#include <QFile>
 #include <cmath>
 
 //----------------------------------------------------------------//
@@ -45,6 +49,7 @@ File Description:
 #define CAPABILITY_KEYBOARD 1u
 #define CAPABILITY_POINTER 2u
 #define EI_LIBRARY "libei.so.1"
+#define RESTORE_TOKEN_FILE "portal-input-capture.token" // in the data folder (0600)
 #define SMOOTH_SCROLL_FACTOR 8.0 // libei smooth scroll (logical pixels) -> 1/120 of a notch
 
 //----------------------------------------------------------------//
@@ -165,6 +170,44 @@ _cold static QPointF read_double2(const QVariant& v)
     return QPointF(x, y);
 }
 
+// Version of the InputCapture interface (2: CreateSession2 / Start with a restore token)
+_cold static unsigned int portal_version(void)
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(PORTAL_SERVICE, PORTAL_PATH, "org.freedesktop.DBus.Properties", "Get");
+    QDBusMessage reply;
+
+    call.setArguments({QString(PORTAL_INPUT_CAPTURE), QString("version")});
+    reply = QDBusConnection::sessionBus().call(call, QDBus::Block, 2000);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return 1;
+    return reply.arguments().front().value<QDBusVariant>().variant().toUInt();
+}
+
+// A session handle comes as an object path (o), some portals send a string
+_cold static QString object_path(const QVariant& value)
+{
+    if (value.canConvert<QDBusObjectPath>() && value.metaType() == QMetaType::fromType<QDBusObjectPath>()) return value.value<QDBusObjectPath>().path();
+    return value.toString();
+}
+
+// Restore token of the last session: the permission of the desktop is asked once, not at every start
+_cold static QString read_restore_token(void)
+{
+    QFile file(xmouse::core::Config::dataDir() + "/" RESTORE_TOKEN_FILE);
+
+    if (!file.open(QIODevice::ReadOnly)) return "";
+    return QString::fromUtf8(file.readAll()).trimmed().left(512);
+}
+
+_cold static void write_restore_token(const QString& token)
+{
+    QSaveFile file(xmouse::core::Config::dataDir() + "/" RESTORE_TOKEN_FILE);
+
+    if (token.isEmpty() || !file.open(QIODevice::WriteOnly)) return;
+    file.write(token.toUtf8());
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    (void)file.commit();
+}
+
 //----------------------------------------------------------------//
 /* CLASS */
 
@@ -272,14 +315,40 @@ void xmouse::platform::PortalCapture::onResponse_(const uint code, const QVarian
 
 void xmouse::platform::PortalCapture::createSession_(void)
 {
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    QDBusMessage call = QDBusMessage::createMethodCall(PORTAL_SERVICE, PORTAL_PATH, PORTAL_INPUT_CAPTURE, "CreateSession2");
+    QDBusMessage reply;
     QVariantMap options;
+    QVariantMap start;
+    const QString token = read_restore_token();
 
     options.insert("session_handle_token", "xmouse" + security::random_id(6));
-    options.insert("capabilities", CAPABILITY_KEYBOARD | CAPABILITY_POINTER);
-    this->request_("CreateSession", {QString()}, options, [this](const unsigned int code, const QVariantMap& results) {
+
+    // Version 1: one dialog at every start (no restore token)
+    if (portal_version() < 2) {
+        options.insert("capabilities", CAPABILITY_KEYBOARD | CAPABILITY_POINTER);
+        this->request_("CreateSession", {QString()}, options, [this](const unsigned int code, const QVariantMap& results) {
+            if (code != 0) {this->fail_(code == 1 ? "input capture refused in the dialog of the desktop" : "input capture session refused by the portal"); return;}
+            this->_session = object_path(results.value("session_handle"));
+            if (this->_session.isEmpty()) {this->fail_("no input capture session"); return;}
+            this->connectEis_();
+            this->getZones_();
+        });
+        return;
+    }
+
+    // Version 2: the session is created at once, then started with the token of the last run (no dialog when it is still valid)
+    call.setArguments({options});
+    reply = bus.call(call, QDBus::Block, 10000);
+    if (reply.type() == QDBusMessage::ErrorMessage || reply.arguments().isEmpty()) {this->fail_("CreateSession2: " + reply.errorMessage()); return;}
+    this->_session = object_path(qdbus_cast<QVariantMap>(reply.arguments().front()).value("session_handle"));
+    if (this->_session.isEmpty()) {this->fail_("no input capture session"); return;}
+    start.insert("capabilities", CAPABILITY_KEYBOARD | CAPABILITY_POINTER);
+    start.insert("persist_mode", 2u); // until revoked in the settings of the desktop
+    if (!token.isEmpty()) start.insert("restore_token", token);
+    this->request_("Start", {QVariant::fromValue(QDBusObjectPath(this->_session)), QString()}, start, [this](const unsigned int code, const QVariantMap& results) {
         if (code != 0) {this->fail_(code == 1 ? "input capture refused in the dialog of the desktop" : "input capture session refused by the portal"); return;}
-        this->_session = results.value("session_handle").toString();
-        if (this->_session.isEmpty()) {this->fail_("no input capture session"); return;}
+        write_restore_token(results.value("restore_token").toString()); // single use: the new one for the next run
         this->connectEis_();
         this->getZones_();
     });
