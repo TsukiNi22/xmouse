@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Map: **Recenter** button in the corner, the background dragged to move the view, wheel zoom
 
 ### Changed
+- macOS shown as **soon** (orange): the macOS build runs on every push, green with a warning while libutils does not build on macOS; the notes of a release, the device page and the README say it
 - **Private mode**: the cursors (members and the pads of the device) pass over a private device to reach the others, nothing is clicked / scrolled / typed there (they were sent back)
 - The phones and web pads are in the members as soon as they connect (online / offline), not only once a screen is lent
 - The map never recenters by itself; my cursor is followed live at home (10 Hz), an unknown position is not drawn

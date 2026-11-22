@@ -1,5 +1,7 @@
 # xmouse
 
+![Linux](https://img.shields.io/badge/Linux-ready-2ea44f) ![Windows](https://img.shields.io/badge/Windows-ready-2ea44f) ![Android](https://img.shields.io/badge/Android-ready-2ea44f) ![Browser pad](https://img.shields.io/badge/Browser%20pad-ready-2ea44f) ![macOS](https://img.shields.io/badge/macOS-soon-orange)
+
 > [!TIP]
 > Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v1.0.0): technical documentation (coming soon) and the interactive project graph.
 

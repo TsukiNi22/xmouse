@@ -63,7 +63,7 @@
                 buttons: deviceApk ? [Object.assign(deviceApk, {primary: true})] : [{label: "Install the app (.apk)", file: "apk", primary: true}],
             },
             {
-                id: "macos", name: "macOS", tag: "Coming", available: false,
+                id: "macos", name: "macOS", tag: "Soon", available: false, soon: true,
                 text: "The macOS part of xmouse is written (edges, clicks, keys through the Accessibility permission); it builds once its library (libutils) builds on macOS.",
                 buttons: [{label: "Not available yet", file: "none"}],
             },
@@ -136,7 +136,7 @@
     function fill(node, p, hero) {
         node.replaceChildren();
         node.classList.toggle("off", !p.available);
-        node.append(element("span", "tag", hero ? "For this device · " + p.tag : p.tag), element("h2", "", p.name), element("p", "muted", p.text));
+        node.append(element("span", p.soon ? "tag soon" : "tag", hero ? "For this device · " + p.tag : p.tag), element("h2", "", p.name), element("p", "muted", p.text));
         if (p.command) node.append(command(p.command));
         if (p.buttons && p.buttons.length > 0) {
             const row = element("div", "row");

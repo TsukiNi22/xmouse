@@ -100,6 +100,7 @@ li { margin-bottom: 8px; }
 .platform.hero { border: 2px solid var(--accent); padding: 18px 20px; margin-bottom: 18px; }
 .platform.hero h2 { font-size: 22px; }
 .platform.off { opacity: 0.7; }
+.tag.soon { color: #e8912d; } /* coming: orange, the card greyed */
 .platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .tag {
     display: inline-block;
