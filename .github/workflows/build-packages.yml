@@ -201,6 +201,14 @@ jobs:
             build/*.rpm
             build/*.deb
             build/*.pkg.tar.zst
+          retention-days: 1
+
+      # Apart from the packages (one artifact = one root folder: the repository sync expects the packages at its root)
+      - name: Upload the tarball and the android app (attached to the release)
+        uses: actions/upload-artifact@v6
+        with:
+          name: compiled-packages-linux-files
+          path: |
             dist/xmouse-linux-x86_64.tar.gz
             android/build/xmouse.apk
           retention-days: 1
@@ -295,6 +303,13 @@ jobs:
           path: |
             build/*.rpm
             build/*.deb
+          retention-days: 1
+
+      - name: Upload the zip and the installer (attached to the release)
+        uses: actions/upload-artifact@v6
+        with:
+          name: compiled-packages-windows-files
+          path: |
             dist/xmouse-windows-x64.zip
             dist/xmouse-windows-x64-setup.exe
           retention-days: 1
