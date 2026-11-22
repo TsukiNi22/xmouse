@@ -3,7 +3,7 @@ set(TARGET xmouse)
 if(NOT CMAKE_TOOLCHAIN_FILE AND NOT DEFINED CMAKE_CXX_COMPILER)
     set(CMAKE_CXX_COMPILER clang++) # A toolchain (ex: cmake/toolchain/mingw-w64.cmake) or -DCMAKE_CXX_COMPILER wins
 endif()
-project(${TARGET} VERSION 1.0.8 LANGUAGES CXX)
+project(${TARGET} VERSION 1.0.9 LANGUAGES CXX)
 
 # =========================
 # Options

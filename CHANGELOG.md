@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.9-pre] - 2026-11-22
 ### Fixed
 - GNOME extension: **never a capture while a screen of GNOME holds the input** (the screenshot tool stayed grey and stuck when an edge was pushed meanwhile, the overview, a dialog); the pointer is always shown again when a capture ends, even when GNOME took the grab back first
 - Portal capture: a capture kept by the compositor is first released (its last activation, the pointer shown again where it was), disabled and armed again only when the input still comes (disabling it during a capture could leave the pointer hidden)
