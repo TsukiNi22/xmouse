@@ -283,7 +283,10 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
     }
     if (type == "wheel") {this->padWheel_(pad, std::clamp(o.value("dx").toInt(), -32000, 32000), std::clamp(o.value("dy").toInt(), -32000, 32000)); return;}
     if (type == "key") {
-        const QString code = o.value("code").toString().left(32);
+        QString code = o.value("code").toString().left(32);
+        const QString character = o.value("char").toString().left(2);
+        // A shortcut of the pad (Ctrl + a): the key that types that letter on the layout of this device (azerty: KeyQ)
+        if (!character.isEmpty() && this->_injector && !this->_injector->codeOf(character).isEmpty()) code = this->_injector->codeOf(character);
         if (!code.isEmpty()) this->padKey_(pad, code, o.value("down").toBool());
         return;
     }

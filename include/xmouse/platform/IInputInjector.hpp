@@ -56,6 +56,7 @@ class IInputInjector {
         // ------------ Function ---------- //
         /* layout */
         _hot _nodiscard virtual inline QString characterOf(const QString& code, const bool shift, const bool altgr) const {(void)code; (void)shift; (void)altgr; return "";}; // the character this key types on the layout of the session ("" = unknown)
+        _hot _nodiscard virtual inline QString codeOf(const QString& character) const                                    {(void)character; return "";}; // the key typing this character on the layout of the session ("" = unknown)
 
         // ----------- Destructor --------- //
         virtual ~IInputInjector() = default;

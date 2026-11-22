@@ -260,18 +260,21 @@
     //----------------------------------------------------------------//
     /* KEYBOARD */
 
-    function key(code, down) {
-        send({t: "key", code: code, down: down});
+    function key(code, down, ch) {
+        send(ch ? {t: "key", code: code, down: down, char: ch} : {t: "key", code: code, down: down});
     }
 
-    // A key with the sticky modifiers around it (they are released after it)
-    function press(code) {
+    // A key with the sticky modifiers around it (they are released after it); ch: the letter of a shortcut, the device
+    // takes the key that types it on its own layout (azerty Ctrl + a is its KeyQ)
+    function press(code, ch) {
         mods.forEach((m) => key(m, true));
-        key(code, true);
-        key(code, false);
+        key(code, true, ch);
+        key(code, false, ch);
         mods.forEach((m) => key(m, false));
         clearMods();
     }
+
+    const MODIFIERS = ["ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"];
 
     function clearMods() {
         mods.clear();
@@ -294,8 +297,9 @@
     document.querySelectorAll("[data-key]").forEach((b) => b.addEventListener("click", () => press(b.dataset.key)));
     document.querySelectorAll("[data-combo]").forEach((b) => b.addEventListener("click", () => {
         const parts = b.dataset.combo.split("+");
-        parts.forEach((p) => key(p, true));
-        parts.slice().reverse().forEach((p) => key(p, false));
+        const letter = (p) => /^Key[A-Z]$/.test(p) ? p.slice(3).toLowerCase() : ""; // the device takes its own key for it (azerty)
+        parts.forEach((p) => key(p, true, letter(p)));
+        parts.slice().reverse().forEach((p) => key(p, false, letter(p)));
     }));
 
     const fkeys = $("fkeys");
@@ -321,7 +325,8 @@
         if (e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") {press("Enter"); e.preventDefault(); return;}
         if (e.data && (e.inputType === "insertText" || e.inputType === "insertReplacementText" || e.inputType === "insertCompositionText")) {
             if (e.inputType === "insertCompositionText") return; // committed later as insertText
-            if (mods.size > 0 && e.data.length === 1 && codeOf(e.data)) press(codeOf(e.data));
+            if (mods.size === 1 && mods.has("ShiftLeft")) {send({t: "text", text: e.data.toUpperCase()}); clearMods();} // Shift alone: the text, never a qwerty key
+            else if (mods.size > 0 && e.data.length === 1) press(codeOf(e.data) || "KeyA", e.data); // a shortcut: its letter goes too
             else send({t: "text", text: e.data});
             e.preventDefault();
         }
@@ -337,12 +342,13 @@
             if (!(e.ctrlKey || e.altKey || e.metaKey) && mods.size === 0) return; // text: beforeinput sends it
         }
         e.preventDefault();
-        key(e.code, true);
+        if (MODIFIERS.includes(e.code)) {key(e.code, true); return;} // held: released by its keyup
+        // A key: pressed and released at once (a soft keyboard may never send its keyup: never a key left down)
+        press(e.code, e.key && e.key.length === 1 && (e.ctrlKey || e.altKey || e.metaKey) ? e.key : "");
     });
     typing.addEventListener("keyup", (e) => {
         if (e.isComposing || e.keyCode === 229 || !e.code) return;
-        if ((e.code.startsWith("Key") || e.code.startsWith("Digit") || e.code === "Space") && !(e.ctrlKey || e.altKey || e.metaKey) && mods.size === 0) return;
-        key(e.code, false);
+        if (MODIFIERS.includes(e.code)) key(e.code, false);
     });
 
     //----------------------------------------------------------------//
