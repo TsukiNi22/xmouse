@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.4-pre] - 2026-11-22
 ### Changed
 - **No lag of the drawn cursors**: the overlay repaints only around the cursors (a whole screen of pixels per frame lagged under Xwayland), one frame per refresh of the screen at most (at once when the last one is old enough), raised above the windows when shown then every 2 s (it was at every move, up to 250 times a second)
 - A phone (pad or member) receives the moves of a cursor 60 times a second (it was 250: its screen draws at 60 Hz), the lent screen of the app draws once per frame
