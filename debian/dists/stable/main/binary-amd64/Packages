@@ -50,17 +50,17 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (debug)
 
 Package: mingw64-xmouse-db-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Architecture: all
 Maintainer: TsukiNi22
-Installed-Size: 137232
+Installed-Size: 137445
 Conflicts: mingw64-xmouse-db, mingw64-xmouse-as, mingw64-xmouse-as-pre, mingw64-xmouse-op, mingw64-xmouse-op-pre
 Breaks: mingw64-xmouse-db, mingw64-xmouse-as, mingw64-xmouse-as-pre, mingw64-xmouse-op, mingw64-xmouse-op-pre
-Filename: pool/main/mingw64-xmouse-db-pre-1.0.8-win64-bin.deb
-Size: 29447372
-MD5sum: faf835a8d8df61658663920acbd6c2cb
-SHA1: f2bf62d2328376ce99fa326b5f9338d1c24f1cf1
-SHA256: 61fb7a3a4b6cba77ed2c8da6c7c9f3bba5bd8eddca344bed3e4215980c8c73d8
+Filename: pool/main/mingw64-xmouse-db-pre-1.0.13-win64-bin.deb
+Size: 29501992
+MD5sum: d9f8a6054d68416f92e9700283f8fefe
+SHA1: 1fd3e684b37f205611d19c309f290f31238a25fa
+SHA256: 1ec140f5479a4c041bfcea9461b0910253b2a336cabcf54c15f3b2d37452b763
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -135,17 +135,17 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (optimized)
 
 Package: mingw64-xmouse-op-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Architecture: all
 Maintainer: TsukiNi22
-Installed-Size: 22559
+Installed-Size: 22591
 Conflicts: mingw64-xmouse-db, mingw64-xmouse-db-pre, mingw64-xmouse-as, mingw64-xmouse-as-pre, mingw64-xmouse-op
 Breaks: mingw64-xmouse-db, mingw64-xmouse-db-pre, mingw64-xmouse-as, mingw64-xmouse-as-pre, mingw64-xmouse-op
-Filename: pool/main/mingw64-xmouse-op-pre-1.0.8-win64-bin.deb
-Size: 7451796
-MD5sum: c763e230881a796690fa7160044f1e0e
-SHA1: c252e002091105d5d775b35ad5b6f6a8fc5adb93
-SHA256: b7a582aeba3417147efce2e3e59b3ba86bc9409e51fb5a2cdf56e760d02a4816
+Filename: pool/main/mingw64-xmouse-op-pre-1.0.13-win64-bin.deb
+Size: 7465260
+MD5sum: aa59bc59d558655e063057b39dca8528
+SHA1: 66b868f1ebc253f4e2b20f77986fc1b26b048173
+SHA256: 8374440ca3d16f1d0c50c17878f45606333df5df54eabf3cd97af372fb0c83ef
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -223,18 +223,18 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (global)
 
 Package: mingw64-xmouse-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Architecture: all
 Maintainer: TsukiNi22
 Installed-Size: 8
-Depends: mingw64-xmouse-op-pre (= 1.0.8-11)
+Depends: mingw64-xmouse-op-pre (= 1.0.13-16)
 Conflicts: mingw64-xmouse
 Breaks: mingw64-xmouse
-Filename: pool/main/mingw64-xmouse-pre-1.0.8-win64.deb
-Size: 642
-MD5sum: ddd826c51f8767a64a7a0a535d4dbed8
-SHA1: ff358d2af3f6262727eea07e2f3d84c82d691698
-SHA256: 1eee5f2e6a60c59188be3def6b71abcaf1407f1098acf2bcdd75939206f89dbc
+Filename: pool/main/mingw64-xmouse-pre-1.0.13-win64.deb
+Size: 644
+MD5sum: 99677891affd9c80acc0ca47c58f2a41
+SHA1: a2f33e10fa8182307a8a77893f7b95a1f10e0a82
+SHA256: 1ae24e619d7cb2cf32e1e7a9133d3792bf542258f596b3c6628ef0339bea369a
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -310,17 +310,17 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (asan)
 
 Package: xmouse-as-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Maintainer: TsukiNi22
-Installed-Size: 31472
+Installed-Size: 31591
 Depends: libc6, libgcc-s1, libstdc++6, libssl3
 Conflicts: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-op, xmouse-op-pre
 Breaks: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-op, xmouse-op-pre
-Filename: pool/main/xmouse-as-pre-1.0.8-Linux-bin.deb
-Size: 10749620
-MD5sum: d91be0b9137f5622867d75d0975f4fc8
-SHA1: 98e038ffa7a6ea3ff8bb3edf226097044cf907c6
-SHA256: 90bb9553c0e4be39aa7ecaebd66babfc403c0b95dc16690fd577ff75c05e1a54
+Filename: pool/main/xmouse-as-pre-1.0.13-Linux-bin.deb
+Size: 10800254
+MD5sum: d56f66ff6d93870fb07a73120c1264a9
+SHA1: 6f97fad5467db5bea28a265dc153268e82827234
+SHA256: 0f84e61679692a5e471b45cd048f4835b91f394e15a002c92a6fb5fdf40cd869
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -398,18 +398,18 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (debug)
 
 Package: xmouse-db-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Maintainer: TsukiNi22
-Installed-Size: 25052
+Installed-Size: 25148
 Depends: libc6, libgcc-s1, libstdc++6, libssl3
 Suggests: gdb
 Conflicts: xmouse-db, xmouse-as, xmouse-as-pre, xmouse-op, xmouse-op-pre
 Breaks: xmouse-db, xmouse-as, xmouse-as-pre, xmouse-op, xmouse-op-pre
-Filename: pool/main/xmouse-db-pre-1.0.8-Linux-bin.deb
-Size: 8870080
-MD5sum: 5e64a63558cfc2b6c268f022ee8af2df
-SHA1: 99bb1612e219f46e83d6f0fdc01dd0697d7fe5a2
-SHA256: 37df2d1e8430198b7772d079721374a8811dd90c75d3ad1f08703ddaf4b86d83
+Filename: pool/main/xmouse-db-pre-1.0.13-Linux-bin.deb
+Size: 8915016
+MD5sum: bbc305f9cbd0cf25a5c02a48bbe7ffdb
+SHA1: aa352d01598a0949edc1203bfebf498fbb3f1080
+SHA256: b60a9b1bf13ef79dde59d1e00cfceb4e71d6658aa718681d70d9d50123981fd4
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -485,17 +485,17 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (optimized)
 
 Package: xmouse-op-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Maintainer: TsukiNi22
-Installed-Size: 2651
+Installed-Size: 2668
 Depends: libc6, libgcc-s1, libstdc++6, libssl3
 Conflicts: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-as-pre, xmouse-op
 Breaks: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-as-pre, xmouse-op
-Filename: pool/main/xmouse-op-pre-1.0.8-Linux-bin.deb
-Size: 1070106
-MD5sum: 5ef01800c8ad1c8efbe4611e3a27efab
-SHA1: 6aa7872ebc3fc81b2b4be6f35c24d9ca7ed814a5
-SHA256: 8c7a1a5cc173df7088b7e059f46a558653ac1d52f6e1b331bca345fd1a7d5431
+Filename: pool/main/xmouse-op-pre-1.0.13-Linux-bin.deb
+Size: 1079636
+MD5sum: 4c1339600087594bda71fd2ce55602cc
+SHA1: 7745c1dbaeb306b9cc80dda8e22c95d3ea7d51d8
+SHA256: 3f363d0707a8a0c1a55315098d87f6dafbf643cd1688299ed1db9dc2fad1267f
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
@@ -570,17 +570,17 @@ Homepage: https://github.com/TsukiNi22/xmouse
 Description: Project xmouse (global)
 
 Package: xmouse-pre
-Version: 1.0.8-11
+Version: 1.0.13-16
 Maintainer: TsukiNi22
 Installed-Size: 4
-Depends: xmouse-op-pre (= 1.0.8-11)
+Depends: xmouse-op-pre (= 1.0.13-16)
 Conflicts: xmouse
 Breaks: xmouse
-Filename: pool/main/xmouse-pre-1.0.8-Linux.deb
-Size: 596
-MD5sum: a4aa7ff6fc81608dc30d1565734ca1ff
-SHA1: 0c7955d69510c4d19c04248220533efcdc3f010c
-SHA256: 22bc0674bfce81b5b4daf4fe3d8497cc3694e2ea9e67e2e494ea562cf47d3e43
+Filename: pool/main/xmouse-pre-1.0.13-Linux.deb
+Size: 600
+MD5sum: 8ed5a153e4e8f65e2cc023ecb1d44b44
+SHA1: edc5d8ba5f33c9dbd4f9796531c4e84a682233be
+SHA256: 4e81ccaf010cfa443d46f9ea8e44e09440440d2b429d2d2adbf3231d849796f2
 Section: devel
 Priority: optional
 Homepage: https://github.com/TsukiNi22/xmouse
