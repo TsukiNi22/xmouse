@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 ### Added
+- GNOME Shell extension `xmouse@tsukini22.github.io` and its backend `ShellCapture`: barriers and input capture on GNOME Wayland without the portal dialog, the pointer position (the real pointer goes back after a foreign click on Wayland too); only `xmouse` may call it (sender checked), unicast signals, released when xmouse stops, Ctrl + Alt + Shift and a watchdog give the input back; the portal stays the fallback
+- `scripts/install.sh --gnome`, the extension installed by the packages in `share/gnome-shell/extensions`
 - Network switch at the bottom of the sidebar (like the sharing switch of xdesk): red `Leave the network` (the others stay linked, there is no server), green `Create or join`
 
 ### Fixed
