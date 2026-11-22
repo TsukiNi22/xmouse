@@ -1,0 +1,69 @@
+Package: xmouse-as-pre
+Version: 0.1.1-1
+Maintainer: TsukiNi22
+Installed-Size: 24360
+Depends: libc6, libgcc-s1, libstdc++6, libssl3
+Conflicts: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-op, xmouse-op-pre
+Breaks: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-op, xmouse-op-pre
+Filename: pool/main/xmouse-as-pre-0.1.1-Linux-bin.deb
+Size: 8048934
+MD5sum: 5764bfb5ee9e9ca5ae05509ec50b91f5
+SHA1: 6865a317143a4fdd62169ea97b0da8eaeb8f8ee4
+SHA256: 86a1cfa2ee63f41404c40b1318f458bdbe8654f0803d679d6c7994bab9a75839
+Section: devel
+Priority: optional
+Homepage: https://github.com/TsukiNi22/xmouse
+Description: Project xmouse (asan)
+
+Package: xmouse-db-pre
+Version: 0.1.1-1
+Maintainer: TsukiNi22
+Installed-Size: 19126
+Depends: libc6, libgcc-s1, libstdc++6, libssl3
+Suggests: gdb
+Conflicts: xmouse-db, xmouse-as, xmouse-as-pre, xmouse-op, xmouse-op-pre
+Breaks: xmouse-db, xmouse-as, xmouse-as-pre, xmouse-op, xmouse-op-pre
+Filename: pool/main/xmouse-db-pre-0.1.1-Linux-bin.deb
+Size: 6493116
+MD5sum: e925ce3e220e767e67417461de35b8e0
+SHA1: fc96a1986488abfae1fd719c8d5eb5a7c676dd53
+SHA256: 0f1fe697eb85d9176e693903713e3100ae1a59d234817e2bbc1d28fdda06ec54
+Section: devel
+Priority: optional
+Homepage: https://github.com/TsukiNi22/xmouse
+Description: Project xmouse (debug)
+
+Package: xmouse-op-pre
+Version: 0.1.1-1
+Maintainer: TsukiNi22
+Installed-Size: 1829
+Depends: libc6, libgcc-s1, libstdc++6, libssl3
+Conflicts: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-as-pre, xmouse-op
+Breaks: xmouse-db, xmouse-db-pre, xmouse-as, xmouse-as-pre, xmouse-op
+Filename: pool/main/xmouse-op-pre-0.1.1-Linux-bin.deb
+Size: 641882
+MD5sum: fc17e4bc121da86bde90602e81a371fa
+SHA1: e858372c263cb352beebff8925a95ce9185c8308
+SHA256: a9c93f4171ab6b3c4ac3e778cafdda7b49bb738456f4f2e76a6b4de74ece7f37
+Section: devel
+Priority: optional
+Homepage: https://github.com/TsukiNi22/xmouse
+Description: Project xmouse (optimized)
+
+Package: xmouse-pre
+Version: 0.1.1-1
+Maintainer: TsukiNi22
+Installed-Size: 4
+Depends: xmouse-op-pre (= 0.1.1-1)
+Conflicts: xmouse
+Breaks: xmouse
+Filename: pool/main/xmouse-pre-0.1.1-Linux.deb
+Size: 596
+MD5sum: 9d5bc124edde843e430cd1df0f17acaa
+SHA1: c3abb1854d498b8eeb20ae4fcd87dd49da981231
+SHA256: faa002eb80d6df67db9de3a31ea7e3030623f07217aa0e7f0cd1bcb7771249bd
+Section: devel
+Priority: optional
+Homepage: https://github.com/TsukiNi22/xmouse
+Description: Project xmouse (global)
+
