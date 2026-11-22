@@ -29,6 +29,7 @@ File Description:
     #include <utils/utils.hpp>          // _cold, _hot
     #include "../../core/Hub.hpp"       // xmouse::core::Hub, xmouse::core::Foreign
     #include <QPointer>                 // QPointer
+    #include <QRegion>                  // QRegion
     #include <QWidget>                  // QWidget
     #include <QScreen>                  // QScreen
     #include <QTimer>                   // QTimer
@@ -51,9 +52,12 @@ class OverlayWindow final: public QWidget {
         core::Hub& _hub;
         Overlay& _owner;
         QPointer<QScreen> _screen;
+        QRegion _drawn; // where the cursors were drawn last (repainted with where they are now, never the whole screen)
+        qint64 _raisedAt = 0; // ms, last time put above the other windows
 
         // ---------- Pre-Function -------- //
         void paintFollow_(QPainter& p, const double s); // arrow to the followed member when it is not on this screen
+        _hot _nodiscard QRegion cursorRegion_(const qint64 now) const; // the foreign cursors on this screen with their name (window pixels)
 
     protected:
         // ---------- Pre-Function -------- //
@@ -82,11 +86,15 @@ class Overlay final: public QObject {
         core::Hub& _hub;
         QList<OverlayWindow*> _windows;
         QTimer _anim; // 30 ms while a wave / a trail / a follow arrow is shown
+        QTimer _frame; // the next frame when the last one is too recent (one per refresh of the screens at most)
+        qint64 _lastFrame = 0; // ms
+        int _frameInterval = 16; // ms, from the fastest screen
         QHash<QString, QList<QPair<qint64, QPoint>>> _trails; // member -> laser points (ms, local desktop pixels)
 
         // ---------- Pre-Function -------- //
         void rebuild_(void); // screens plugged / removed
         void tick_(void); // trails sampled, animations
+        void draw_(void); // every window refreshed now
 
     public:
         // ---------- Pre-Function -------- //

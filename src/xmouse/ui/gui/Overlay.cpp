@@ -38,11 +38,15 @@ File Description:
 #define ANIMATION_INTERVAL 30 // ms between two frames of the waves / trails
 #define TRAIL_LIFETIME 700 // ms a point of a laser trail stays
 #define PING_PERIOD 900 // ms of one wave
+#define RAISE_INTERVAL 2000 // ms between two raises of a shown overlay (above a window opened meanwhile; never at every frame)
+#define MIN_FRAME_INTERVAL 4 // ms, the fastest screens
 
 //----------------------------------------------------------------//
 /* TOOLS */
 
 _hot static qint64 now_ms(void) {return QDateTime::currentMSecsSinceEpoch();}
+
+_hot static double scale_of(const QScreen* screen) {return screen ? std::clamp(screen->logicalDotsPerInch() / 96.0, 1.0, 3.0) : 1.0;}
 
 // Arrow cursor (12 x 19 at scale 1), tip at (0, 0)
 _hot static QPainterPath arrow_path(const double s)
@@ -106,23 +110,57 @@ xmouse::ui::gui::OverlayWindow::OverlayWindow(core::Hub& hub, Overlay& owner, QS
     this->setProperty("xmouse_overlay", true);
 }
 
+QRegion xmouse::ui::gui::OverlayWindow::cursorRegion_(const qint64 now) const
+{
+    const QRect screen = this->_screen ? this->_screen->geometry() : QRect();
+    const double s = scale_of(this->_screen);
+    const bool pointerMode = this->_hub.config().settings().foreignMode == "pointer";
+    QFont font = this->font();
+    QRegion region;
+
+    font.setPixelSize(static_cast<int>(12 * s));
+    font.setBold(true);
+    const QFontMetrics metrics(font);
+    for (const core::Foreign& f: this->_hub.foreign()) {
+        const QPoint at = pointerMode && !f.passing ? f.local : f.drawn(now);
+        const QString extra = state_text(f, this->_hub.config().settings().focusRequestDelay);
+        const int label = metrics.horizontalAdvance(extra.isEmpty() ? f.name : f.name + "  -  " + extra) + static_cast<int>(40 * s);
+        if (!screen.contains(at)) continue;
+        // The arrow, its halo and its ring around the tip; the name on the right or the left, below or above
+        region += QRect(at.x() - screen.x() - label - static_cast<int>(30 * s), at.y() - screen.y() - static_cast<int>(50 * s), 2 * label + static_cast<int>(60 * s), static_cast<int>(100 * s));
+    }
+    return region;
+}
+
 void xmouse::ui::gui::OverlayWindow::refresh(void)
 {
     const qint64 now = now_ms();
-    bool any = false;
+    const bool animating = this->_owner.animating();
+    QRegion cursors;
 
     if (!this->_screen) {this->hide(); return;}
-    for (const core::Foreign& f: this->_hub.foreign())
-        if (this->_screen->geometry().contains(f.drawn(now))) any = true;
-    any = any || this->_owner.animating();
-    if (!any) {if (this->isVisible()) this->hide(); return;}
+    cursors = this->cursorRegion_(now);
+    if (cursors.isEmpty() && !animating) {
+        if (this->isVisible()) this->hide();
+        this->_drawn = QRegion();
+        return;
+    }
     if (this->geometry() != this->_screen->geometry()) this->setGeometry(this->_screen->geometry());
     if (!this->isVisible()) {
         this->show();
         if (this->windowHandle()) this->windowHandle()->setFlag(Qt::WindowTransparentForInput, true); // set again once the native window exists
+        this->update();
     }
-    this->raise();
-    this->update();
+    if (now - this->_raisedAt > RAISE_INTERVAL) {
+        this->raise();
+        this->_raisedAt = now;
+    }
+
+    // Only where a cursor was and is now (a full screen of pixels per frame lags under Xwayland); everything while a
+    // wave / a trail / a follow arrow moves
+    if (animating) this->update();
+    else this->update(this->_drawn.united(cursors));
+    this->_drawn = cursors;
 }
 
 void xmouse::ui::gui::OverlayWindow::paintFollow_(QPainter& p, const double s)
@@ -171,7 +209,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
     const QPoint origin = this->_screen ? this->_screen->geometry().topLeft() : QPoint();
-    const double s = this->_screen ? std::clamp(this->_screen->logicalDotsPerInch() / 96.0, 1.0, 3.0) : 1.0;
+    const double s = scale_of(this->_screen);
     const qint64 now = now_ms();
     const QString self = this->_hub.group().self();
     const bool pointerMode = this->_hub.config().settings().foreignMode == "pointer";
@@ -258,7 +296,10 @@ xmouse::ui::gui::Overlay::Overlay(core::Hub& hub, QObject* parent)
 {
     this->rebuild_();
     this->_anim.setInterval(ANIMATION_INTERVAL);
+    this->_frame.setSingleShot(true);
+    this->_frame.setTimerType(Qt::PreciseTimer);
     QObject::connect(&this->_anim, &QTimer::timeout, this, &Overlay::tick_);
+    QObject::connect(&this->_frame, &QTimer::timeout, this, &Overlay::draw_);
     QObject::connect(&hub, &core::Hub::foreignChanged, this, &Overlay::refresh);
     QObject::connect(&hub, &core::Hub::presenceChanged, this, [this]() {if (this->animating() && !this->_anim.isActive()) this->_anim.start();});
     QObject::connect(&hub, &core::Hub::followChanged, this, [this]() {this->_anim.start(); this->refresh();});
@@ -273,10 +314,15 @@ xmouse::ui::gui::Overlay::~Overlay()
 
 void xmouse::ui::gui::Overlay::rebuild_(void)
 {
+    double rate = 60;
+
     qDeleteAll(this->_windows);
     this->_windows.clear();
-    for (QScreen* screen: QGuiApplication::screens())
+    for (QScreen* screen: QGuiApplication::screens()) {
         this->_windows.append(new OverlayWindow(this->_hub, *this, screen));
+        rate = std::max(rate, screen->refreshRate());
+    }
+    this->_frameInterval = std::max(MIN_FRAME_INTERVAL, static_cast<int>(1000.0 / rate));
     this->refresh();
 }
 
@@ -322,6 +368,18 @@ void xmouse::ui::gui::Overlay::tick_(void)
 
 void xmouse::ui::gui::Overlay::refresh(void)
 {
+    const qint64 since = now_ms() - this->_lastFrame;
+
+    // One frame per refresh of the screen at most: at once when the last one is old enough (no added latency),
+    // else at the next refresh with the latest state (the moves and the predictions come up to 250 times a second)
+    if (this->_frame.isActive()) return;
+    if (since < this->_frameInterval) {this->_frame.start(static_cast<int>(this->_frameInterval - since)); return;}
+    this->draw_();
+}
+
+void xmouse::ui::gui::Overlay::draw_(void)
+{
+    this->_lastFrame = now_ms();
     if (this->animating() && !this->_anim.isActive()) this->_anim.start();
     for (OverlayWindow* w: this->_windows)
         w->refresh();
