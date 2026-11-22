@@ -87,10 +87,12 @@ if (-not $NoFirewall) {
     $exe = Join-Path $Prefix "xmouse.exe"
     $rule = "advfirewall firewall add rule name=xmouse dir=in action=allow program=`"$exe`" protocol=TCP localport=$Port profile=private,domain"
     $discovery = "advfirewall firewall add rule name=xmouse dir=in action=allow program=`"$exe`" protocol=UDP localport=47901 profile=private,domain"
+    $moves = "advfirewall firewall add rule name=xmouse dir=in action=allow program=`"$exe`" protocol=UDP localport=$Port profile=private,domain" # encrypted udp of the moves
     try {
         Start-Process -Verb RunAs -Wait -WindowStyle Hidden netsh -ArgumentList "advfirewall firewall delete rule name=xmouse"
         Start-Process -Verb RunAs -Wait -WindowStyle Hidden netsh -ArgumentList $rule
         Start-Process -Verb RunAs -Wait -WindowStyle Hidden netsh -ArgumentList $discovery
+        Start-Process -Verb RunAs -Wait -WindowStyle Hidden netsh -ArgumentList $moves
         Say "port $Port opened for the private networks"
     } catch { Say "firewall not changed (administrator refused): the members on the LAN may be blocked" }
 }

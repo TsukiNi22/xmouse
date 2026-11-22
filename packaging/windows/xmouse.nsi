@@ -108,6 +108,8 @@ Section "xmouse" SecMain
     Pop $0
     nsExec::Exec 'netsh advfirewall firewall add rule name=xmouse dir=in action=allow program="$INSTDIR\xmouse.exe" protocol=UDP localport=${DISCOVERY_PORT} profile=private,domain'
     Pop $0
+    nsExec::Exec 'netsh advfirewall firewall add rule name=xmouse dir=in action=allow program="$INSTDIR\xmouse.exe" protocol=UDP localport=${PORT} profile=private,domain' ; the encrypted udp of the moves
+    Pop $0
 SectionEnd
 
 Section /o "Start with Windows" SecAutostart
