@@ -63,11 +63,14 @@ class UInputInjector final: public IInputInjector {
         _hot void mouseWheel(const int dx, const int dy) override;
         _hot void key(const QString& code, const bool down) override;
         _hot void text(const QString& text) override;
-        _hot _nodiscard QString characterOf(const QString& code, const bool shift, const bool altgr) const override; // on the layout of the session
-        _hot _nodiscard QString codeOf(const QString& character) const override; // its key on the layout of the session
         _cold void releaseAll(void) override;
 
         // ------------ Function ---------- //
+        /* layout */
+        _hot _nodiscard inline QString characterOf(const QString& code, const bool shift, const bool altgr) const override {return this->_layout.textOf(code, shift, altgr);}; // on the layout of the session
+        _hot _nodiscard inline QString codeOf(const QString& character) const override                                     {return this->_layout.codeOf(character);}; // its key on the layout of the session
+        _cold _nodiscard inline LockKeys lockKeys(void) const override                                                     {return XkbLayout::lights();}; // the lights of the keyboards
+
         /* getter */
         _cold _nodiscard QString name(void) const override  {return "uinput";};
         _cold _nodiscard QString error(void) const override {return this->_error;};

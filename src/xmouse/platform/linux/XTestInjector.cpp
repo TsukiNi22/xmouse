@@ -65,6 +65,7 @@ bool xmouse::platform::XTestInjector::start(const QSize& screen)
     }
     XTestGrabControl(DISPLAY, True); // keep working while another client grabs the server
     this->_root = QSize(DisplayWidth(DISPLAY, DefaultScreen(DISPLAY)), DisplayHeight(DISPLAY, DefaultScreen(DISPLAY)));
+    (void)this->_layout.load(); // not loaded: the keys keep their code (a phone gets the US characters)
     return true;
 }
 

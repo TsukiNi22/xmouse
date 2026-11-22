@@ -44,7 +44,8 @@ static const std::pair<const char*, int> KEYS[] = {
     {"F5", 0x60}, {"F6", 0x61}, {"F7", 0x62}, {"F3", 0x63}, {"F8", 0x64}, {"F9", 0x65}, {"F11", 0x67}, {"F13", 0x69}, {"F16", 0x6A},
     {"F14", 0x6B}, {"F10", 0x6D}, {"F12", 0x6F}, {"F15", 0x71}, {"Insert", 0x72}, {"Home", 0x73}, {"PageUp", 0x74}, {"Delete", 0x75},
     {"F4", 0x76}, {"End", 0x77}, {"F2", 0x78}, {"PageDown", 0x79}, {"F1", 0x7A}, {"ArrowLeft", 0x7B}, {"ArrowRight", 0x7C},
-    {"ArrowDown", 0x7D}, {"ArrowUp", 0x7E},
+    {"ArrowDown", 0x7D}, {"ArrowUp", 0x7E}, {"ContextMenu", 0x6E}, {"IntlYen", 0x5D}, {"IntlRo", 0x5E}, {"NumpadComma", 0x5F},
+    {"Lang2", 0x66}, {"Lang1", 0x68},
 };
 
 //----------------------------------------------------------------//

@@ -132,27 +132,6 @@ bool xmouse::platform::UInputInjector::start(const QSize& screen)
     return true;
 }
 
-QString xmouse::platform::UInputInjector::characterOf(const QString& code, const bool shift, const bool altgr) const
-{
-    const std::optional<KeyInfo> key = key_info(code);
-    std::optional<uint> ucs;
-
-    if (!key || !this->_layout.isLoaded()) return "";
-    ucs = this->_layout.character(key->evdev, shift, altgr);
-    if (!ucs) return "";
-    return QString::fromUcs4(reinterpret_cast<const char32_t*>(&*ucs), 1);
-}
-
-QString xmouse::platform::UInputInjector::codeOf(const QString& character) const
-{
-    const QList<uint> ucs = character.toLower().toUcs4();
-    std::optional<LayoutKey> key;
-
-    if (ucs.size() != 1 || !this->_layout.isLoaded()) return "";
-    key = this->_layout.find(ucs.front());
-    return key ? code_from_evdev(key->evdev) : QString();
-}
-
 void xmouse::platform::UInputInjector::emit_(const int fd, const int type, const int code, const int value)
 {
     input_event event;

@@ -47,6 +47,11 @@ struct TextKey {
     bool shift = false; // shift needed (US layout)
 };
 
+struct LockKeys {
+    bool caps = false; // Caps Lock on
+    bool num = true; // Num Lock on (the numpad types its digits)
+};
+
 //----------------------------------------------------------------//
 /* PROTOTYPE */
 

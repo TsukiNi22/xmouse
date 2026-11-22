@@ -21,11 +21,14 @@ File Description:
 #define _Attribute
 #include <utils/utils.hpp>
 #include "xmouse/platform/linux/XkbLayout.hpp"
+#include "xmouse/platform/Keymap.hpp"
 #include <QRegularExpression>
 #include <linux/input.h>
 #include <QStringList>
 #include <QLibrary>
 #include <QProcess>
+#include <QFile>
+#include <QDir>
 #include <cstdint>
 #include <cstddef>
 
@@ -199,4 +202,45 @@ std::optional<xmouse::platform::LayoutKey> xmouse::platform::XkbLayout::dead(con
 
     if (it == this->_dead.constEnd()) return std::nullopt;
     return it.value();
+}
+
+QString xmouse::platform::XkbLayout::textOf(const QString& code, const bool shift, const bool altgr) const
+{
+    const std::optional<KeyInfo> key = key_info(code);
+    std::optional<uint> ucs;
+
+    if (!key || !this->isLoaded()) return "";
+    ucs = this->character(key->evdev, shift, altgr);
+    if (!ucs) return "";
+    return QString::fromUcs4(reinterpret_cast<const char32_t*>(&*ucs), 1);
+}
+
+QString xmouse::platform::XkbLayout::codeOf(const QString& character) const
+{
+    const QList<uint> ucs = character.toLower().toUcs4();
+    std::optional<LayoutKey> key;
+
+    if (ucs.size() != 1 || !this->isLoaded()) return "";
+    key = this->find(ucs.front());
+    return key ? code_from_evdev(key->evdev) : QString();
+}
+
+xmouse::platform::LockKeys xmouse::platform::XkbLayout::lights(void)
+{
+    LockKeys locks;
+    bool numFound = false;
+    bool numOn = false;
+
+    // /sys/class/leds/input<N>::capslock, ::numlock (readable by everyone): the lights the compositor sets
+    for (const QString& led: QDir("/sys/class/leds").entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        QFile file("/sys/class/leds/" + led + "/brightness");
+        bool on = false;
+        if (!led.endsWith("::capslock") && !led.endsWith("::numlock")) continue;
+        if (!file.open(QIODevice::ReadOnly)) continue;
+        on = file.readAll().trimmed().toInt() > 0;
+        if (led.endsWith("::capslock")) locks.caps = locks.caps || on;
+        else {numFound = true; numOn = numOn || on;}
+    }
+    if (numFound) locks.num = numOn;
+    return locks;
 }

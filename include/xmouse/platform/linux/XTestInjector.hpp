@@ -27,6 +27,7 @@ File Description:
     #define _Attribute
     #include <utils/utils.hpp>              // _hot, _cold, _nodiscard
     #include "../IInputInjector.hpp"        // xmouse::platform::IInputInjector
+    #include "XkbLayout.hpp"                // xmouse::platform::XkbLayout
     #include <QString>                      // QString
     #include <QSize>                        // QSize
     #include <QSet>                         // QSet
@@ -44,6 +45,7 @@ class XTestInjector final: public IInputInjector {
         QSet<int> _buttons; // X buttons down
         int _wheelY = 0; // remainder (120 = one notch)
         int _wheelX = 0;
+        XkbLayout _layout; // keys of the layout of the session (the characters of the keys, for a phone)
         QString _error = "";
 
         // ---------- Pre-Function -------- //
@@ -61,6 +63,11 @@ class XTestInjector final: public IInputInjector {
         _cold void releaseAll(void) override;
 
         // ------------ Function ---------- //
+        /* layout */
+        _hot _nodiscard inline QString characterOf(const QString& code, const bool shift, const bool altgr) const override {return this->_layout.textOf(code, shift, altgr);}; // on the layout of the session
+        _hot _nodiscard inline QString codeOf(const QString& character) const override                                     {return this->_layout.codeOf(character);}; // its key on the layout of the session
+        _cold _nodiscard inline LockKeys lockKeys(void) const override                                                     {return XkbLayout::lights();}; // the lights of the keyboards
+
         /* getter */
         _cold _nodiscard QString name(void) const override  {return "xtest";};
         _cold _nodiscard QString error(void) const override {return this->_error;};

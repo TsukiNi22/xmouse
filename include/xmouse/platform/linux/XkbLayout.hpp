@@ -26,6 +26,7 @@ File Description:
     /* type */
     #define _Attribute
     #include <utils/utils.hpp>      // _hot, _cold, _nodiscard
+    #include "../Keymap.hpp"        // xmouse::platform::LockKeys
     #include <optional>             // std::optional
     #include <QString>              // QString
     #include <QHash>                // QHash
@@ -63,6 +64,9 @@ class XkbLayout {
         _hot _nodiscard std::optional<LayoutKey> find(const uint ucs) const;
         _hot _nodiscard std::optional<LayoutKey> dead(const uint keysym) const;
         _hot _nodiscard std::optional<uint> character(const int evdev, const bool shift, const bool altgr) const; // what this key types (the inverse of find)
+        _hot _nodiscard QString textOf(const QString& code, const bool shift, const bool altgr) const; // the same by the name of the key ("" = none)
+        _hot _nodiscard QString codeOf(const QString& character) const; // the name of the key typing it ("" = none)
+        _cold _nodiscard static LockKeys lights(void); // the Caps Lock / Num Lock lights of the keyboards (the state the compositor keeps)
 
         // ------------ Function ---------- //
         /* getter */

@@ -418,7 +418,7 @@ endif()
 if(WIN32)
     list(APPEND XMOUSE_LIBS user32 gdi32 advapi32 ws2_32 iphlpapi)
 elseif(APPLE)
-    list(APPEND XMOUSE_LIBS "-framework ApplicationServices" "-framework CoreFoundation") # event tap, CGEvent, Accessibility
+    list(APPEND XMOUSE_LIBS "-framework ApplicationServices" "-framework CoreFoundation" "-framework Carbon") # event tap, CGEvent, Accessibility, the keyboard layout
 endif()
 set(XMOUSE_DEFINITIONS
     $<$<BOOL:${XMOUSE_HAS_DBUS}>:XMOUSE_HAS_DBUS>

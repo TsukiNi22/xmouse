@@ -22,6 +22,7 @@ File Description:
 #include <utils/utils.hpp>
 #include "xmouse/platform/macos/MacInjector.hpp"
 #include <ApplicationServices/ApplicationServices.h>
+#include <Carbon/Carbon.h>
 #include <QGuiApplication>
 #include <QDateTime>
 #include <QScreen>
@@ -179,4 +180,49 @@ void xmouse::platform::MacInjector::releaseAll(void)
         if (this->_buttons & (1 << b)) this->mouseButton(static_cast<net::MouseButton>(b), false);
     for (const QString& code: keys)
         this->key(code, false);
+}
+
+//----------------------------------------------------------------//
+/* LAYOUT */
+
+QString xmouse::platform::MacInjector::characterOf(const QString& code, const bool shift, const bool altgr) const
+{
+    const int keycode = mac_keycode(code);
+    TISInputSourceRef source = nullptr;
+    CFDataRef data = nullptr;
+    UInt32 dead = 0;
+    UniChar out[8] = {};
+    UniCharCount length = 0;
+    QString text;
+
+    if (keycode < 0) return "";
+    source = TISCopyCurrentKeyboardLayoutInputSource();
+    if (source) data = static_cast<CFDataRef>(TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData));
+    // Shift / Option in the high byte of the Carbon modifiers; the dead keys give no character
+    if (data && UCKeyTranslate(reinterpret_cast<const UCKeyboardLayout*>(CFDataGetBytePtr(data)), static_cast<UInt16>(keycode), kUCKeyActionDown,
+            ((shift ? shiftKey : 0) | (altgr ? optionKey : 0)) >> 8, LMGetKbdType(), kUCKeyTranslateNoDeadKeysMask, &dead, 8, &length, out) == noErr && length > 0)
+        text = QString::fromUtf16(reinterpret_cast<const char16_t*>(out), static_cast<qsizetype>(length));
+    if (source) CFRelease(source);
+    return text;
+}
+
+QString xmouse::platform::MacInjector::codeOf(const QString& character) const
+{
+    const QString wanted = character.toLower();
+    QString code;
+
+    if (character.size() != 1) return "";
+    for (int keycode = 0; keycode < 0x80; ++keycode) {
+        code = code_from_mac(keycode);
+        if (!code.isEmpty() && this->characterOf(code, false, false) == wanted) return code;
+    }
+    return "";
+}
+
+xmouse::platform::LockKeys xmouse::platform::MacInjector::lockKeys(void) const
+{
+    LockKeys locks;
+
+    locks.caps = (CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState) & kCGEventFlagMaskAlphaShift) != 0;
+    return locks;
 }

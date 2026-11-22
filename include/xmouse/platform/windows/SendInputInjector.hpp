@@ -51,6 +51,9 @@ class SendInputInjector final: public IInputInjector {
         _hot void key(const QString& code, const bool down) override;
         _hot void text(const QString& text) override;
         _cold void releaseAll(void) override;
+        _hot _nodiscard QString characterOf(const QString& code, const bool shift, const bool altgr) const override; // on the layout of the window in front
+        _hot _nodiscard QString codeOf(const QString& character) const override; // the same
+        _cold _nodiscard LockKeys lockKeys(void) const override;
 
         // ------------ Function ---------- //
         /* getter */

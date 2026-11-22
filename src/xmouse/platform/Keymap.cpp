@@ -79,18 +79,37 @@ static const KeyEntry KEYS[] = {
     {"F5", 63, 0x3F, 0}, {"F6", 64, 0x40, 0}, {"F7", 65, 0x41, 0}, {"F8", 66, 0x42, 0},
     {"F9", 67, 0x43, 0}, {"F10", 68, 0x44, 0}, {"F11", 87, 0x57, 0}, {"F12", 88, 0x58, 0},
     {"F13", 183, 0x64, 0}, {"F14", 184, 0x65, 0}, {"F15", 185, 0x66, 0}, {"F16", 186, 0x67, 0},
+    {"F17", 187, 0x68, 0}, {"F18", 188, 0x69, 0}, {"F19", 189, 0x6A, 0}, {"F20", 190, 0x6B, 0},
+    {"F21", 191, 0x6C, 0}, {"F22", 192, 0x6D, 0}, {"F23", 193, 0x6E, 0}, {"F24", 194, 0x76, 0},
 
     /* numpad */
     {"NumLock", 69, 0x45, 0}, {"NumpadDivide", 98, 0xE035, 0}, {"NumpadMultiply", 55, 0x37, 0}, {"NumpadSubtract", 74, 0x4A, 0},
     {"NumpadAdd", 78, 0x4E, 0}, {"NumpadEnter", 96, 0xE01C, 0}, {"NumpadDecimal", 83, 0x53, 0}, {"NumpadEqual", 117, 0x59, 0},
     {"Numpad0", 82, 0x52, 0}, {"Numpad1", 79, 0x4F, 0}, {"Numpad2", 80, 0x50, 0}, {"Numpad3", 81, 0x51, 0},
     {"Numpad4", 75, 0x4B, 0}, {"Numpad5", 76, 0x4C, 0}, {"Numpad6", 77, 0x4D, 0}, {"Numpad7", 71, 0x47, 0},
-    {"Numpad8", 72, 0x48, 0}, {"Numpad9", 73, 0x49, 0}, {"NumpadComma", 121, 0x7E, 0},
+    {"Numpad8", 72, 0x48, 0}, {"Numpad9", 73, 0x49, 0}, {"NumpadComma", 121, 0x7E, 0}, {"NumpadParenLeft", 179, 0, 0},
+    {"NumpadParenRight", 180, 0, 0},
 
     /* media */
     {"AudioVolumeMute", 113, 0xE020, 0}, {"AudioVolumeDown", 114, 0xE02E, 0}, {"AudioVolumeUp", 115, 0xE030, 0},
     {"MediaPlayPause", 164, 0xE022, 0}, {"MediaStop", 166, 0xE024, 0}, {"MediaTrackNext", 163, 0xE019, 0},
-    {"MediaTrackPrevious", 165, 0xE010, 0},
+    {"MediaTrackPrevious", 165, 0xE010, 0}, {"MediaPlay", 200, 0, 0}, {"MediaPause", 201, 0, 0}, {"MediaFastForward", 208, 0, 0},
+    {"MediaRewind", 168, 0, 0}, {"MediaRecord", 167, 0, 0}, {"Eject", 161, 0, 0}, {"MediaSelect", 171, 0xE06D, 0},
+
+    /* browser, apps and system (the scancodes of Windows: E0 6A...) */
+    {"BrowserBack", 158, 0xE06A, 0}, {"BrowserForward", 159, 0xE069, 0}, {"BrowserRefresh", 173, 0xE067, 0}, {"BrowserStop", 128, 0xE068, 0},
+    {"BrowserSearch", 217, 0xE065, 0}, {"BrowserFavorites", 156, 0xE066, 0}, {"BrowserHome", 172, 0xE032, 0}, {"LaunchMail", 155, 0xE06C, 0},
+    {"LaunchApp1", 157, 0xE06B, 0}, {"LaunchApp2", 140, 0xE021, 0}, {"Power", 116, 0xE05E, 0}, {"Sleep", 142, 0xE05F, 0},
+    {"WakeUp", 143, 0xE063, 0}, {"BrightnessDown", 224, 0, 0}, {"BrightnessUp", 225, 0, 0},
+
+    /* edit keys of some keyboards (Sun, laptops) */
+    {"Help", 138, 0, 0x2F}, {"Undo", 131, 0, 0}, {"Again", 129, 0, 0}, {"Copy", 133, 0, 0},
+    {"Paste", 135, 0, 0}, {"Cut", 137, 0, 0}, {"Find", 136, 0, 0}, {"Props", 130, 0, 0},
+    {"Open", 134, 0, 0},
+
+    /* languages (Japanese, Korean) */
+    {"Convert", 92, 0x79, 0}, {"NonConvert", 94, 0x7B, 0}, {"KanaMode", 93, 0x70, 0}, {"Lang1", 122, 0, 0x15},
+    {"Lang2", 123, 0, 0x19}, {"Lang3", 90, 0x78, 0}, {"Lang4", 91, 0x77, 0},
 };
 
 // US layout: unshifted / shifted characters of the main block

@@ -62,6 +62,9 @@ class MacInjector final: public IInputInjector {
         void key(const QString& code, const bool down) override;
         void text(const QString& text) override;
         void releaseAll(void) override;
+        _hot _nodiscard QString characterOf(const QString& code, const bool shift, const bool altgr) const override; // on the layout of the session (Option: the third level)
+        _hot _nodiscard QString codeOf(const QString& character) const override; // the same
+        _cold _nodiscard LockKeys lockKeys(void) const override; // a Mac has no Num Lock: its numpad types digits
 
         // ------------ Function ---------- //
         /* getter */

@@ -27,6 +27,7 @@ File Description:
     #define _Attribute
     #include <utils/utils.hpp>      // _hot, _cold, _nodiscard
     #include "../net/Protocol.hpp"  // xmouse::net::MouseButton
+    #include "Keymap.hpp"           // xmouse::platform::LockKeys
     #include <QString>              // QString
     #include <memory>               // std::unique_ptr
     #include <QSize>                // QSize
@@ -57,6 +58,9 @@ class IInputInjector {
         /* layout */
         _hot _nodiscard virtual inline QString characterOf(const QString& code, const bool shift, const bool altgr) const {(void)code; (void)shift; (void)altgr; return "";}; // the character this key types on the layout of the session ("" = unknown)
         _hot _nodiscard virtual inline QString codeOf(const QString& character) const                                    {(void)character; return "";}; // the key typing this character on the layout of the session ("" = unknown)
+
+        /* locks */
+        _cold _nodiscard virtual inline LockKeys lockKeys(void) const {return LockKeys{};}; // Caps Lock and Num Lock of this device now (unknown: off, on)
 
         // ----------- Destructor --------- //
         virtual ~IInputInjector() = default;
