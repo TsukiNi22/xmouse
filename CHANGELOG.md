@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Changed
+- **The phone screen is touched live**: a cursor of a computer is a finger there (continued strokes of a frame): the left button puts it down and lifts it, a drag follows the cursor as it moves instead of being replayed at the release, a long press lasts what the button is held; the wheel moves a finger as it turns, lifted still after the last notch (never flung); the right button is a long press at once
+- Phone screen, Android 13+: in a focused text field the keys are the real key events of a keyboard (the input method of the Accessibility service), so every key and shortcut of the app works there, and the text typed is the real input of the field (the undo of the app included)
+
+### Fixed
+- **Every key combination on the phone screen**: with Ctrl held, only Ctrl + A / C / X / V did something; now Ctrl + arrows (by word), Ctrl + Shift + arrows (select by word), Up / Down (by line, Shift selects), Ctrl + Home / End, Ctrl + Backspace / Delete (a word), Ctrl + Z / Y / Shift + Z (undo / redo of the edits made from the computers), Ctrl / Shift + Insert, Shift + Delete, Ctrl + Enter, Page Up / Down (the list under the cursor), Home / End outside a field (its top / bottom), F5 / Ctrl + R / the reload key (a pull down at the cursor), Ctrl + plus / minus (a zoom where the cursor is), Esc / Alt + Left / Alt + F4 (back), Super alone / Ctrl + Esc (all the apps), Super + D / H / Enter (home), Alt + Tab / Super + Tab / Ctrl + Shift + Esc (recent apps), Super + N / A / L / X / I (notifications, quick settings, lock, power menu, settings), Print Screen / Super + Shift + S (screenshot), Super + B / C / E / K / M / P / S / U (the apps of the phone), Menu / Shift + F10 (long press), the media and volume keys, the numpad without Num Lock; the modifiers are kept per key (both Ctrl, both Shift)
+- A key held while my cursor is on a phone repeats (a phone repeats nothing by itself); Caps Lock and Num Lock follow the keyboard of the computer (its lights when the cursor leaves), the numpad types its digits with Num Lock
+- Missing keys between computers: F17 - F24, the browser keys (back, forward, reload, stop, search, favorites, home), mail, calculator, my computer, media select, play, pause, fast forward, rewind, record, eject, power, sleep, wake up, brightness, the edit keys of some keyboards (help, undo, again, copy, paste, cut, find), the Japanese and Korean keys, the numpad parentheses; macOS: Menu, the JIS keys
+- Windows, macOS and X11 type the characters of their own layout on a phone and keep the letter of a shortcut (they used the US layout); a key that does not exist on Windows is no longer sent as a key 0
+- Between a Mac and a PC or a phone, Ctrl and Cmd change places (Ctrl + C copies on a Mac, Cmd + C on a PC), from the computers and from the touchpad of a phone member
+- The keys of a pad that drives its own cursor on another device carry their letter, and the keys released when a phone member comes back too (never a key stuck)
+
+### Added
+- The keyboard of the touchpad: AltGr, Ins, Super alone, Menu, Print Screen, F1 - F24, a media row (previous, play / pause, next, stop, mute, volume), the shortcuts cut, redo, reload, find, save, new tab, close tab, Alt + F4; a key button held repeats
 
 ## [v1.0.13-pre] - 2026-11-22
 ### Fixed
