@@ -1,12 +1,14 @@
 /*
- * xmouse android application, two ways:
- *  - this phone in a network (NodeService: a member itself, it creates or joins a network, its touchpad drives its own
- *    cursor across the devices, its screen is lent to the layout)
- *  - a pad of a computer: the /pad page of a device of the network in a WebView, with
+ * xmouse android application:
+ *  - home: this phone in a network like a computer (NodeService: a member and a server itself, it creates a network
+ *    shown as a QR code / code, joins one, disconnects, leaves; its touchpad drives its own cursor across the devices,
+ *    its screen is lent to the layout; its settings)
+ *  - the touchpad of one computer (paired, without the phone in its network): the /pad page of the device in a WebView, with
  *  - the device taken from its QR code / link (https://host:port/pad?code=..&fp=..): the fp pins its certificate, every
  *    TLS error is accepted ONLY for that exact certificate
  *  - a bridge for the page (XmouseAndroid): the token of the pad shared with the screen service, the screen lent
- *  - updates: /app/version of the device compared with this app, /app/xmouse.apk installed with the PackageInstaller
+ *  - updates: the xmouse website (gh-pages app/version.json, its sha256) and the device of the network, the newest one,
+ *    installed with the PackageInstaller
  *  - a QR code scanner (assets/scan.html on a local https origin, the camera given to it only)
 */
 package io.github.tsukini22.xmouse;
@@ -20,8 +22,10 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.net.http.SslCertificate;
 import android.net.http.SslError;
@@ -45,7 +49,9 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.ScrollView;
 import android.widget.Toast;
@@ -58,7 +64,10 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
 import java.security.MessageDigest;
+import java.util.List;
+import java.util.Locale;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -70,6 +79,7 @@ public class MainActivity extends Activity {
     private static final int DEFAULT_PORT = 47900;
     private static final int CAMERA_REQUEST = 7;
     private static final String SCANNER = "https://appassets.androidplatform.net"; // local origin of the scanner page (assets)
+    private static final String PAGES = "https://tsukini22.github.io/xmouse/app/"; // the app on the xmouse website (version.json, xmouse.apk)
 
     /* palette (dark tokens of the panel) */
     private static final int BG = Color.parseColor("#0f1214");
@@ -77,6 +87,7 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.parseColor("#98a2a9");
     private static final int ACCENT = Color.parseColor("#3ddc97");
     private static final int WARN = Color.parseColor("#f0a742");
+    private static final int CARD = Color.parseColor("#171b1e");
 
     // ---------------------------------------------------------------- //
     // State
@@ -109,8 +120,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (this._web != null && this._web.getUrl() != null && this._web.getUrl().startsWith(SCANNER)) {this.startOrSetup(); return;}
-        this.moveTaskToBack(true); // the pad / the network stays connected
+        if (!this._homeShown) {this.showHome(); return;} // touchpad, scanner, pairing: back to the home
+        this.moveTaskToBack(true); // the network stays connected
     }
 
     @Override
@@ -123,19 +134,15 @@ public class MainActivity extends Activity {
 
     private String pin() {return this._prefs.getString("fp", "");}
 
-    private String mode() {return this._prefs.getString("mode", "");}
+    private String deviceName() {return this._prefs.getString("name", Build.MODEL);}
 
+    private boolean online() {return this._prefs.getBoolean("online", true);}
+
+    // Every launch: the home (the node started unless the person disconnected it)
     private void startOrSetup() {
-        if (this.mode().equals("member")) {
-            NodeService.start(this);
-            this.showMember();
-            this._ui.postDelayed(() -> {this.autoUpdate(); this.resumeScreen();}, 4000); // once linked to its network
-            return;
-        }
-        if (this.host().isEmpty() || this.pin().isEmpty()) {
-            if (this.mode().isEmpty()) this.showChoice();
-            else this.showSetup("");
-        } else this.openPad();
+        if (this.online()) NodeService.start(this);
+        this.showHome();
+        this._ui.postDelayed(() -> {this.autoUpdate(); this.resumeScreen();}, 3000); // once linked to its network
     }
 
     // A link shared to the app, or typed / scanned: https://host:port/pad?code=..&fp=..
@@ -147,12 +154,30 @@ public class MainActivity extends Activity {
 
     private boolean useLink(String link) {
         Uri uri = Uri.parse(link);
-        if (this.mode().equals("member")) {this.joinWhenReady(link, 0); this.showMember(); return true;} // a member joins the network of the link
         String fp = uri.getQueryParameter("fp");
         if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || fp == null || fp.length() != 64) {
-            this.showSetup(this.tr("This is not the link of an xmouse device (its QR code holds its identity).", "Ce n'est pas le lien d'un appareil xmouse (son QR code contient son identité)."));
+            this.showHome();
+            Toast.makeText(this, this.tr("This is not the link of an xmouse device (its QR code holds its identity).", "Ce n'est pas le lien d'un appareil xmouse (son QR code contient son identité)."), Toast.LENGTH_LONG).show();
             return false;
         }
+
+        // The network of a member (its QR code / link): this phone joins it
+        if (uri.getPath() == null || !uri.getPath().startsWith("/pad")) {
+            Node node = NodeService.node();
+            this._prefs.edit().putBoolean("online", true).apply();
+            this.showHome();
+            if (node != null && node.joined()) {
+                new AlertDialog.Builder(this)
+                    .setTitle(this.tr("Join another network?", "Rejoindre un autre réseau ?"))
+                    .setMessage(this.tr("This phone is in the network ", "Ce téléphone est dans le réseau ") + node.networkName() + this.tr(": it leaves it to join the new one.", " : il le quitte pour rejoindre le nouveau."))
+                    .setPositiveButton(this.tr("Join", "Rejoindre"), (d, w) -> {node.leave(); node.join(link, "");})
+                    .setNegativeButton(this.tr("Cancel", "Annuler"), null)
+                    .show();
+            } else this.joinWhenReady(link, 0);
+            return true;
+        }
+
+        // The touchpad of a computer (its "Pair a phone" QR code)
         String origin = "https://" + uri.getHost() + ":" + (uri.getPort() > 0 ? uri.getPort() : DEFAULT_PORT);
         if (!origin.equals(this.host()) || !fp.equalsIgnoreCase(this.pin())) this._prefs.edit().putString("token", "").apply(); // another device: pair again
         this._prefs.edit().putString("host", origin).putString("fp", fp.toLowerCase()).apply();
@@ -172,6 +197,8 @@ public class MainActivity extends Activity {
     private String tr(String en, String fr) {return this.french() ? fr : en;}
 
     private void clearRoot() {
+        this._homeShown = false;
+        this._ui.removeCallbacks(this._tick);
         if (this._web != null) {
             this._root.removeView(this._web);
             this._web.destroy();
@@ -197,7 +224,7 @@ public class MainActivity extends Activity {
         TextView title = this.text("xmouse", 28, TEXT);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         box.addView(title);
-        box.addView(this.text(this.tr("A touchpad and a keyboard for the devices of your network, and this screen in their layout.", "Un touchpad et un clavier pour les appareils de votre réseau, et cet écran dans leur disposition."), 15, MUTED));
+        box.addView(this.text(this.tr("The touchpad and the keyboard of one computer, paired with it (this phone stays out of its network).", "Le touchpad et le clavier d'un ordinateur, associé à lui (ce téléphone reste hors de son réseau)."), 15, MUTED));
         box.addView(this.text(this.tr("On the computer: xmouse > Network > Pair a phone. Scan its QR code.", "Sur l'ordinateur : xmouse > Réseau > Associer un téléphone. Scannez son QR code."), 15, TEXT));
         Button scan = new Button(this);
         scan.setText(this.tr("Scan the QR code", "Scanner le QR code"));
@@ -220,37 +247,12 @@ public class MainActivity extends Activity {
             back.setOnClickListener(v -> this.openPad());
             box.addView(back);
         }
+        box.addView(this.button(this.tr("Home", "Accueil"), v -> this.showHome()));
         this._root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
     }
 
     // ---------------------------------------------------------------- //
-    // First launch: what this phone is
-
-    private void showChoice() {
-        this.clearRoot();
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(this.dp(24), this.dp(48), this.dp(24), this.dp(24));
-        TextView title = this.text("xmouse", 28, TEXT);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        box.addView(title);
-        box.addView(this.text(this.tr("What is this phone for?", "À quoi sert ce téléphone ?"), 16, MUTED));
-        Button member = new Button(this);
-        member.setText(this.tr("This phone in a network: it creates one or joins one", "Ce téléphone dans un réseau : il en crée un ou en rejoint un"));
-        member.setOnClickListener(v -> {this._prefs.edit().putString("mode", "member").apply(); this.startOrSetup();});
-        box.addView(member);
-        box.addView(this.text(this.tr("A member like a computer: its touchpad drives a cursor across the screens of every device, the others reach its screen, it can be the first device of a network.",
-            "Un membre comme un ordinateur : son touchpad pilote un curseur sur les écrans de tous les appareils, les autres atteignent son écran, il peut être le premier appareil d'un réseau."), 14, MUTED));
-        Button pad = new Button(this);
-        pad.setText(this.tr("Drive a computer (touchpad)", "Piloter un ordinateur (touchpad)"));
-        pad.setOnClickListener(v -> {this._prefs.edit().putString("mode", "pad").apply(); this.showSetup("");});
-        box.addView(pad);
-        box.addView(this.text(this.tr("Paired with one computer (its QR code): the touchpad and the keyboard of that computer.", "Associé à un ordinateur (son QR code) : le touchpad et le clavier de cet ordinateur."), 14, MUTED));
-        this._root.addView(box, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-    }
-
-    // ---------------------------------------------------------------- //
-    // This phone as a member
+    // Home: this phone in a network like a computer (a member, and a server the others join)
 
     // The node starts with the service: the join waits for it a few seconds
     private void joinWhenReady(String link, int tries) {
@@ -261,7 +263,7 @@ public class MainActivity extends Activity {
     }
 
     private final Node.Listener _memberListener = new Node.Listener() {
-        @Override public void changed() {if (MainActivity.this._memberShown) MainActivity.this.refreshMember();}
+        @Override public void changed() {if (MainActivity.this._homeShown) MainActivity.this.refreshHome();}
         @Override public void joinRequest(String pending, String name, String os) {
             new AlertDialog.Builder(MainActivity.this)
                 .setTitle(MainActivity.this.tr("A device wants to join", "Un appareil veut rejoindre"))
@@ -270,7 +272,7 @@ public class MainActivity extends Activity {
                 .setNegativeButton(MainActivity.this.tr("Refuse", "Refuser"), (d, w) -> {Node n = NodeService.node(); if (n != null) n.approve(pending, false); NodeService.cancel(MainActivity.this, pending);})
                 .show();
         }
-        @Override public void joinResult(boolean ok, String message) {if (MainActivity.this._memberShown) MainActivity.this.refreshMember();}
+        @Override public void joinResult(boolean ok, String message) {if (MainActivity.this._homeShown) MainActivity.this.refreshHome();}
         @Override public void notice(String text) { /* toasts of the service */ }
         @Override public void screen(java.util.Map<String, Object> event) { /* the lent screen */ }
         @Override public void map(java.util.Map<String, Object> map) {
@@ -283,100 +285,282 @@ public class MainActivity extends Activity {
         @Override public void link(String from, String url) { /* a notification of the service */ }
     };
 
-    private boolean _memberShown = false;
-    private LinearLayout _memberBox;
+    private boolean _homeShown = false;
+    private LinearLayout _dynamic; // network and members: rebuilt when the node changes
     private WebView _localPad; // the touchpad page of the app (assets) driving the node
+    private TextView _codeText;
+    private ImageView _qrImage;
+    private String _qrLink = "";
+    private Bitmap _qrBitmap;
+    private Button _screenButton;
+
+    // Every second while the home is shown: the time left of the code, the QR code once the code changed
+    private final Runnable _tick = new Runnable() {
+        @Override public void run() {
+            if (!MainActivity.this._homeShown) return;
+            MainActivity.this.tickCode();
+            MainActivity.this._ui.postDelayed(this, 1000);
+        }
+    };
 
     private Button button(String label, android.view.View.OnClickListener click) {
         Button b = new Button(this);
         b.setText(label);
+        b.setAllCaps(false);
         b.setOnClickListener(click);
         return b;
     }
 
-    private void showMember() {
-        this.clearRoot();
-        this._localPad = null;
-        this._memberShown = true;
-        NodeService.listen(this._memberListener);
-        ScrollView scroll = new ScrollView(this);
-        this._memberBox = new LinearLayout(this);
-        this._memberBox.setOrientation(LinearLayout.VERTICAL);
-        this._memberBox.setPadding(this.dp(20), this.dp(36), this.dp(20), this.dp(24));
-        scroll.addView(this._memberBox);
-        this._root.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        this.refreshMember();
-        String pending = this.getIntent().getStringExtra("pending");
-        if (pending != null) this.getIntent().removeExtra("pending");
+    // Two buttons side by side
+    private LinearLayout pair(Button a, Button b) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(a, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.addView(b, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        return row;
     }
 
-    private void refreshMember() {
-        Node node = NodeService.node();
-        LinearLayout box = this._memberBox;
-        if (box == null || !this._memberShown) return;
-        box.removeAllViews();
-        TextView title = this.text(this.tr("xmouse - this phone", "xmouse - ce téléphone"), 24, TEXT);
+    // A section of the home: a rounded card with its title
+    private LinearLayout card(LinearLayout parent, String title) {
+        LinearLayout card = new LinearLayout(this);
+        GradientDrawable background = new GradientDrawable();
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        TextView label = this.text(title.toUpperCase(Locale.ROOT), 12, MUTED);
+        card.setOrientation(LinearLayout.VERTICAL);
+        background.setColor(CARD);
+        background.setCornerRadius(this.dp(12));
+        card.setBackground(background);
+        card.setPadding(this.dp(16), this.dp(12), this.dp(16), this.dp(14));
+        params.topMargin = this.dp(12);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setLetterSpacing(0.08f);
+        card.addView(label);
+        parent.addView(card, params);
+        return card;
+    }
+
+    private void showHome() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        TextView title = this.text("xmouse", 26, TEXT);
+
+        this.clearRoot();
+        this._localPad = null;
+        this._homeShown = true;
+        NodeService.listen(this._memberListener);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(this.dp(16), this.dp(28), this.dp(16), this.dp(24));
+        scroll.addView(box);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         box.addView(title);
-        if (node == null) {
-            box.addView(this.text(this.tr("Starting...", "Démarrage..."), 15, MUTED));
-            this._ui.postDelayed(this::refreshMember, 500);
+        box.addView(this.text(this.deviceName() + "  ·  " + this.version(), 14, MUTED));
+        this._dynamic = new LinearLayout(this);
+        this._dynamic.setOrientation(LinearLayout.VERTICAL);
+        box.addView(this._dynamic);
+        this.phoneCard(box);
+        this.computerCard(box);
+        this.settingsCard(box);
+        this._root.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        this.refreshHome();
+        this._ui.post(this._tick);
+    }
+
+    private void refreshHome() {
+        LinearLayout box = this._dynamic;
+        Node node = NodeService.node();
+
+        if (box == null || !this._homeShown) return;
+        box.removeAllViews();
+        this._codeText = null;
+        this._qrImage = null;
+        if (this._screenButton != null) this._screenButton.setText(this.screenLabel());
+        LinearLayout net = this.card(box, this.tr("Network", "Réseau"));
+
+        // Disconnected by the person: nothing listens, the network waits
+        if (!this.online()) {
+            net.addView(this.text(this.tr("Disconnected: the other devices do not reach this phone (it stays a member of its network).", "Déconnecté : les autres appareils n'atteignent pas ce téléphone (il reste membre de son réseau)."), 15, MUTED));
+            net.addView(this.button(this.tr("Connect", "Se connecter"), v -> {
+                this._prefs.edit().putBoolean("online", true).apply();
+                NodeService.start(this);
+                this._ui.postDelayed(this::refreshHome, 600);
+            }));
             return;
         }
+        if (node == null) {
+            net.addView(this.text(this.tr("Starting...", "Démarrage..."), 15, MUTED));
+            NodeService.start(this);
+            this._ui.postDelayed(this::refreshHome, 500);
+            return;
+        }
+
+        // In no network: create one (this phone is its first device and its server) or join one
         if (!node.joined()) {
-            box.addView(this.text(this.tr("In no network yet: create one (this phone is its first device), or join the network of another device.",
-                "Dans aucun réseau : créez-en un (ce téléphone en est le premier appareil), ou rejoignez le réseau d'un autre appareil."), 15, MUTED));
             final EditText name = new EditText(this);
-            name.setText(Build.MODEL + " network");
-            name.setTextColor(TEXT);
-            box.addView(name);
-            box.addView(this.button(this.tr("Create a network", "Créer un réseau"), v -> node.createNetwork(name.getText().toString())));
-            box.addView(this.text(this.tr("Join: scan the QR code of a member (Network page), or paste its link.", "Rejoindre : scannez le QR code d'un membre (page Réseau), ou collez son lien."), 15, MUTED));
-            box.addView(this.button(this.tr("Scan the QR code", "Scanner le QR code"), v -> this.openScanner()));
             final EditText link = new EditText(this);
+            net.addView(this.text(this.tr("In no network yet: create one (this phone is its first device, the others join it), or join the network of another device.",
+                "Dans aucun réseau : créez-en un (ce téléphone en est le premier appareil, les autres le rejoignent), ou rejoignez le réseau d'un autre appareil."), 15, MUTED));
+            name.setText(this.deviceName() + " network");
+            name.setTextColor(TEXT);
+            name.setSingleLine(true);
+            net.addView(name);
+            net.addView(this.button(this.tr("Create a network", "Créer un réseau"), v -> node.createNetwork(name.getText().toString())));
+            net.addView(this.text(this.tr("Join: scan the QR code of a member (its Network page), or paste its link.", "Rejoindre : scannez le QR code d'un membre (sa page Réseau), ou collez son lien."), 15, MUTED));
+            net.addView(this.button(this.tr("Scan a QR code", "Scanner un QR code"), v -> this.openScanner()));
             link.setHint("https://192.168.1.20:47900/?code=...&fp=...");
             link.setTextColor(TEXT);
             link.setHintTextColor(MUTED);
             link.setSingleLine(true);
-            box.addView(link);
-            box.addView(this.button(this.tr("Join with this link", "Rejoindre avec ce lien"), v -> node.join(link.getText().toString().trim(), "")));
-        } else {
-            box.addView(this.text(this.tr("Network ", "Réseau ") + node.networkName(), 18, ACCENT));
-            box.addView(this.text(this.tr("Code ", "Code ") + node.code() + this.tr("  (changes in ", "  (change dans ") + node.codeSecondsLeft() / 60 + ":" + String.format("%02d", node.codeSecondsLeft() % 60) + ")", 20, TEXT));
-            box.addView(this.text(this.tr("A device joins with the link of this phone (Connect to a network on a computer).", "Un appareil rejoint avec le lien de ce téléphone (Se connecter à un réseau sur un ordinateur)."), 14, MUTED));
-            box.addView(this.button(this.tr("Share the link", "Partager le lien"), v -> {
-                Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, node.joinLink());
-                this.startActivity(Intent.createChooser(share, "xmouse"));
-            }));
-            box.addView(this.button(this.tr("New code", "Nouveau code"), v -> {node.newCode(); this._ui.postDelayed(this::refreshMember, 300);}));
-            box.addView(this.text(this.tr("Members", "Membres"), 16, TEXT));
-            for (Node.Member m: node.members()) {
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                TextView label = this.text((m.online ? "● " : "○ ") + m.name + "  " + m.kind + (m.self ? this.tr("  (this phone)", "  (ce téléphone)") : (m.online ? (m.rtt >= 0 ? "  " + m.rtt + " ms" : "") : this.tr("  offline", "  hors ligne"))), 15, m.online ? TEXT : MUTED);
-                row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-                if (!m.self) {
-                    final String id = m.id;
-                    final String who = m.name;
-                    row.addView(this.button(this.tr("Remove", "Retirer"), v -> new AlertDialog.Builder(this).setTitle(who)
-                        .setMessage(this.tr("It leaves the network (the key changes).", "Il quitte le réseau (la clé change)."))
-                        .setPositiveButton(this.tr("Remove", "Retirer"), (d, w) -> node.removeMember(id)).setNegativeButton(this.tr("Cancel", "Annuler"), null).show()));
-                }
-                box.addView(row);
-            }
-            box.addView(this.button(this.tr("Open the touchpad", "Ouvrir le touchpad"), v -> this.openLocalPad()));
-            box.addView(this.button(this.tr("This screen in the layout", "Cet écran dans la disposition"), v -> this.lendScreenDialog()));
-            box.addView(this.button(this.tr("Leave the network", "Quitter le réseau"), v -> new AlertDialog.Builder(this)
-                .setMessage(this.tr("This phone leaves the network: it needs a new code to come back.", "Ce téléphone quitte le réseau : il lui faudra un nouveau code pour revenir."))
-                .setPositiveButton(this.tr("Leave", "Quitter"), (d, w) -> node.leave()).setNegativeButton(this.tr("Cancel", "Annuler"), null).show()));
+            net.addView(link);
+            net.addView(this.pair(this.button(this.tr("Join with this link", "Rejoindre avec ce lien"), v -> this.useLink(link.getText().toString().trim())),
+                this.button(this.tr("Disconnect", "Se déconnecter"), v -> this.disconnect())));
+            return;
         }
-        box.addView(this.button(this.tr("Use this phone as the touchpad of one computer instead", "Utiliser plutôt ce téléphone comme touchpad d'un ordinateur"), v -> {
-            this._prefs.edit().putString("mode", "pad").apply();
-            this._memberShown = false;
-            NodeService.unlisten(this._memberListener);
-            NodeService.stop(this);
-            this.showSetup("");
+
+        // In a network: its QR code and its code for a new device, the members
+        TextView networkName = this.text(node.networkName(), 20, ACCENT);
+        LinearLayout.LayoutParams qr = new LinearLayout.LayoutParams(this.dp(230), this.dp(230));
+        networkName.setTypeface(Typeface.DEFAULT_BOLD);
+        net.addView(networkName);
+        net.addView(this.text(this.tr("A device joins with this QR code or its link (Connect to a network), then this phone accepts it.", "Un appareil rejoint avec ce QR code ou son lien (Se connecter à un réseau), puis ce téléphone l'accepte."), 14, MUTED));
+        this._qrImage = new ImageView(this);
+        this._qrImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        qr.gravity = Gravity.CENTER_HORIZONTAL;
+        qr.topMargin = this.dp(8);
+        net.addView(this._qrImage, qr);
+        if (this._qrBitmap != null) this._qrImage.setImageBitmap(this._qrBitmap);
+        this._codeText = this.text("", 22, TEXT);
+        this._codeText.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        this._codeText.setGravity(Gravity.CENTER_HORIZONTAL);
+        net.addView(this._codeText);
+        this.tickCode();
+        net.addView(this.pair(this.button(this.tr("Share the link", "Partager le lien"), v -> {
+            Intent share = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, node.joinLink());
+            this.startActivity(Intent.createChooser(share, "xmouse"));
+        }), this.button(this.tr("New code", "Nouveau code"), v -> {node.newCode(); this._ui.postDelayed(this::tickCode, 300);})));
+        net.addView(this.pair(this.button(this.tr("Disconnect", "Se déconnecter"), v -> this.disconnect()),
+            this.button(this.tr("Leave the network", "Quitter le réseau"), v -> new AlertDialog.Builder(this)
+                .setMessage(this.tr("This phone leaves the network: it needs a new code to come back.", "Ce téléphone quitte le réseau : il lui faudra un nouveau code pour revenir."))
+                .setPositiveButton(this.tr("Leave", "Quitter"), (d, w) -> node.leave()).setNegativeButton(this.tr("Cancel", "Annuler"), null).show())));
+
+        List<Node.Member> list = node.members();
+        LinearLayout members = this.card(box, this.tr("Members", "Membres") + " (" + list.size() + ")");
+        for (Node.Member m: list) {
+            LinearLayout row = new LinearLayout(this);
+            TextView label = this.text((m.online ? "● " : "○ ") + m.name + "  " + m.kind + (m.self ? this.tr("  (this phone)", "  (ce téléphone)") : (m.online ? (m.rtt >= 0 ? "  " + m.rtt + " ms" : "") : this.tr("  offline", "  hors ligne"))), 15, m.online ? TEXT : MUTED);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+            if (!m.self) {
+                final String id = m.id;
+                final String who = m.name;
+                row.addView(this.button(this.tr("Remove", "Retirer"), v -> new AlertDialog.Builder(this).setTitle(who)
+                    .setMessage(this.tr("It leaves the network (the key changes).", "Il quitte le réseau (la clé change)."))
+                    .setPositiveButton(this.tr("Remove", "Retirer"), (d, w) -> node.removeMember(id)).setNegativeButton(this.tr("Cancel", "Annuler"), null).show()));
+            }
+            members.addView(row);
+        }
+    }
+
+    // The code and its time left; the QR code drawn again once the link changed (a new code)
+    private void tickCode() {
+        Node node = NodeService.node();
+        if (node == null || !node.joined() || this._codeText == null) return;
+        int left = node.codeSecondsLeft();
+        this._codeText.setText(node.code() + "   " + left / 60 + ":" + String.format(Locale.ROOT, "%02d", left % 60));
+        String link = node.joinLink();
+        if (link.equals(this._qrLink) && this._qrBitmap != null) return;
+        try {
+            this._qrBitmap = qrBitmap(link);
+            this._qrLink = link;
+        } catch (Exception e) {
+            this._qrBitmap = null; // a link too long for a QR code: the link button stays
+        }
+        if (this._qrImage != null) this._qrImage.setImageBitmap(this._qrBitmap);
+    }
+
+    // Black modules on white with the quiet zone of 4 modules, 8 px a module
+    private static Bitmap qrBitmap(String text) {
+        Qr qr = Qr.encode(text, Qr.MEDIUM);
+        int quiet = 4;
+        int scale = 8;
+        int width = (qr.size + 2 * quiet) * scale;
+        int[] pixels = new int[width * width];
+        for (int y = 0; y < width; y++)
+            for (int x = 0; x < width; x++) pixels[y * width + x] = qr.dark(x / scale - quiet, y / scale - quiet) ? Color.BLACK : Color.WHITE;
+        return Bitmap.createBitmap(pixels, width, width, Bitmap.Config.ARGB_8888);
+    }
+
+    // Nothing listens until Connect: the network waits, this phone stays a member
+    private void disconnect() {
+        this._prefs.edit().putBoolean("online", false).apply();
+        NodeService.stop(this);
+        this._ui.postDelayed(this::refreshHome, 400);
+    }
+
+    private String screenLabel() {
+        boolean lent = ScreenService.running() || OverlayService.running();
+        return this.tr("This screen in the layout", "Cet écran dans la disposition") + (lent ? this.tr(": on", " : activé") : this.tr(": off", " : désactivé"));
+    }
+
+    private void phoneCard(LinearLayout box) {
+        LinearLayout card = this.card(box, this.tr("This phone", "Ce téléphone"));
+        card.addView(this.text(this.tr("Its touchpad drives its cursor across the screens of the network; its screen can be in the layout (the cursors of the others come on it).",
+            "Son touchpad pilote son curseur sur les écrans du réseau ; son écran peut être dans la disposition (les curseurs des autres viennent dessus)."), 14, MUTED));
+        card.addView(this.button(this.tr("Open the touchpad", "Ouvrir le touchpad"), v -> {
+            Node node = NodeService.node();
+            if (node == null || !node.joined()) {Toast.makeText(this, this.tr("Create or join a network first", "Créez ou rejoignez d'abord un réseau"), Toast.LENGTH_SHORT).show(); return;}
+            this.openLocalPad();
         }));
+        this._screenButton = this.button(this.screenLabel(), v -> this.lendScreenDialog());
+        card.addView(this._screenButton);
+    }
+
+    private void computerCard(LinearLayout box) {
+        LinearLayout card = this.card(box, this.tr("Touchpad of a computer", "Touchpad d'un ordinateur"));
+        card.addView(this.text(this.tr("Paired with one computer (its \"Pair a phone\" QR code): the touchpad of that computer, without this phone in its network.",
+            "Associé à un ordinateur (son QR code « Associer un téléphone ») : le touchpad de cet ordinateur, sans ce téléphone dans son réseau."), 14, MUTED));
+        if (!this.host().isEmpty() && !this.pin().isEmpty()) card.addView(this.button(this.tr("Open the touchpad of ", "Ouvrir le touchpad de ") + Uri.parse(this.host()).getHost(), v -> this.openPad()));
+        card.addView(this.button(this.tr("Pair with a computer", "Associer à un ordinateur"), v -> this.showSetup("")));
+    }
+
+    private Switch toggle(String label, String key, boolean byDefault, Runnable changed) {
+        Switch s = new Switch(this);
+        s.setText(label);
+        s.setTextColor(TEXT);
+        s.setTextSize(15);
+        s.setPadding(0, this.dp(8), 0, this.dp(8));
+        s.setChecked(this._prefs.getBoolean(key, byDefault));
+        s.setOnCheckedChangeListener((v, on) -> {
+            this._prefs.edit().putBoolean(key, on).apply();
+            if (changed != null) changed.run();
+        });
+        return s;
+    }
+
+    private void settingsCard(LinearLayout box) {
+        LinearLayout card = this.card(box, this.tr("Settings", "Réglages"));
+        final EditText name = new EditText(this);
+        LinearLayout row = new LinearLayout(this);
+
+        card.addView(this.text(this.tr("Name of this phone", "Nom de ce téléphone"), 14, MUTED));
+        name.setText(this.deviceName());
+        name.setTextColor(TEXT);
+        name.setSingleLine(true);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        row.addView(this.button(this.tr("Save", "Enregistrer"), v -> {
+            String value = name.getText().toString().trim();
+            Node node = NodeService.node();
+            if (value.isEmpty()) return;
+            this._prefs.edit().putString("name", value.length() > 64 ? value.substring(0, 64) : value).apply();
+            if (node != null) node.rename(this.deviceName());
+            Toast.makeText(this, this.tr("Name saved", "Nom enregistré"), Toast.LENGTH_SHORT).show();
+        }));
+        card.addView(row);
+        card.addView(this.toggle(this.tr("Private mode: the cursors of the others pass over this screen without touching anything", "Mode privé : les curseurs des autres passent sur cet écran sans rien toucher"), "private", false, null));
+        card.addView(this.toggle(this.tr("Check for updates at every launch", "Chercher les mises à jour à chaque lancement"), "autoUpdate", true, null));
+        card.addView(this.button(this.tr("Check for updates now", "Chercher les mises à jour maintenant"), v -> this.checkUpdate(true)));
+        card.addView(this.text(this.tr("Version ", "Version ") + this.version() + this.tr(" - updates from the xmouse website and the computers of the network", " - mises à jour depuis le site xmouse et les ordinateurs du réseau"), 13, MUTED));
     }
 
     // The touchpad page of the app (its assets): its commands go to the node of the phone
@@ -405,7 +589,6 @@ public class MainActivity extends Activity {
 
     private void openLocalPad() {
         this.clearRoot();
-        this._memberShown = false;
         WebView web = this.newWeb();
         this._web = web;
         this._localPad = web;
@@ -505,16 +688,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (this.mode().equals("member") || (this._web != null && !this.host().isEmpty())) {
-            this.autoUpdate();
-            this.resumeScreen(); // back from the overlay permission: the screen is lent at once
-        }
-        if (this.mode().equals("member") && this._memberShown) this.refreshMember();
+        this.autoUpdate();
+        this.resumeScreen(); // back from the overlay permission: the screen is lent at once
+        if (this._homeShown) this.refreshHome();
     }
 
-    // Every launch / return to the app: the device is asked for a newer app (a dialog only when there is one)
+    // Every launch / return to the app: the website and the device are asked for a newer app (a dialog only when there is one)
     private void autoUpdate() {
         long now = System.currentTimeMillis();
+        if (!this._prefs.getBoolean("autoUpdate", true)) return;
         if (now - this._lastUpdateCheck < 10 * 60 * 1000) return;
         this._lastUpdateCheck = now;
         this.checkUpdate(false);
@@ -522,7 +704,8 @@ public class MainActivity extends Activity {
 
     // The screen stays lent (phantom) as long as the person wants it and the overlay is allowed
     private void resumeScreen() {
-        if (this._prefs.getBoolean("lend", false) && (this.mode().equals("member") || !this._prefs.getString("token", "").isEmpty())) OverlayService.start(this);
+        Node node = NodeService.node();
+        if (this._prefs.getBoolean("lend", false) && ((node != null && node.joined()) || !this._prefs.getString("token", "").isEmpty())) OverlayService.start(this);
     }
 
     private void lendPhantom() {
@@ -553,10 +736,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void checkUpdate() {MainActivity.this._ui.post(() -> MainActivity.this.checkUpdate(true));}
 
         @JavascriptInterface public void changeDevice() {
-            MainActivity.this._ui.post(() -> {
-                if (MainActivity.this.mode().equals("member")) MainActivity.this.showMember();
-                else MainActivity.this.showSetup("");
-            });
+            MainActivity.this._ui.post(MainActivity.this::showHome);
         }
     }
 
@@ -617,7 +797,10 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         if (request != CAMERA_REQUEST) return;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) this.openScanner();
-        else this.showSetup(this.tr("No camera: paste the link of the device instead.", "Pas de caméra : collez plutôt le lien de l'appareil."));
+        else {
+            this.showHome();
+            Toast.makeText(this, this.tr("No camera: paste the link of the device instead.", "Pas de caméra : collez plutôt le lien de l'appareil."), Toast.LENGTH_LONG).show();
+        }
     }
 
     // ---------------------------------------------------------------- //
@@ -658,61 +841,98 @@ public class MainActivity extends Activity {
         return out.toByteArray();
     }
 
+    // Where a device carries the newest app: a computer of the network of this phone, else the paired computer
+    private String[] updateDevice() {
+        Node node = NodeService.node();
+        String[] source = node == null || !node.joined() ? null : node.updateSource();
+        if (source != null) return source;
+        if (!this.host().isEmpty() && !this.pin().isEmpty()) return new String[]{this.host(), this.pin()};
+        return null;
+    }
+
+    // The newest of the xmouse website (independent of any device) and the device; the same version: the device (LAN)
     private void checkUpdate(boolean asked) {
-        String from = this.host();
-        String pinned = this.pin();
-        if (this.mode().equals("member")) { // a member: a computer of its network carries the newest app
-            Node node = NodeService.node();
-            String[] source = node == null ? null : node.updateSource();
-            if (source == null) {
-                if (asked) Toast.makeText(this, this.tr("No computer of the network online to update from", "Aucun ordinateur du réseau en ligne pour la mise à jour"), Toast.LENGTH_SHORT).show();
-                return;
-            }
-            from = source[0];
-            pinned = source[1];
-        }
-        final String origin = from;
-        final String fp = pinned;
-        if (origin.isEmpty() || fp.isEmpty()) return;
+        final String[] device = this.updateDevice();
         new Thread(() -> {
-            String remote = "";
+            String fromDevice = "";
+            String fromPages = "";
+            String sha256 = "";
+            if (device != null) {
+                try {
+                    HttpsURLConnection c = Pinned.open(device[0] + "/app/version", device[1]);
+                    if (c.getResponseCode() == 200) {
+                        try (InputStream in = c.getInputStream()) {fromDevice = new String(readAll(in, 64), "UTF-8").trim();}
+                    }
+                    c.disconnect();
+                } catch (Exception e) {
+                    fromDevice = "";
+                }
+            }
             try {
-                HttpsURLConnection c = Pinned.open(origin + "/app/version", fp);
+                HttpsURLConnection c = (HttpsURLConnection) new URL(PAGES + "version.json").openConnection();
+                c.setConnectTimeout(Pinned.TIMEOUT);
+                c.setReadTimeout(Pinned.TIMEOUT);
+                c.setUseCaches(false);
                 if (c.getResponseCode() == 200) {
-                    try (InputStream in = c.getInputStream()) {remote = new String(readAll(in, 64), "UTF-8").trim();}
+                    try (InputStream in = c.getInputStream()) {
+                        org.json.JSONObject o = new org.json.JSONObject(new String(readAll(in, 4096), "UTF-8"));
+                        fromPages = o.optString("version", "");
+                        sha256 = o.optString("sha256", "").toLowerCase(Locale.ROOT);
+                    }
                 }
                 c.disconnect();
             } catch (Exception e) {
-                remote = "";
+                fromPages = "";
             }
-            final String latest = remote;
+            final boolean pages = !fromPages.isEmpty() && sha256.length() == 64 && (fromDevice.isEmpty() || compareVersions(fromPages, fromDevice) > 0);
+            final String latest = pages ? fromPages : fromDevice;
+            final String hash = sha256;
             this._ui.post(() -> {
                 if (latest.isEmpty() || compareVersions(latest, this.version()) <= 0) {
-                    if (asked) Toast.makeText(this, this.tr("xmouse is up to date (", "xmouse est à jour (") + this.version() + ")", Toast.LENGTH_SHORT).show();
+                    if (asked) Toast.makeText(this, latest.isEmpty() && device == null ? this.tr("No update source reachable (website, device)", "Aucune source de mise à jour joignable (site, appareil)")
+                        : this.tr("xmouse is up to date (", "xmouse est à jour (") + this.version() + ")", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 new AlertDialog.Builder(this)
                     .setTitle(this.tr("Update available", "Mise à jour disponible"))
-                    .setMessage(this.version() + " -> " + latest + "\n\n" + this.tr("The update comes from the device (its pinned certificate).", "La mise à jour vient de l'appareil (son certificat épinglé)."))
-                    .setPositiveButton(this.tr("Update", "Mettre à jour"), (d, w) -> this.downloadAndInstall(origin, fp))
+                    .setMessage(this.version() + " -> " + latest + "\n\n" + (pages
+                        ? this.tr("From the xmouse website (its sha256 checked, the same signature as this app).", "Depuis le site xmouse (son sha256 vérifié, la même signature que cette appli).")
+                        : this.tr("From the device (its pinned certificate).", "Depuis l'appareil (son certificat épinglé).")))
+                    .setPositiveButton(this.tr("Update", "Mettre à jour"), (d, w) -> {
+                        if (pages) this.downloadAndInstall(PAGES + "xmouse.apk", "", hash);
+                        else this.downloadAndInstall(device[0] + "/app/xmouse.apk", device[1], "");
+                    })
                     .setNegativeButton(this.tr("Later", "Plus tard"), null)
                     .show();
             });
         }).start();
     }
 
-    private void downloadAndInstall(String origin, String fp) {
+    // From the device (pinned TLS) or the website (system TLS, then its sha256)
+    private void downloadAndInstall(String url, String fp, String sha256) {
         Toast.makeText(this, this.tr("Downloading the update...", "Téléchargement de la mise à jour..."), Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 File apk = new File(this.getCacheDir(), "xmouse.apk");
-                HttpsURLConnection c = Pinned.open(origin + "/app/xmouse.apk", fp);
+                HttpsURLConnection c = fp.isEmpty() ? (HttpsURLConnection) new URL(url).openConnection() : Pinned.open(url, fp);
+                c.setConnectTimeout(Pinned.TIMEOUT);
                 c.setReadTimeout(60000);
+                c.setUseCaches(false);
                 try (InputStream in = c.getInputStream(); OutputStream out = new FileOutputStream(apk)) {
                     byte[] buffer = new byte[65536];
                     for (int n; (n = in.read(buffer)) > 0;) out.write(buffer, 0, n);
                 }
                 c.disconnect();
+                if (!sha256.isEmpty()) {
+                    try (InputStream in = new FileInputStream(apk)) {
+                        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                        byte[] buffer = new byte[65536];
+                        for (int n; (n = in.read(buffer)) > 0;) digest.update(buffer, 0, n);
+                        StringBuilder hex = new StringBuilder();
+                        for (byte b: digest.digest()) hex.append(String.format("%02x", b & 0xff));
+                        if (!hex.toString().equals(sha256)) throw new Exception("the downloaded app does not match its sha256");
+                    }
+                }
                 this.install(apk);
             } catch (Exception e) {
                 this._ui.post(() -> Toast.makeText(this, this.tr("Update failed: ", "Échec de la mise à jour : ") + e.getMessage(), Toast.LENGTH_LONG).show());

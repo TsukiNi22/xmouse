@@ -337,12 +337,30 @@ jobs:
           merge-multiple: true
           path: build
 
+      - name: Download the android app
+        uses: actions/download-artifact@v7
+        with:
+          name: android-app
+          path: app
+
       - name: Checkout xmouse - gh-pages
         uses: actions/checkout@v5
         with:
           ref: gh-pages
           path: gh-pages
           fetch-depth: 1
+
+      - name: Sync the android app into gh-pages (its updates without any device)
+        run: |
+          set -euo pipefail
+          test -f app/xmouse.apk && test -f app/version.txt
+          mkdir -p gh-pages/app
+          cp app/xmouse.apk gh-pages/app/xmouse.apk
+          VERSION="$(tr -d '[:space:]' < app/version.txt)"
+          SHA="$(sha256sum app/xmouse.apk | cut -d' ' -f1)"
+          SIZE="$(stat -c %s app/xmouse.apk)"
+          printf '{\n    "version": "%s",\n    "sha256": "%s",\n    "size": %s,\n    "apk": "xmouse.apk"\n}\n' "$VERSION" "$SHA" "$SIZE" > gh-pages/app/version.json
+          cat gh-pages/app/version.json
 
       - name: Import GPG key
         run: |

@@ -93,7 +93,8 @@ final class ScreenLink {
         this._density = this._context.getResources().getDisplayMetrics().density;
         this.addOverlay();
         _active = this;
-        this._local = NodeService.node() != null;
+        Node node = NodeService.node();
+        this._local = node != null && node.joined(); // a member: its own network; else the computer its touchpad is paired with
         if (this._local) this.sendScreen(); // a member: its node publishes the screen
         else this.connect();
     }
@@ -130,6 +131,11 @@ final class ScreenLink {
     // Link
 
     private SharedPreferences prefs() {return this._context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE);}
+
+    // Private mode (setting of the app): the cursors of the others pass over this screen, nothing is touched
+    private boolean privateMode() {return this.prefs().getBoolean("private", false);}
+
+    private Actions actions() {return this.privateMode() ? null : this._actions;}
 
     private void connect() {
         final String origin = this.prefs().getString("host", "");
@@ -238,7 +244,7 @@ final class ScreenLink {
                 if (o.optBoolean("down")) this.onKey(o.optString("code"));
                 break;
             case "text":
-                if (this._actions != null) this._actions.insert(o.optString("text"));
+                if (this.actions() != null) this.actions().insert(o.optString("text"));
                 break;
             default:
                 break;
@@ -255,10 +261,11 @@ final class ScreenLink {
         boolean down = o.optBoolean("down");
         if (c == null) return;
         if (o.has("x")) {c.x = o.optInt("x") * this._density; c.y = o.optInt("y") * this._density;}
-        if (this._actions == null) {
-            // Phantom: the click is only shown; the member is told once why nothing happens
+        if (this.actions() == null) {
+            // Phantom / private mode: the click is only shown; the member is told once why nothing happens
             c.down = down;
-            if (down && this._told.add(id)) this.send(json("t", "access", "id", id, "text", "this phone only shows your cursor (turn on its Accessibility service \"xmouse screen\" to let it touch)"));
+            if (down && this._told.add(id)) this.send(json("t", "access", "id", id, "text", this.privateMode() ? "private mode: your cursor passes over this phone without acting"
+                : "this phone only shows your cursor (turn on its Accessibility service \"xmouse screen\" to let it touch)"));
             return;
         }
         if (b == 3) {if (down) this._actions.back(); return;} // back button of the mouse
@@ -289,7 +296,7 @@ final class ScreenLink {
 
     private void onWheel(String id, int dx, int dy) {
         Cursor c = this._cursors.get(id);
-        if (c == null || this._actions == null) return;
+        if (c == null || this.actions() == null) return;
         Path path = new Path();
         path.moveTo(c.x, c.y);
         // Wheel up (dy > 0) shows what is above: the finger goes down
@@ -298,7 +305,7 @@ final class ScreenLink {
     }
 
     private void onKey(String code) {
-        if (this._actions == null) return;
+        if (this.actions() == null) return;
         switch (code) {
             case "Escape": case "BrowserBack": this._actions.back(); break;
             case "MetaLeft": case "MetaRight": case "BrowserHome": this._actions.home(); break;
