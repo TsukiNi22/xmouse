@@ -1,15 +1,8 @@
 name: Build - macOS (CI)
 
 # The macOS backends (event tap, CGEvent) only build on a Mac: Qt and OpenSSL from Homebrew, libutils from its sources
+# By hand only for now: libutils does not build on macOS yet (its epoll parts, Linux only), xmouse needs it
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'web/**'
-      - 'android/**'
   workflow_dispatch:
 
 concurrency:
