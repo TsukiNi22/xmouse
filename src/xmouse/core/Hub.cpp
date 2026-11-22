@@ -312,11 +312,23 @@ void xmouse::core::Hub::publishSelf_(void)
     QJsonObject entry;
 
     if (!this->_group.joined()) return;
+    // Every path of the exposure ("host" on the port of this device, "host:port" through a tunnel), then the LAN / tailnet ones
+    for (const net::Endpoint& e: this->_exposure.endpoints()) {
+        if (e.label == "This PC" || e.host.isEmpty()) continue;
+        addresses.append(e.port == this->_mesh.port() ? e.host : e.host + ":" + QString::number(e.port));
+        if (!e.ip.isEmpty()) addresses.append(e.port == this->_mesh.port() ? e.ip : e.ip + ":" + QString::number(e.port));
+    }
     for (const QString& a: net::Exposure::lanAddresses())
         addresses.append(a);
     if (!net::Exposure::tailscaleAddress().isEmpty()) addresses.append(net::Exposure::tailscaleAddress());
     if (!this->_exposure.tailnet().dns.isEmpty()) addresses.append(this->_exposure.tailnet().dns);
     if (!this->_config.settings().publicHost.isEmpty()) addresses.append(this->_config.settings().publicHost);
+    {
+        QStringList unique;
+        for (const QJsonValue& a: addresses)
+            if (!unique.contains(a.toString())) unique.append(a.toString());
+        addresses = QJsonArray::fromStringList(unique);
+    }
     entry["name"] = this->_config.deviceName();
     entry["os"] = osName();
     entry["kind"] = net::device_kind_name(net::DeviceKind::Desktop);
@@ -369,8 +381,12 @@ void xmouse::core::Hub::refreshCandidates_(void)
         if (this->_state.contains("removed/" + id)) {this->_mesh.setCandidates(id, {}); continue;}
         for (const QString& a: this->_mesh.addressesOf(id))
             addresses.append({a, port});
-        for (const QJsonValue& a: device.value("addresses").toArray())
-            if (!addresses.contains({a.toString(), port})) addresses.append({a.toString(), port});
+        for (const QJsonValue& a: device.value("addresses").toArray()) {
+            // "host" on the port of the member, "host:port" through a tunnel (bore, ngrok, UPnP)
+            const QString text = a.toString();
+            const QPair<QString, quint16> address = text.count(':') == 1 ? QPair<QString, quint16>(text.section(':', 0, 0), static_cast<quint16>(text.section(':', 1).toUInt())) : QPair<QString, quint16>(text, port);
+            if (!address.first.isEmpty() && address.second != 0 && !addresses.contains(address)) addresses.append(address);
+        }
         this->_mesh.setCandidates(id, addresses);
     }
 }
@@ -528,6 +544,19 @@ void xmouse::core::Hub::renameNetwork(const QString& name)
     emit this->networkChanged();
 }
 
+void xmouse::core::Hub::setExposure(const Exposure exposure)
+{
+    Settings settings = this->_config.settings();
+
+    if (exposure == settings.exposure) return;
+    this->_config.settings().exposure = exposure;
+    this->_config.save();
+    settings.exposure = exposure;
+    settings.discovery = false; // the LAN announce is the one of the mesh
+    this->_exposure.start(settings, this->_mesh.port(), this->_config.deviceName(), security::fingerprint_short(this->_certificate.fingerprint()));
+    this->_log.info("settings", "", "reachable through " + exposure_name(exposure));
+}
+
 void xmouse::core::Hub::renameDevice(const QString& name)
 {
     this->_config.settings().name = name.trimmed().left(64);
@@ -536,19 +565,24 @@ void xmouse::core::Hub::renameDevice(const QString& name)
     this->publishSelf_();
 }
 
-QString xmouse::core::Hub::joinLink(void) const
+QString xmouse::core::Hub::joinLink(const QString& host, const quint16 port) const
 {
-    QString host = "";
+    QString target = host;
+    quint16 targetPort = port;
     QUrl url;
     QUrlQuery query;
 
-    for (const net::Endpoint& e: this->_exposure.endpoints())
-        if (!e.host.isEmpty()) {host = e.host; break;}
-    if (host.isEmpty() && !net::Exposure::lanAddresses().isEmpty()) host = net::Exposure::lanAddresses().front();
-    if (host.isEmpty()) host = "127.0.0.1";
+    // The first address another device can use (the public / tailnet ones come first, "This PC" last)
+    for (const net::Endpoint& e: this->_exposure.endpoints()) {
+        if (!target.isEmpty() || e.host.isEmpty() || e.label == "This PC") continue;
+        target = e.host;
+        targetPort = e.port;
+    }
+    if (target.isEmpty() && !net::Exposure::lanAddresses().isEmpty()) target = net::Exposure::lanAddresses().front();
+    if (target.isEmpty()) target = "127.0.0.1";
     url.setScheme("xmouse");
-    url.setHost(host);
-    url.setPort(this->_mesh.port());
+    url.setHost(target);
+    url.setPort(targetPort == 0 ? this->_mesh.port() : targetPort);
     query.addQueryItem("fp", QString::fromLatin1(this->_certificate.fingerprint().toHex()));
     query.addQueryItem("code", this->_code.display());
     query.addQueryItem("net", this->_group.name());

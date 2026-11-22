@@ -216,7 +216,8 @@ class Hub: public QObject {
         void removeMember(const QString& id);
         void renameNetwork(const QString& name);
         void renameDevice(const QString& name);
-        _cold _nodiscard QString joinLink(void) const; // xmouse://host:port?fp=..&code=.. (QR code)
+        _cold _nodiscard QString joinLink(const QString& host = "", const quint16 port = 0) const; // xmouse://host:port?fp=..&code=..&net=.. (QR code), "" = the first address the others can use
+        void setExposure(const Exposure exposure); // how this device is reached (saved, applied at once)
         _cold _nodiscard QList<Member> members(void) const;
         _cold _nodiscard QList<net::Announce> nearby(void) const; // devices announced on the LAN, not members
 
