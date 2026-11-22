@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.8-pre] - 2026-11-22
 ### Added
 - **Typing on a phone screen**: the keys of the computer arrive as the characters of its layout (azerty, Shift, AltGr read from the keyboard layout of the session, US otherwise) in the focused field; Ctrl+V / C / X / A paste, copy, cut and select all there (the letter of the layout); the special keys stay keys
 - **The clipboard to the phone screens**: its text is sent to a phone in touchpad mode when it changes and when a cursor enters its screen (to paste there)
