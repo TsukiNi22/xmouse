@@ -109,6 +109,8 @@ struct Foreign {
     quint16 seq = 0; // last move accepted (an older one is dropped: reordered udp)
     bool hasSeq = false;
     QPointF velocity; // px / ms of the last moves (prediction while packets are missing)
+    bool passing = false; // private mode / no mouse right here: it crosses this device to reach the others, acts on nothing
+    bool told = false; // its owner was told why its clicks do nothing here
 
     // Where it is drawn now: ahead of the last packet along its speed while the next one is late (80 ms at most)
     _hot _nodiscard inline QPoint drawn(const qint64 now) const
@@ -237,6 +239,8 @@ class Hub: public QObject {
         bool _presenceDirty = false;
         quint16 _seq = 0;
         quint16 _presenceSeq = 0;
+        int _presenceTick = 0; // ticks of the presence timer (the home pointer is read every other one)
+        QPoint _lastHomePointer; // last local pointer told at home
         QSet<QString> _keysDown; // keys held while away (released on the way back)
         int _buttonsDown = 0;
         qint64 _pingUntil = 0; // ms: "look here" wave told until then

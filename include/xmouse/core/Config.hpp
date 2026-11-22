@@ -86,7 +86,8 @@ struct Settings {
 
     /* input */
     QString releaseShortcut = "Ctrl+Alt+Shift"; // brings the cursor back on this device at once
-    bool restorePointer = true; // the real pointer goes back where it was after a foreign click (when the platform tells it)
+    QString foreignMode = "pointer"; // a foreign cursor here: "pointer" moves the real pointer (default), "phantom" is drawn over the apps (the real pointer only jumps for a click)
+    bool restorePointer = true; // phantom mode: the real pointer goes back where it was after a foreign click (when the platform tells it)
     int edgeDelay = 0; // ms the cursor must push on an edge before it crosses (0 = at once)
     bool clipboard = true; // copies of this device go to the members (their rights decide)
     /* files and links */

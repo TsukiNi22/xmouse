@@ -103,6 +103,7 @@ enum class DeviceKind: std::uint8_t {
     #define XMOUSE_PRESENCE_HIDDEN 0x02 // the cursor is back on its own device (not drawn by the others)
     #define XMOUSE_PRESENCE_PING 0x04 // "look here" wave asked
     #define XMOUSE_PRESENCE_LASER 0x08 // laser pointer: its trail is drawn where it goes
+    #define XMOUSE_PRESENCE_UNKNOWN 0x10 // at home on a platform that does not tell the pointer: its position is unknown (not drawn)
 
 //----------------------------------------------------------------//
 /* PROTOTYPE */

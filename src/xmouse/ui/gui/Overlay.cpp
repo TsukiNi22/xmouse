@@ -62,6 +62,7 @@ _hot static QPainterPath arrow_path(const double s)
 
 _cold static QString state_text(const xmouse::core::Foreign& f, const int delay)
 {
+    if (f.passing) return "passing";
     switch (f.state) {
         case xmouse::core::ForeignState::Paused: return "locked: click again to ask";
         case xmouse::core::ForeignState::Asking: {
@@ -173,6 +174,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
     const double s = this->_screen ? std::clamp(this->_screen->logicalDotsPerInch() / 96.0, 1.0, 3.0) : 1.0;
     const qint64 now = now_ms();
     const QString self = this->_hub.group().self();
+    const bool pointerMode = this->_hub.config().settings().foreignMode == "pointer";
     QFont font = this->font();
 
     p.setRenderHint(QPainter::Antialiasing);
@@ -200,7 +202,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
     }
 
     for (const core::Foreign& f: this->_hub.foreign()) {
-        const QPoint at = f.drawn(now) - origin;
+        const QPoint at = (pointerMode && !f.passing ? f.local : f.drawn(now)) - origin; // pointer mode: where the real pointer was put
         const QString extra = state_text(f, this->_hub.config().settings().focusRequestDelay);
         const QString label = extra.isEmpty() ? f.name : f.name + "  -  " + extra;
         const QFontMetrics metrics(font);
@@ -209,7 +211,7 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
         QColor color = f.color;
 
         if (!this->rect().contains(at)) continue;
-        if (f.state == core::ForeignState::Paused || f.state == core::ForeignState::Asking) color = color.darker(160);
+        if (f.state == core::ForeignState::Paused || f.state == core::ForeignState::Asking || f.passing) color = color.darker(160);
 
         // Followed member: a halo around its cursor
         if (this->_hub.following() == f.id) {
@@ -220,12 +222,15 @@ void xmouse::ui::gui::OverlayWindow::paintEvent(QPaintEvent*)
             p.drawEllipse(QPointF(at), 22 * s, 22 * s);
         }
 
-        // Arrow: white border, the color of the member, held buttons shown as a filled ring
+        // Arrow: white border, the color of the member, held buttons shown as a filled ring; pointer mode: the real
+        // pointer is the cursor (its name only), unless it is held on the panel
         p.save();
         p.translate(at);
-        p.setPen(QPen(Qt::white, 1.6 * s));
-        p.setBrush(color);
-        p.drawPath(arrow_path(s));
+        if (!pointerMode || f.passing || f.state == core::ForeignState::Paused || f.state == core::ForeignState::Asking) {
+            p.setPen(QPen(Qt::white, 1.6 * s));
+            p.setBrush(color);
+            p.drawPath(arrow_path(s));
+        }
         if (f.buttons != 0) {
             p.setPen(QPen(color, 2 * s));
             p.setBrush(Qt::NoBrush);

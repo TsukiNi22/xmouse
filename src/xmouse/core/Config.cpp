@@ -183,6 +183,7 @@ void xmouse::core::Config::load(void)
 
     // Input
     s.releaseShortcut = o.value("releaseShortcut").toString(s.releaseShortcut);
+    s.foreignMode = o.value("foreignMode").toString(s.foreignMode) == "phantom" ? "phantom" : "pointer";
     s.restorePointer = o.value("restorePointer").toBool(s.restorePointer);
     s.edgeDelay = std::clamp(o.value("edgeDelay").toInt(s.edgeDelay), 0, 2000);
     s.clipboard = o.value("clipboard").toBool(s.clipboard);
@@ -228,6 +229,7 @@ void xmouse::core::Config::save(void) const
     o["privateMode"] = s.privateMode;
     o["rights"] = rights;
     o["releaseShortcut"] = s.releaseShortcut;
+    o["foreignMode"] = s.foreignMode;
     o["restorePointer"] = s.restorePointer;
     o["edgeDelay"] = s.edgeDelay;
     o["clipboard"] = s.clipboard;

@@ -42,14 +42,14 @@ void xmouse::core::Hub::foreignEnter_(const QString& id, const QJsonObject& o)
     const Rights rights = this->_config.rightsOf(id);
     Foreign f;
 
-    if (this->_config.settings().privateMode) {this->sendTo_(id, QJsonObject{{"t", "deny"}, {"reason", "private mode"}}); return;}
-    if (!rights.mouse) {this->sendTo_(id, QJsonObject{{"t", "deny"}, {"reason", "no mouse right here"}}); return;}
+    // Private mode / no mouse right: the cursor may cross this device to reach the others, it acts on nothing here
+    f.passing = this->_config.settings().privateMode || !rights.mouse;
     f.id = id;
     f.name = this->_layout.device(id).name.isEmpty() ? o.value("name").toString().left(64) : this->_layout.device(id).name;
     f.color = colorOf(id);
     f.local = QPoint(o.value("x").toInt(), o.value("y").toInt());
     f.seen = now_ms();
-    if (this->_foreign.contains(id)) f.state = this->_foreign.value(id).state;
+    if (this->_foreign.contains(id)) {f.state = this->_foreign.value(id).state; f.told = this->_foreign.value(id).told;}
     this->_foreign[id] = f;
     this->_log.info("input", id, "cursor of " + f.name + " entered");
     emit this->foreignChanged();
@@ -132,8 +132,12 @@ void xmouse::core::Hub::foreignPointer_(const QString& id, const QPoint& local, 
         if (!over) it->state = ForeignState::Free;
     }
 
-    // A drag: the real pointer follows the cursor that holds the button
-    if (it->buttons != 0 && this->_injector && it->state != ForeignState::Paused && it->state != ForeignState::Asking) this->_injector->mouseMove(this->injectPoint_(it->local).x(), this->injectPoint_(it->local).y());
+    // Pointer mode: the real pointer is the foreign cursor; phantom mode: it follows only a drag (the button held); a
+    // cursor passing over a private device never moves it
+    if (!it->passing && (it->buttons != 0 || this->_config.settings().foreignMode == "pointer") && this->_injector && it->state != ForeignState::Paused && it->state != ForeignState::Asking) {
+        this->_lastInject = now;
+        this->_injector->mouseMove(this->injectPoint_(it->local).x(), this->injectPoint_(it->local).y());
+    }
     if (!this->_predict.isActive()) this->_predict.start();
     emit this->foreignChanged();
 }
@@ -162,14 +166,22 @@ void xmouse::core::Hub::foreignButton_(const QString& id, const net::MouseButton
     bool anyHeld = false;
     QPoint at;
 
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).mouse) return;
+    if (it == this->_foreign.end()) return;
+    if (it->passing) {
+        if (down && !it->told) {
+            it->told = true;
+            this->sendTo_(id, QJsonObject{{"t", "access"}, {"text", this->_config.settings().privateMode ? "private mode: your cursor passes over this device without acting" : "no mouse right here: your cursor only passes over"}});
+        }
+        return;
+    }
+    if (!this->_injector || !this->_config.rightsOf(id).mouse) return;
     if (down && this->blocked_(*it, it->local)) return;
     if (!down && !(it->buttons & bit)) return; // the down was held back: its up too
     for (const Foreign& f: this->_foreign)
         if (f.buttons != 0) anyHeld = true;
 
-    // Teleported click: the real pointer goes there, clicks, and comes back after the last button up
-    if (down && !anyHeld && !this->_hasSavedPointer && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
+    // Phantom mode, teleported click: the real pointer goes there, clicks, and comes back after the last button up (pointer mode: it is there already)
+    if (down && !anyHeld && !this->_hasSavedPointer && this->_config.settings().foreignMode == "phantom" && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
         this->_savedPointer = this->_capture->pointer();
         this->_hasSavedPointer = true;
     }
@@ -192,9 +204,9 @@ void xmouse::core::Hub::foreignWheel_(const QString& id, const int dx, const int
     auto it = this->_foreign.find(id);
     QPoint at;
 
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).mouse) return;
+    if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).mouse) return;
     if (this->blocked_(*it, it->local)) return;
-    if (!this->_hasSavedPointer && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
+    if (!this->_hasSavedPointer && this->_config.settings().foreignMode == "phantom" && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
         this->_savedPointer = this->_capture->pointer();
         this->_hasSavedPointer = true;
     }
@@ -209,7 +221,7 @@ void xmouse::core::Hub::foreignKey_(const QString& id, const QString& code, cons
 {
     auto it = this->_foreign.find(id);
 
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
+    if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
     if (down && this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
     this->_keyboardOwner = id;
     this->_lastInject = now_ms();
@@ -220,7 +232,7 @@ void xmouse::core::Hub::foreignText_(const QString& id, const QString& text)
 {
     auto it = this->_foreign.find(id);
 
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
+    if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
     if (this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
     this->_lastInject = now_ms();
     this->_injector->text(text);
@@ -286,9 +298,9 @@ void xmouse::core::Hub::setPrivateMode(const bool enabled)
 {
     this->_config.settings().privateMode = enabled;
     this->_config.save();
-    if (enabled)
-        for (const QString& id: this->_foreign.keys())
-            this->kickCursor(id);
+    for (Foreign& f: this->_foreign) // the cursors here now only pass over (or act again)
+        f.passing = enabled || !this->_config.rightsOf(f.id).mouse;
+    emit this->foreignChanged();
     this->_log.info("settings", "", QString("private mode ") + (enabled ? "on" : "off"));
 }
 
@@ -296,6 +308,6 @@ void xmouse::core::Hub::setRights(const QString& id, const Rights& rights)
 {
     this->_config.settings().rights[id] = rights;
     this->_config.save();
-    if (!rights.mouse && this->_foreign.contains(id)) this->kickCursor(id);
+    if (this->_foreign.contains(id)) {this->_foreign[id].passing = this->_config.settings().privateMode || !rights.mouse; emit this->foreignChanged();}
     this->_log.info("settings", id, "rights changed");
 }

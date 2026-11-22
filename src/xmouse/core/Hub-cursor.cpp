@@ -44,8 +44,9 @@ void xmouse::core::Hub::onCrossed_(const QPoint& local, const QPoint& push)
     const QPoint global = this->_layout.toGlobal(self, local);
     const std::optional<Hit> hit = this->_layout.hit(global + push);
 
-    // Nothing there (a layout changed meanwhile) or the device cannot be reached: the pointer stays here
-    if (!hit || hit->device == self || !this->reachable(hit->device)) {
+    // Nothing there (a layout changed meanwhile), the device cannot be reached, or the push came from a foreign cursor
+    // driving the real pointer (pointer mode): the pointer stays here
+    if (!hit || hit->device == self || !this->reachable(hit->device) || (this->injectingNow() && !this->_foreign.isEmpty())) {
         this->_capture->release(local - push * 2);
         return;
     }
@@ -200,7 +201,13 @@ void xmouse::core::Hub::sendPresence_(void)
     QByteArray data;
     int flags = 0;
 
-    if (!this->_presenceDirty || !this->_group.joined()) return;
+    if (!this->_group.joined()) return;
+    // At home: the pointer the platform tells is followed live (10 Hz), not only once a second
+    if (!this->_away && this->_capture && this->_capture->knowsPointer() && (++this->_presenceTick % 2) == 0) {
+        const QPoint now = this->localPointer_();
+        if (now != this->_lastHomePointer) {this->_lastHomePointer = now; this->_presenceDirty = true;}
+    }
+    if (!this->_presenceDirty) return;
     this->_presenceDirty = false;
     if (this->_away) {
         on = this->_target;
@@ -210,6 +217,7 @@ void xmouse::core::Hub::sendPresence_(void)
         on = this->_group.self();
         global = this->_layout.toGlobal(on, this->localPointer_());
         flags |= XMOUSE_PRESENCE_HIDDEN;
+        if (!(this->_capture && this->_capture->knowsPointer()) && this->_padPointer.isNull()) flags |= XMOUSE_PRESENCE_UNKNOWN; // never a stale position on the maps
     }
     if (now_ms() < this->_pingUntil) flags |= XMOUSE_PRESENCE_PING;
     if (this->_laser) flags |= XMOUSE_PRESENCE_LASER;
@@ -293,24 +301,24 @@ void xmouse::core::Hub::padMotion_(const double dx, const double dy)
 void xmouse::core::Hub::padButton_(const net::MouseButton button, const bool down)
 {
     if (this->_away) {this->onButton_(button, down); return;}
-    if (this->_injector) this->_injector->mouseButton(button, down);
+    if (this->_injector && !this->_config.settings().privateMode) this->_injector->mouseButton(button, down);
 }
 
 void xmouse::core::Hub::padWheel_(const int dx, const int dy)
 {
     if (this->_away) {this->onWheel_(dx, dy); return;}
-    if (this->_injector) this->_injector->mouseWheel(dx, dy);
+    if (this->_injector && !this->_config.settings().privateMode) this->_injector->mouseWheel(dx, dy);
 }
 
 void xmouse::core::Hub::padKey_(const QString& code, const bool down)
 {
     if (this->_away) {this->onKey_(code, down); return;}
-    if (this->_injector) this->_injector->key(code, down);
+    if (this->_injector && !this->_config.settings().privateMode) this->_injector->key(code, down);
 }
 
 void xmouse::core::Hub::padText_(const QString& text)
 {
     if (text.isEmpty()) return;
     if (this->_away) {this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Text).bytes(text.left(4096).toUtf8()).data()); return;}
-    if (this->_injector) this->_injector->text(text.left(4096));
+    if (this->_injector && !this->_config.settings().privateMode) this->_injector->text(text.left(4096)); // private mode: the pad acts only on the other devices
 }
