@@ -103,6 +103,8 @@ scripts/install.sh --autostart       # xmouse at login (tray)
 scripts/install.sh --uninstall
 ```
 
+Windows: the installer of a release (`xmouse-windows-x64-setup.exe`, about 22 MB: Start menu, firewall of the private networks, start with Windows as an option, uninstall from the settings), or the portable zip:
+
 ```powershell
 # Windows (PowerShell): the zip of a release (xmouse-windows-x64.zip: xmouse.exe and its dll), extracted, then
 powershell -ExecutionPolicy Bypass -File install.ps1             # %LOCALAPPDATA%\Programs\xmouse, PATH, Start menu, firewall
@@ -117,7 +119,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 | ------ | ------ |
 | `scripts/install.sh` | `--deps` (dnf / apt / pacman / brew + libutils), `--uinput` (udev `uaccess` rule on `/dev/uinput`), `--gnome` (GNOME Shell extension), `--autostart`, `--prefix DIR`, `--uninstall` |
 | `scripts/install.ps1` | Windows, from the zip: `-Zip <file>`, `-Prefix`, `-Port`, `-Autostart`, `-NoFirewall`, `-Uninstall` (no zip next to it: the newest release) |
-| `scripts/bundle_windows.sh` | Fedora: cross compiles `xmouse.exe` and packs every dll (Qt, OpenSSL) in `dist/xmouse-windows-x64.zip` (`--no-build`: the exe already built; the CI attaches it to the releases) |
+| `scripts/bundle_windows.sh` | Fedora: cross compiles `xmouse.exe` and packs every dll (Qt, OpenSSL, stripped) in `dist/xmouse-windows-x64.zip`, `--installer`: `dist/xmouse-windows-x64-setup.exe` (NSIS `packaging/windows/xmouse.nsi`, `mingw32-nsis`), `--no-build`: the exe already built (the CI attaches both to the releases) |
 
 > [!TIP]
 > GNOME Wayland: the extension `xmouse@tsukini22.github.io` puts the barriers on the edges and captures the input itself: no dialog of the input capture portal (GNOME 50 asks it at every start of xmouse otherwise), and the real pointer goes back where it was after a foreign click. Only the `xmouse` program may use it, the events go to it only, Ctrl + Alt + Shift gives the input back even if xmouse does not answer. Without the extension (or disabled), xmouse uses the portal.
