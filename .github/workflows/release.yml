@@ -91,5 +91,5 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           prerelease=()
           case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
-          mapfile -t assets < <(find packages -type f \( -name '*.rpm' -o -name '*.deb' -o -name '*.pkg.tar.zst' \) | sort)
+          mapfile -t assets < <(find packages -type f \( -name '*.rpm' -o -name '*.deb' -o -name '*.pkg.tar.zst' -o -name '*.zip' \) | sort)
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md "${prerelease[@]}" "${assets[@]}"

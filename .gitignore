@@ -47,3 +47,6 @@ _CPack_Packages/
 # Build
 /build-windows
 ## End of project outputs
+
+## Windows bundle (scripts/bundle_windows.sh)
+/dist
