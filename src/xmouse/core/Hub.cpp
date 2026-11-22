@@ -39,6 +39,7 @@ File Description:
 #include <QBuffer>
 #include <QScreen>
 #include <QImage>
+#include <QFile>
 #include <cstdio>
 #include <cmath>
 #include <QUrl>
@@ -195,6 +196,20 @@ void xmouse::core::Hub::start(void)
         emit this->joinApproval(peer);
     });
     this->_mesh.start(s.bind, s.port, server, s.discovery);
+
+    // https://<address>:<port>/ shows what this device is and how to join (its /api/info: nothing secret)
+    this->_mesh.server().setInfo([this]() {
+        QFile apk(":/android/version.txt"); // the android app embedded in this build ("" = none: the page says so)
+        if (!apk.exists()) apk.setFileName(Config::dataDir() + "/version.txt");
+        return QJsonObject{
+            {"apk", apk.open(QIODevice::ReadOnly) ? QString::fromUtf8(apk.readAll()).trimmed().left(32) : QString()},
+            {"app", "xmouse"},
+            {"version", XMOUSE_VERSION},
+            {"name", this->_config.deviceName()},
+            {"network", this->_group.joined() ? this->_state.value("net/name").toString(this->_group.name()) : QString()},
+            {"identity", security::fingerprint_short(this->_certificate.fingerprint())},
+        };
+    });
 
     // How the others reach this device (the LAN announce of the mesh replaces the one of the exposure)
     exposure.discovery = false;
@@ -457,15 +472,17 @@ void xmouse::core::Hub::join(const QString& link, const QString& code)
 {
     QString host = link.trimmed();
     QString pin = code;
+    QByteArray expected;
     quint16 port = XMOUSE_DEFAULT_PORT;
 
-    // xmouse://host:port?fp=..&code=.. (QR code), https://host:port, host[:port]
-    if (host.startsWith("xmouse://") || host.startsWith("https://")) {
+    // https://host:port/?code=..&fp=..&net=.. (QR code, copied link), the old xmouse:// links, host[:port]
+    if (host.startsWith("https://") || host.startsWith("xmouse://")) {
         const QUrl url(host);
         const QUrlQuery query(url);
         host = url.host();
         if (url.port() > 0) port = static_cast<quint16>(url.port());
         if (pin.isEmpty()) pin = query.queryItemValue("code");
+        expected = QByteArray::fromHex(query.queryItemValue("fp").toLatin1()); // the identity of the device that gave the link
     } else if (host.count(':') == 1) {
         port = static_cast<quint16>(host.section(':', 1).toUInt());
         host = host.section(':', 0, 0);
@@ -474,7 +491,7 @@ void xmouse::core::Hub::join(const QString& link, const QString& code)
     if (security::normalize_code(pin).size() < 6) {emit this->joinResult(false, "the code shown on the other device is needed"); return;}
     if (this->_group.joined()) this->leave();
     this->_log.info("network", "", "joining through " + host + ":" + QString::number(port));
-    (void)this->_mesh.join(host, port, pin);
+    (void)this->_mesh.join(host, port, pin, expected.size() == 32 ? expected : QByteArray());
 }
 
 void xmouse::core::Hub::onJoined_(const QJsonObject& welcome, const QString& through)
@@ -580,11 +597,12 @@ QString xmouse::core::Hub::joinLink(const QString& host, const quint16 port) con
     }
     if (target.isEmpty() && !net::Exposure::lanAddresses().isEmpty()) target = net::Exposure::lanAddresses().front();
     if (target.isEmpty()) target = "127.0.0.1";
-    url.setScheme("xmouse");
+    url.setScheme("https"); // a browser opens the page of the device (how to join), xmouse joins with it
     url.setHost(target);
     url.setPort(targetPort == 0 ? this->_mesh.port() : targetPort);
-    query.addQueryItem("fp", QString::fromLatin1(this->_certificate.fingerprint().toHex()));
+    url.setPath("/");
     query.addQueryItem("code", this->_code.display());
+    query.addQueryItem("fp", QString::fromLatin1(this->_certificate.fingerprint().toHex()));
     query.addQueryItem("net", this->_group.name());
     url.setQuery(query);
     return url.toString();

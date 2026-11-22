@@ -95,7 +95,7 @@ class Mesh: public QObject {
         void stop(void);
         void setCandidates(const QString& id, const QList<QPair<QString, quint16>>& addresses); // empty = forgotten
         void dialNow(void); // a member appeared / the network came back: no wait
-        Peer* join(const QString& host, const quint16 port, const QString& code); // dial with a code (the result: joined / joinFailed)
+        Peer* join(const QString& host, const quint16 port, const QString& code, const QByteArray& expected = QByteArray()); // dial with a code (the result: joined / joinFailed), expected = identity of the link
         _hot void send(const QString& id, const QJsonObject& object);
         _hot void sendBinary(const QString& id, const QByteArray& data);
         _hot void broadcast(const QJsonObject& object, const QString& except = "");

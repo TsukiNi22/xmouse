@@ -231,9 +231,9 @@ void xmouse::net::Mesh::dialAll_(void)
     }
 }
 
-xmouse::net::Peer* xmouse::net::Mesh::join(const QString& host, const quint16 port, const QString& code)
+xmouse::net::Peer* xmouse::net::Mesh::join(const QString& host, const quint16 port, const QString& code, const QByteArray& expected)
 {
-    Peer* peer = Peer::dial(host, port, this->_ctx, code, this, true); // the device joined may lack ML-KEM: hybrid first, classic accepted
+    Peer* peer = Peer::dial(host, port, this->_ctx, code, this, true, expected); // the device joined may lack ML-KEM: hybrid first, classic accepted
 
     this->_pending.append(peer);
     this->watch_(peer);

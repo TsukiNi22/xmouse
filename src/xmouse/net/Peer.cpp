@@ -85,7 +85,7 @@ xmouse::net::Peer* xmouse::net::Peer::accept(WebSocket* ws, const PeerContext& c
     return peer;
 }
 
-xmouse::net::Peer* xmouse::net::Peer::dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code, QObject* parent, const bool compat)
+xmouse::net::Peer* xmouse::net::Peer::dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code, QObject* parent, const bool compat, const QByteArray& expected)
 {
     WebSocket* ws = WebSocket::connectTo(host, port, "/ws", compat ? ctx.tlsCompat : ctx.tls);
     Peer* peer = new Peer(ws, ctx, true, parent);
@@ -94,6 +94,7 @@ xmouse::net::Peer* xmouse::net::Peer::dial(const QString& host, const quint16 po
     peer->_remotePort = port;
     peer->_code = security::normalize_code(code);
     peer->_mode = code.isEmpty() ? "member" : "join";
+    peer->_expected = expected;
     QObject::connect(ws, &WebSocket::opened, peer, &Peer::onOpened_);
     QObject::connect(ws, &WebSocket::failed, peer, [peer](const QString& error) {peer->fail_(error);});
     return peer;
@@ -152,6 +153,10 @@ void xmouse::net::Peer::onOpened_(void)
     if (!socket) {this->fail_("no socket"); return;}
     this->_serverFingerprint = security::Certificate::fingerprintOf(socket->peerCertificate());
     if (this->_serverFingerprint.isEmpty()) {this->fail_("the device has no certificate"); return;}
+    if (!this->_expected.isEmpty() && !security::constant_equal(this->_expected, this->_serverFingerprint)) {
+        this->fail_("this is not the device of the link (another identity answered): nothing sent");
+        return;
+    }
     this->_state = PeerState::Hello;
 }
 

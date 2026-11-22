@@ -45,7 +45,7 @@ void xmouse::Node::init(const int argc, const char* const argv[])
         "every link secured end to end (TLS 1.3 + ML-KEM post-quantum key exchange, Argon2id codes).\n"
         "Commands:\n"
         "  xmouse                          the panel (graphical, or in the terminal with --tty / without display)\n"
-        "  xmouse join <address> [code]    join the network of a member (address[:port] or its xmouse:// link)\n"
+        "  xmouse join <address> [code]    join the network of a member (address[:port] or its https:// link)\n"
         "  xmouse scan                     list the devices announced on the LAN\n"
         "  xmouse paths                    print the configuration, data and log folders");
     std::vector<std::string> args;
@@ -96,7 +96,7 @@ void xmouse::Node::init(const int argc, const char* const argv[])
         else if (id == "version")    this->_command = "version";
     }
     if (this->_port < 0 || this->_port > 65535) throw utils::exception::ErrorException(utils::exception::ExternalCode::Usage, "Invalid port " + std::to_string(this->_port));
-    if (this->_command == "join" && this->_target.empty()) throw utils::exception::ErrorException(utils::exception::ExternalCode::Usage, "xmouse join <address|xmouse:// link> [code]");
+    if (this->_command == "join" && this->_target.empty()) throw utils::exception::ErrorException(utils::exception::ExternalCode::Usage, "xmouse join <address|https:// link> [code]");
     this->_config.load();
     onBasicVerbose("xmouse " XMOUSE_VERSION " - command " + this->_command);
 }

@@ -101,6 +101,7 @@ class Peer: public QObject {
         QByteArray _clientNonce;
         QByteArray _serverFingerprint; // certificate of the server side of this tls session
         QByteArray _proofKey; // join: argon2id of the code | member with an old epoch: the previous key
+        QByteArray _expected; // join: identity given by the link (fp), "" = not checked
         bool _stale = false; // server: the member proved itself with the previous key (it gets the new one)
         QTimer _ping; // every XMOUSE_PING_INTERVAL
         qint64 _lastSeen = 0; // ms, anything received
@@ -125,7 +126,7 @@ class Peer: public QObject {
     public:
         // ---------- Pre-Function -------- //
         _cold static Peer* accept(WebSocket* ws, const PeerContext& ctx, QObject* parent = nullptr); // server side (hello sent at once)
-        _cold static Peer* dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code = "", QObject* parent = nullptr, const bool compat = false); // client side, code = join, compat = tlsCompat
+        _cold static Peer* dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code = "", QObject* parent = nullptr, const bool compat = false, const QByteArray& expected = QByteArray()); // client side, code = join, compat = tlsCompat, expected = certificate fingerprint of the link
         _cold void approve(const bool accepted); // server: answer of the local person to a join
         _cold void close(const QString& reason);
 

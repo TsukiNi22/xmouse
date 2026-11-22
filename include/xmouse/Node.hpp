@@ -40,7 +40,7 @@ class Node {
         int _argc = 0;
         char** _argv = nullptr;
         std::string _command = "run"; // run | join | scan | paths | version
-        std::string _target = ""; // join: address or xmouse:// link
+        std::string _target = ""; // join: address or https:// link of a member
         std::string _code = ""; // join: code shown on the member
         bool _tty = false;
         bool _gui = false;
