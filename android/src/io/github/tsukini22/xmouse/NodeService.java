@@ -41,6 +41,7 @@ public class NodeService extends Service implements Node.Listener {
     private static final CopyOnWriteArrayList<Node.Listener> _listeners = new CopyOnWriteArrayList<>(); // the screens of the app
 
     private final Handler _ui = new Handler(Looper.getMainLooper());
+    private String _shown = ""; // text of the notification now
 
     static Node node() {return _node;}
 
@@ -118,6 +119,7 @@ public class NodeService extends Service implements Node.Listener {
     @SuppressWarnings("deprecation")
     private void foreground(String text) {
         Notification.Builder builder;
+        this._shown = text;
         PendingIntent open = PendingIntent.getActivity(this, 1, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager manager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -143,7 +145,7 @@ public class NodeService extends Service implements Node.Listener {
         Node node = _node;
         String text = node == null || !node.joined() ? "in no network yet" : "network " + node.networkName();
         this._ui.post(() -> {
-            this.foreground(text);
+            if (!text.equals(this._shown)) this.foreground(text);
             for (Node.Listener l: _listeners) l.changed();
         });
     }

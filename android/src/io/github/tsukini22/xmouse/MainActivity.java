@@ -110,6 +110,39 @@ public class MainActivity extends Activity {
         this._root.setBackgroundColor(BG);
         this.setContentView(this._root);
         if (!this.handleIntent(this.getIntent())) this.startOrSetup();
+        this.showLastCrash();
+    }
+
+    // The app stopped last time (App wrote it down): its trace, to copy and send
+    private void showLastCrash() {
+        File file = new File(this.getFilesDir(), App.CRASH);
+        String trace;
+        if (!file.exists()) return;
+        try (InputStream in = new FileInputStream(file)) {
+            trace = new String(readAll(in, 65536), "UTF-8");
+        } catch (Exception e) {
+            trace = "";
+        }
+        file.delete();
+        if (trace.isEmpty()) return;
+        final String text = trace;
+        TextView view = this.text(text, 11, TEXT);
+        ScrollView scroll = new ScrollView(this);
+        view.setTextIsSelectable(true);
+        view.setTypeface(Typeface.MONOSPACE);
+        view.setPadding(this.dp(16), this.dp(8), this.dp(16), this.dp(8));
+        scroll.addView(view);
+        new AlertDialog.Builder(this)
+            .setTitle(this.tr("xmouse stopped last time", "xmouse s'est arrêté la dernière fois"))
+            .setMessage(this.tr("The lent screen and the network of the phone were turned off so that it does not happen at every launch: turn them on again from the home. Copy this report to send it:",
+                "L'écran prêté et le réseau du téléphone ont été coupés pour que cela ne recommence pas à chaque lancement : réactivez-les depuis l'accueil. Copiez ce rapport pour l'envoyer :"))
+            .setView(scroll)
+            .setPositiveButton(this.tr("Copy", "Copier"), (d, w) -> {
+                android.content.ClipboardManager clipboard = (android.content.ClipboardManager) this.getSystemService(CLIPBOARD_SERVICE);
+                if (clipboard != null) clipboard.setPrimaryClip(android.content.ClipData.newPlainText("xmouse crash", text));
+            })
+            .setNegativeButton("OK", null)
+            .show();
     }
 
     @Override
@@ -263,7 +296,9 @@ public class MainActivity extends Activity {
     }
 
     private final Node.Listener _memberListener = new Node.Listener() {
-        @Override public void changed() {if (MainActivity.this._homeShown) MainActivity.this.refreshHome();}
+        @Override public void changed() {
+            if (MainActivity.this._homeShown && !MainActivity.this.homeState().equals(MainActivity.this._homeState)) MainActivity.this.refreshHome();
+        }
         @Override public void joinRequest(String pending, String name, String os) {
             new AlertDialog.Builder(MainActivity.this)
                 .setTitle(MainActivity.this.tr("A device wants to join", "Un appareil veut rejoindre"))
@@ -286,6 +321,7 @@ public class MainActivity extends Activity {
     };
 
     private boolean _homeShown = false;
+    private String _homeState = ""; // what the network and members cards show (rebuilt only when it changes)
     private LinearLayout _dynamic; // network and members: rebuilt when the node changes
     private WebView _localPad; // the touchpad page of the app (assets) driving the node
     private TextView _codeText;
@@ -365,11 +401,26 @@ public class MainActivity extends Activity {
         this._ui.post(this._tick);
     }
 
+    // Connected, in a network, its name, its members (online, rtt by 20 ms): the node tells a change every second
+    private String homeState() {
+        Node node = NodeService.node();
+        StringBuilder state = new StringBuilder();
+        state.append(this.online()).append('|').append(node == null ? "-" : (node.joined() ? "joined " + node.networkName() : "alone"));
+        try {
+            if (node != null && node.joined())
+                for (Node.Member m: node.members()) state.append('|').append(m.id).append(m.name).append(m.kind).append(m.online).append(m.rtt / 20);
+        } catch (RuntimeException e) {
+            state.append("|changing"); // the node changed its members meanwhile: drawn again next time
+        }
+        return state.toString();
+    }
+
     private void refreshHome() {
         LinearLayout box = this._dynamic;
         Node node = NodeService.node();
 
         if (box == null || !this._homeShown) return;
+        this._homeState = this.homeState();
         box.removeAllViews();
         this._codeText = null;
         this._qrImage = null;
@@ -442,7 +493,12 @@ public class MainActivity extends Activity {
                 .setMessage(this.tr("This phone leaves the network: it needs a new code to come back.", "Ce téléphone quitte le réseau : il lui faudra un nouveau code pour revenir."))
                 .setPositiveButton(this.tr("Leave", "Quitter"), (d, w) -> node.leave()).setNegativeButton(this.tr("Cancel", "Annuler"), null).show())));
 
-        List<Node.Member> list = node.members();
+        List<Node.Member> list;
+        try {
+            list = node.members();
+        } catch (RuntimeException e) {
+            list = new java.util.ArrayList<>(); // changed meanwhile: the next change draws them
+        }
         LinearLayout members = this.card(box, this.tr("Members", "Membres") + " (" + list.size() + ")");
         for (Node.Member m: list) {
             LinearLayout row = new LinearLayout(this);

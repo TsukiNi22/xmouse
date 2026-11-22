@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- Android: a crash is written down and shown at the next launch with its trace (Copy), the lent screen and the network of the phone turned off so that it cannot come back at every launch
+
+### Fixed
+- Android: **the app stopped at every launch** once its lent screen reached its computer (1.0.2): the size of the screen was written on the network from the main thread (Android ends the app then); the websocket of the screen writes and closes on its own thread
+- Android: the home was drawn again every second (a link could not be typed): only when the network or its members change; the notification of the network only when its text changes
+
 
 ## [v1.0.2-pre] - 2026-11-22
 ### Added
