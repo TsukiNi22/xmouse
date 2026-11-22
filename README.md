@@ -3,7 +3,7 @@
 ![Linux](https://img.shields.io/badge/Linux-ready-2ea44f) ![Windows](https://img.shields.io/badge/Windows-ready-2ea44f) ![Android](https://img.shields.io/badge/Android-ready-2ea44f) ![Browser pad](https://img.shields.io/badge/Browser%20pad-ready-2ea44f) ![macOS](https://img.shields.io/badge/macOS-soon-orange)
 
 > [!TIP]
-> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v1.0.12): user guide, concepts explained and troubleshooting (EN / FR, with search), and the interactive project graph.
+> Documentation [TsukiNi22/xmouse](https://tsukini22.github.io/xmouse/docs/) (v1.0.13): user guide, concepts explained and troubleshooting (EN / FR, with search), and the interactive project graph.
 
 A network of screens: link your devices once (code or QR code), place their screens on a shared layout, and **one cursor, one keyboard and one clipboard** go from one device to the other through the borders of the screens.
 Every link is **TLS 1.3 with a post-quantum hybrid key exchange (X25519 + ML-KEM-768)**; a phone (Android app or any browser) is a touchpad, a member and a screen of the layout.
