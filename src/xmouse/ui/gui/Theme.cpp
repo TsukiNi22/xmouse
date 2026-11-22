@@ -232,7 +232,6 @@ QToolTip { background: @surface; color: @text; border: 1px solid @border; paddin
 #code[off="true"] { color: @muted; border-left-color: @border; }
 #endpoint { background: transparent; border: none; border-bottom: 1px solid @border; }
 #endpoint[last="true"] { border-bottom: none; }
-#endpoint:hover { background: @accentSoft; }
 #tag { font-family: "@mono"; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 0; border: 1px solid @border; border-radius: 2px; color: @muted; background: @surfaceAlt; }
 #tag[kind="tailscale"] { color: @accent; border-color: @accent; background: @accentSoft; }
 #tag[kind="internet"] { color: @warning; border-color: @warning; }

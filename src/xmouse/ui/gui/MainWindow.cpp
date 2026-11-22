@@ -509,7 +509,7 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
         this->_connectTitle = connect->findChildren<QLabel*>().first();
         this->_joinAddress = new QLineEdit();
         this->_joinCode = new QLineEdit();
-        this->_joinAddress->setPlaceholderText("address[:port] of a member, or its xmouse:// link");
+        this->_joinAddress->setPlaceholderText("address[:port] of a member, or its https:// link");
         this->_joinCode->setPlaceholderText("K7F-29Q-XM4");
         this->_joinCode->setObjectName("codeInput");
         this->_joinCode->setMaximumWidth(170);
@@ -528,7 +528,7 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
         QObject::connect(this->_joinCode, &QLineEdit::returnPressed, join, &QPushButton::click);
         QObject::connect(this->_joinAddress, &QLineEdit::textChanged, this, [this](const QString& text) {
             const QString code = QUrlQuery(QUrl(text.trimmed())).queryItemValue("code");
-            if (text.trimmed().startsWith("xmouse://") && !code.isEmpty()) this->_joinCode->setText(code); // a pasted link brings its code
+            if ((text.trimmed().startsWith("https://") || text.trimmed().startsWith("xmouse://")) && !code.isEmpty()) this->_joinCode->setText(code); // a pasted link brings its code
         });
         QObject::connect(this->_nearby, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {this->_joinAddress->setText(item->data(Qt::UserRole).toString());});
         layout->addWidget(connect);
@@ -738,28 +738,32 @@ void xmouse::ui::gui::MainWindow::refreshStatus_(void)
 void xmouse::ui::gui::MainWindow::refreshEndpoints_(void)
 {
     const QList<net::Endpoint>& endpoints = this->_hub.exposure().endpoints();
+    const bool joined = this->_hub.group().joined();
     QLayout* layout = this->_endpointList->layout();
-    QString key = "";
+    QString key = joined ? "on" : "off";
 
     this->_exposure->setCurrentIndex(std::max(0, this->_exposure->findData(core::exposure_name(this->_hub.config().settings().exposure))));
-    this->_exposureStatus->setText(this->_hub.exposure().status() + (this->_hub.group().joined() ? "." : ". The others reach this device through these paths once it is in a network."));
+    // No network: every path is closed (like xdesk with the sharing off), the choice above applies once in one
+    this->_exposureStatus->setText(joined ? this->_hub.exposure().status() + "." : QString("No network: every path is closed. The choice above applies once this device creates or joins a network."));
 
     // Rebuilt only when an address changes (refreshed every second)
-    for (const net::Endpoint& e: endpoints)
-        key += "\n" + e.label + "|" + e.host + "|" + QString::number(e.port) + "|" + e.reach + "|" + e.ip;
+    if (joined)
+        for (const net::Endpoint& e: endpoints)
+            key += "\n" + e.label + "|" + e.host + "|" + QString::number(e.port) + "|" + e.reach + "|" + e.ip;
     if (key == this->_endpointKey) return;
     this->_endpointKey = key;
     while (QLayoutItem* item = layout->takeAt(0)) {
         if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+    if (!joined) return; // nothing to reach yet
     if (endpoints.isEmpty()) {
         layout->addWidget(make_label("Looking for the addresses of this device...", "muted"));
         return;
     }
     for (int i = 0; i < endpoints.size(); ++i) {
         const net::Endpoint& e = endpoints[i];
-        const QString address = "xmouse://" + e.host + ":" + QString::number(e.port);
+        const QString address = "https://" + e.host + ":" + QString::number(e.port);
         const QString kind = e.label == "Tailscale" ? "tailscale" : (e.label == "LAN" ? "lan" : (e.label == "This PC" ? "local" : "internet"));
         QFrame* row = new QFrame(this->_endpointList);
         QHBoxLayout* rowLayout = new QHBoxLayout(row);
@@ -783,7 +787,7 @@ void xmouse::ui::gui::MainWindow::refreshEndpoints_(void)
         texts->addWidget(reach);
         copy->setToolTip("Copy " + e.host + ":" + QString::number(e.port) + " (Connect to a network on the other device)");
         qr->setToolTip("QR code of this address (with the code)");
-        qr->setVisible(kind != "local" && this->_hub.group().joined());
+        qr->setVisible(kind != "local"); // "This device" only: no QR code for another device
         rowLayout->addWidget(tag, 0, Qt::AlignVCenter);
         rowLayout->addLayout(texts, 1);
         rowLayout->addWidget(copy);
