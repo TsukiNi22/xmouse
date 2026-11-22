@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- Foreign cursors: **pointer** mode (default: the cursor of a member moves the real pointer of the device) and **phantom** mode (drawn over the apps, the real pointer stays yours), `foreignMode` in the settings
+- Android: the screen lent **without Accessibility** (phantom: the cursors drawn over the apps, "Display over other apps", a foreground service), the Accessibility service taking over to touch; the update checked at every launch / return to the app
+- Map: **Recenter** button in the corner, the background dragged to move the view, wheel zoom
+
+### Changed
+- **Private mode**: the cursors (members and the pads of the device) pass over a private device to reach the others, nothing is clicked / scrolled / typed there (they were sent back)
+- The phones and web pads are in the members as soon as they connect (online / offline), not only once a screen is lent
+- The map never recenters by itself; my cursor is followed live at home (10 Hz), an unknown position is not drawn
+
+### Fixed
+- The buttons of the tables were cut (rows too low)
+- Two cursors of one member could fight with the crossing of an edge in pointer mode (the injected moves never cross)
+
 
 ## [v1.0.0-pre] - 2026-11-22
 ### Added
