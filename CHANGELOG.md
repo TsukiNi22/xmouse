@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.14-pre] - 2026-11-22
 ### Changed
 - **The phone screen is touched live**: a cursor of a computer is a finger there (continued strokes of a frame): the left button puts it down and lifts it, a drag follows the cursor as it moves instead of being replayed at the release, a long press lasts what the button is held; the wheel moves a finger as it turns, lifted still after the last notch (never flung); the right button is a long press at once
 - Phone screen, Android 13+: in a focused text field the keys are the real key events of a keyboard (the input method of the Accessibility service), so every key and shortcut of the app works there, and the text typed is the real input of the field (the undo of the app included)
