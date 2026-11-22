@@ -35,6 +35,7 @@ File Description:
 #include <unistd.h>
 #include <libei.h>
 #include <dlfcn.h>
+#include <QDateTime>
 #include <QTimer>
 #include <QFile>
 #include <cmath>
@@ -52,6 +53,8 @@ File Description:
 #define EI_LIBRARY "libei.so.1"
 #define RESTORE_TOKEN_FILE "portal-input-capture.token" // in the data folder (0600)
 #define SMOOTH_SCROLL_FACTOR 8.0 // libei smooth scroll (logical pixels) -> 1/120 of a notch
+#define RECOVER_INTERVAL 300 // ms between two recoveries of a capture kept by the compositor
+#define RECOVER_REARM 150 // ms between the Disable and the Enable of a recovery
 
 //----------------------------------------------------------------//
 /* STRUCT */
@@ -506,6 +509,20 @@ void xmouse::platform::PortalCapture::onZonesChanged_(const QDBusObjectPath& ses
     this->getZones_(); // a screen plugged / moved: the barriers set again on the new zones
 }
 
+void xmouse::platform::PortalCapture::recover_(void)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    // The compositor still sends the input although it was released here (a Release lost, or refused for an old
+    // activation): the person would have a dead mouse and keyboard. Disable ends every capture of the session (the
+    // pointer comes back to the desktop), the barriers are armed again just after
+    if (now - this->_recoveredAt < RECOVER_INTERVAL || this->_session.isEmpty()) return;
+    this->_recoveredAt = now;
+    this->_enabled = true; // the Disable is sent whatever the state known here
+    this->setEnabled_(false);
+    QTimer::singleShot(RECOVER_REARM, this, [this]() {if (!this->_barriers.isEmpty() && !this->_enabled) this->setEnabled_(true);});
+}
+
 void xmouse::platform::PortalCapture::dispatch_(void)
 {
     struct ei* ei = static_cast<struct ei*>(this->_ei);
@@ -526,8 +543,10 @@ void xmouse::platform::PortalCapture::dispatch_(void)
                 return;
             case EI_EVENT_POINTER_MOTION:
                 if (this->_capturing) emit this->motion(this->_api->pointerDx(event), this->_api->pointerDy(event));
+                else this->recover_();
                 break;
             case EI_EVENT_BUTTON_BUTTON:
+                if (!this->_capturing) this->recover_();
                 if (this->_capturing) {
                     const std::optional<net::MouseButton> button = button_from_evdev(this->_api->buttonButton(event));
                     if (button) emit this->button(*button, this->_api->buttonIsPress(event));
@@ -547,6 +566,7 @@ void xmouse::platform::PortalCapture::dispatch_(void)
                 this->_frameSmooth = QPointF();
                 break;
             case EI_EVENT_KEYBOARD_KEY:
+                if (!this->_capturing) this->recover_();
                 if (this->_capturing) {
                     const QString code = code_from_evdev(static_cast<int>(this->_api->keyboardKey(event)));
                     if (!code.isEmpty()) emit this->key(code, this->_api->keyboardIsPress(event));

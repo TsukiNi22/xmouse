@@ -172,7 +172,16 @@ void xmouse::core::Hub::checkAway_(void)
     // The real pointer of this device, read 5 times a second while away: left with a pad, it moves = the person took
     // the mouse here; captured, it is found far from where it is held twice in a row = the capture was lost (the
     // compositor, an old extension): the cursor comes back where the pointer is, never stuck away
-    if (!this->_awayWatch || !this->_capture || (++this->_awayTick % AWAY_CHECK_TICKS) != 0) return;
+    if (!this->_capture || (++this->_awayTick % AWAY_CHECK_TICKS) != 0) return;
+
+    // Away with the capture, but the capture holds nothing any more (ended without a word, any backend): back here
+    if (!this->_awayByPad && !this->_capture->capturing()) {
+        if (++this->_awayLost < 2) return;
+        this->_log.info("input", this->_target, "the capture of the pointer ended without a word: the cursor comes back");
+        this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
+        return;
+    }
+    if (!this->_awayWatch) return;
     now = this->_capture->pointer();
     if (this->injectingNow()) {this->_awayPointer = now; return;} // a foreign cursor moved it (pointer mode)
     moved = (now - this->_awayPointer).manhattanLength();
