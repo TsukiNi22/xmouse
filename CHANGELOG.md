@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- GNOME: when the xmouse extension is installed but not loaded yet (GNOME loads a new extension only at the next login), the status and a notice say so: log out and back in once, the input capture dialog never comes back (the portal of Fedora is at version 1: no restore token, a dialog at every start)
+
+### Fixed
+- **A dead mouse and keyboard with the portal capture**: the compositor could keep the capture after a release (lost, or refused for an old activation) and every input was ignored; input coming while nothing is captured now disables the capture and arms it again (the pointer given back at once)
+- The cursor comes back when the capture holds nothing any more although it is away (ended without a word, every backend)
+
 
 ## [v1.0.5-pre] - 2026-11-22
 ### Added

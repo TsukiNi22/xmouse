@@ -26,10 +26,12 @@ File Description:
 #include "xmouse/core/Routing.hpp"
 #include "xmouse/core/Tools.hpp"
 #include "xmouse/core/Hub.hpp"
+#include <QStandardPaths>
 #include <QJsonDocument>
 #include <QClipboard>
 #include <QJsonArray>
 #include <functional>
+#include <QFileInfo>
 #include <QDateTime>
 #include <QUrlQuery>
 #include <algorithm>
@@ -328,9 +330,16 @@ void xmouse::core::Hub::startCapture_(void)
         this->_captureError.clear();
         this->updateEdges_();
         this->_capture->setWindowMove(this->windowMoveEnabled() && this->_windows != nullptr);
-        if (this->_capture->name() == "portal" && qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("GNOME", Qt::CaseInsensitive))
-            this->setStatus_("edges: portal (GNOME asks once per run: scripts/install.sh --gnome removes the dialog)");
-        else this->setStatus_("edges: " + this->_capture->name());
+        if (this->_capture->name() == "portal" && qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("GNOME", Qt::CaseInsensitive)) {
+            // Installed but not running: GNOME loads a new extension only at the next login (Wayland)
+            const QString uuid = "/gnome-shell/extensions/xmouse@tsukini22.github.io/extension.js";
+            const bool installed = QFileInfo::exists(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + uuid) || QFileInfo::exists("/usr/share" + uuid);
+            if (installed) {
+                this->setStatus_("edges: portal (the xmouse GNOME extension is installed but not loaded yet: log out and back in once, then no dialog)");
+                this->_log.warn("input", "", "the xmouse GNOME extension is installed but GNOME has not loaded it: log out and back in once (the portal asks at every start until then)");
+                emit this->notice("The xmouse GNOME extension is installed but not loaded yet: log out and back in once, the input capture dialog then never comes back");
+            } else this->setStatus_("edges: portal (GNOME asks once per run: scripts/install.sh --gnome removes the dialog)");
+        } else this->setStatus_("edges: " + this->_capture->name());
     });
     QObject::connect(this->_capture.get(), &platform::IInputCapture::failed, this, [this](const QString& error) {
         this->_captureError = error;
