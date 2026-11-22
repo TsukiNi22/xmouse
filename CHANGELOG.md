@@ -19,7 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Changed
+- **[MAJOR]** The links of a device are `https://host:port/?code=..&fp=..&net=..` (QR code, copied link, addresses shown), no more `xmouse://` (still accepted when joining); joining with a link checks that the device answering has the identity of the link
+- The paths of `Who can reach this device` only show once the device is in a network (like xdesk with the sharing off)
+
 ### Added
+- Page of every device on its address (`web/`, embedded): the device and its network (`/api/info`), the code of the link, how to install xmouse on the platform of the visitor first (Linux packages, Windows zip, the Android app the device carries, macOS planned, iOS not available, the sources), then how to join
+- Windows zip `xmouse-windows-x64.zip` (`scripts/bundle_windows.sh`: xmouse.exe, Qt, OpenSSL, `install.ps1`), built by the CI and attached to the releases; `scripts/install.ps1` (PATH, Start menu, firewall, autostart, uninstall; takes the newest release, pre-releases included)
 - GNOME Shell extension `xmouse@tsukini22.github.io` and its backend `ShellCapture`: barriers and input capture on GNOME Wayland without the portal dialog, the pointer position (the real pointer goes back after a foreign click on Wayland too); only `xmouse` may call it (sender checked), unicast signals, released when xmouse stops, Ctrl + Alt + Shift and a watchdog give the input back; the portal stays the fallback
 - `scripts/install.sh --gnome`, the extension installed by the packages in `share/gnome-shell/extensions`
 - Network page in the way of the overview of xdesk: connection code card (countdown bar, identity, `Copy` / `QR code` / `New code`), status card (edges, input, encryption, members), `Who can reach this device` with `Open to` (LAN only, Tailscale, UPnP, bore, ngrok, manual: applied at once) and a row per address (copy, QR code), then `Connect to a network`; the QR code in its own window with the choice of the address
@@ -27,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Network switch at the bottom of the sidebar (like the sharing switch of xdesk): red `Leave the network` (the others stay linked, there is no server), green `Create or join`
 
 ### Fixed
+- The rows of `Who can reach this device` stayed highlighted (hover style of xdesk on rows that are not clickable)
 - The `setup.sh` options `--pre` and `--windows` never changed the package installed
 - Wayland: the input capture was never armed after the dialog (`session_handle` is an object path)
 - Wayland: the input capture dialog only shows once an edge opens on a device online (not at every start); remembered with a restore token on the portals >= v2 (`CreateSession2` + `Start`, `persist_mode` 2), GNOME 50 implements the version 1 only
