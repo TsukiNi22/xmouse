@@ -143,7 +143,14 @@ set(SRC_SHARED
     src/xmouse/core/AuditLog.cpp
     src/xmouse/core/State.cpp
     src/xmouse/core/Layout.cpp
+    src/xmouse/core/Routing.cpp
     src/xmouse/core/Hub.cpp
+    src/xmouse/core/Hub-cursor.cpp
+    src/xmouse/core/Hub-foreign.cpp
+    src/xmouse/core/Hub-route.cpp
+    src/xmouse/core/Hub-files.cpp
+    src/xmouse/core/Hub-pads.cpp
+    src/xmouse/core/Hub-windows.cpp
 
     ## Security (sub-part: security)
     src/xmouse/security/Crypto.cpp
@@ -154,6 +161,7 @@ set(SRC_SHARED
     ## Network (sub-part: net)
     src/xmouse/net/Protocol.cpp
     src/xmouse/net/WebSocket.cpp
+    src/xmouse/net/Datagrams.cpp
     src/xmouse/net/Server.cpp
     src/xmouse/net/Exposure.cpp
     src/xmouse/net/Peer.cpp
@@ -165,12 +173,15 @@ set(SRC_SHARED
     src/xmouse/platform/Clipboard.cpp
     src/xmouse/platform/InputCapture.cpp
     src/xmouse/platform/GrabCapture.cpp
+    src/xmouse/platform/WindowSharing.cpp
 
     ## Interface (sub-part: ui)
     src/xmouse/ui/Ui.cpp
     src/xmouse/ui/gui/Theme.cpp
     src/xmouse/ui/gui/Overlay.cpp
     src/xmouse/ui/gui/LayoutView.cpp
+    src/xmouse/ui/gui/WindowViewer.cpp
+    src/xmouse/ui/gui/DropShelf.cpp
     src/xmouse/ui/gui/MainWindow.cpp
     src/xmouse/ui/tty/Tui.cpp
 
@@ -186,20 +197,31 @@ set(SRC_LINUX
 set(SRC_DBUS
     src/xmouse/platform/linux/PortalCapture.cpp
     src/xmouse/platform/linux/ShellCapture.cpp
+    src/xmouse/platform/linux/ShellWindows.cpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/platform/linux/PortalCapture.hpp # Q_OBJECT (moc)
     ${CMAKE_SOURCE_DIR}/include/xmouse/platform/linux/ShellCapture.hpp # Q_OBJECT (moc)
 )
 set(SRC_XTEST
     src/xmouse/platform/linux/XTestInjector.cpp
+    src/xmouse/platform/linux/X11Windows.cpp
 )
 set(SRC_WINDOWS
     src/xmouse/platform/windows/SendInputInjector.cpp
     src/xmouse/platform/windows/HookCapture.cpp
+    src/xmouse/platform/windows/WinWindows.cpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/platform/windows/HookCapture.hpp # Q_OBJECT (moc)
+)
+set(SRC_MACOS
+    src/xmouse/platform/macos/MacCapture.cpp
+    src/xmouse/platform/macos/MacInjector.cpp
+    src/xmouse/platform/macos/MacKeymap.cpp
+    ${CMAKE_SOURCE_DIR}/include/xmouse/platform/macos/MacCapture.hpp # Q_OBJECT (moc)
 )
 if(WIN32)
     list(APPEND SRC_SHARED ${SRC_WINDOWS})
-elseif(NOT APPLE)
+elseif(APPLE)
+    list(APPEND SRC_SHARED ${SRC_MACOS})
+else()
     list(APPEND SRC_SHARED ${SRC_LINUX})
     if(XMOUSE_HAS_DBUS)
         list(APPEND SRC_SHARED ${SRC_DBUS})
@@ -220,10 +242,13 @@ set(HDR_MOC
     ${CMAKE_SOURCE_DIR}/include/xmouse/net/Exposure.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/net/Server.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/net/WebSocket.hpp
+    ${CMAKE_SOURCE_DIR}/include/xmouse/net/Datagrams.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/platform/Clipboard.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/security/PairingCode.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/ui/gui/Overlay.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/ui/gui/LayoutView.hpp
+    ${CMAKE_SOURCE_DIR}/include/xmouse/ui/gui/WindowViewer.hpp
+    ${CMAKE_SOURCE_DIR}/include/xmouse/ui/gui/DropShelf.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/ui/gui/MainWindow.hpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/ui/tty/Tui.hpp
 )
@@ -392,6 +417,8 @@ if(XMOUSE_HAS_XTEST)
 endif()
 if(WIN32)
     list(APPEND XMOUSE_LIBS user32 gdi32 advapi32 ws2_32 iphlpapi)
+elseif(APPLE)
+    list(APPEND XMOUSE_LIBS "-framework ApplicationServices" "-framework CoreFoundation") # event tap, CGEvent, Accessibility
 endif()
 set(XMOUSE_DEFINITIONS
     $<$<BOOL:${XMOUSE_HAS_DBUS}>:XMOUSE_HAS_DBUS>
