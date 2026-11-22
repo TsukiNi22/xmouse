@@ -65,9 +65,11 @@
                 <button type="button" data-mod="AltLeft">Alt</button>
                 <button type="button" data-mod="ShiftLeft">Shift</button>
                 <button type="button" data-mod="MetaLeft">Super</button>
+                <button type="button" data-mod="AltRight">AltGr</button>
                 <button type="button" data-key="Escape">Esc</button>
                 <button type="button" data-key="Tab">Tab</button>
                 <button type="button" data-key="Delete">Del</button>
+                <button type="button" data-key="Insert">Ins</button>
             </div>
             <div class="row">
                 <button type="button" data-key="Home">Home</button>
@@ -81,17 +83,40 @@
             </div>
             <div class="row">
                 <button type="button" data-combo="ControlLeft+KeyC">Copy</button>
+                <button type="button" data-combo="ControlLeft+KeyX">Cut</button>
                 <button type="button" data-combo="ControlLeft+KeyV">Paste</button>
                 <button type="button" data-combo="ControlLeft+KeyZ">Undo</button>
+                <button type="button" data-combo="ControlLeft+KeyY">Redo</button>
                 <button type="button" data-combo="ControlLeft+KeyA">All</button>
+            </div>
+            <div class="row">
+                <button type="button" data-key="F5">Reload</button>
+                <button type="button" data-combo="ControlLeft+KeyF">Find</button>
+                <button type="button" data-combo="ControlLeft+KeyS">Save</button>
+                <button type="button" data-combo="ControlLeft+KeyT">New tab</button>
+                <button type="button" data-combo="ControlLeft+KeyW">Close tab</button>
                 <button type="button" data-combo="AltLeft+Tab">Alt Tab</button>
-                <button type="button" id="fkeysToggle">F1-F12</button>
+                <button type="button" data-combo="AltLeft+F4">Alt F4</button>
             </div>
             <div class="row">
                 <button type="button" data-button="3">&#9664; Back</button>
                 <button type="button" data-button="4">Forward &#9654;</button>
+                <button type="button" data-key="MetaLeft">Super</button>
+                <button type="button" data-key="ContextMenu">Menu</button>
+                <button type="button" data-key="PrintScreen">PrtSc</button>
+                <button type="button" id="fkeysToggle">F1-F24</button>
+                <button type="button" id="mediaToggle">Media</button>
             </div>
             <div class="row" id="fkeys" hidden></div>
+            <div class="row" id="media" hidden>
+                <button type="button" data-key="MediaTrackPrevious">Prev</button>
+                <button type="button" data-key="MediaPlayPause">Play / Pause</button>
+                <button type="button" data-key="MediaTrackNext">Next</button>
+                <button type="button" data-key="MediaStop">Stop</button>
+                <button type="button" data-key="AudioVolumeMute">Mute</button>
+                <button type="button" data-key="AudioVolumeDown">Vol -</button>
+                <button type="button" data-key="AudioVolumeUp">Vol +</button>
+            </div>
             <textarea id="typing" rows="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Type here: it goes where the cursor clicked"></textarea>
             <div class="row">
                 <button type="button" data-key="Backspace">&#9003; Backspace</button>

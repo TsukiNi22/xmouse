@@ -15,6 +15,8 @@
     const SEND_INTERVAL = 16; // ms between two moves sent (the sum of the deltas)
     const TAP_TIME = 220; // ms: a touch shorter than this, that did not move, is a click
     const TAP_MOVE = 10; // px a tap may move
+    const REPEAT_DELAY = 500; // ms a key button is held before it repeats (like a keyboard)
+    const REPEAT_INTERVAL = 50; // ms between two of its repeats
     const PINCH_START = 28; // px the two fingers must spread / close before it is a zoom (a scroll keeps their distance)
     const ZOOM_STEP = 2.4; // 1/120 of a notch per px of spread (Ctrl + wheel on the device: a zoom where the cursor is)
     const SWIPE_NAV = 90; // px three fingers must cross sideways for back / forward
@@ -290,14 +292,45 @@
         send(ch ? {t: "key", code: code, down: down, char: ch} : {t: "key", code: code, down: down});
     }
 
-    // A key with the sticky modifiers around it (they are released after it); ch: the letter of a shortcut, the device
-    // takes the key that types it on its own layout (azerty Ctrl + a is its KeyQ)
-    function press(code, ch) {
-        mods.forEach((m) => key(m, true));
+    // A key with the sticky modifiers around it (they are released after it, in the other order); ch: the letter of a
+    // shortcut, the device takes the key that types it on its own layout (azerty Ctrl + a is its KeyQ); held: the
+    // modifiers of a key repeated (kept for its repeats)
+    function press(code, ch, held) {
+        const list = held || [...mods];
+        list.forEach((m) => key(m, true));
         key(code, true, ch);
         key(code, false, ch);
-        mods.forEach((m) => key(m, false));
-        clearMods();
+        list.slice().reverse().forEach((m) => key(m, false));
+        if (!held) clearMods();
+    }
+
+    // A key button: a tap presses it once; held still, it repeats like a key of a keyboard (Backspace, the arrows, the
+    // volume...) with the sticky modifiers of its press; a finger that scrolls the row presses nothing
+    function repeatable(button, code) {
+        let timer = 0;
+        let repeated = false;
+        let start = null;
+        const stop = () => {clearTimeout(timer); timer = 0;};
+        button.addEventListener("pointerdown", (e) => {
+            const held = [...mods];
+            repeated = false;
+            start = {x: e.clientX, y: e.clientY};
+            stop();
+            timer = setTimeout(() => {
+                repeated = true;
+                clearMods();
+                press(code, "", held);
+                timer = setInterval(() => press(code, "", held), REPEAT_INTERVAL);
+            }, REPEAT_DELAY);
+        });
+        button.addEventListener("pointermove", (e) => {
+            if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_MOVE) stop(); // the row scrolls
+        });
+        ["pointerup", "pointerleave", "pointercancel"].forEach((type) => button.addEventListener(type, stop));
+        button.addEventListener("click", () => {
+            if (!repeated) press(code); // a tap (a hold already pressed it)
+            repeated = false;
+        });
     }
 
     const MODIFIERS = ["ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"];
@@ -320,7 +353,7 @@
         else mods.add(m);
         b.classList.toggle("on", mods.has(m));
     }));
-    document.querySelectorAll("[data-key]").forEach((b) => b.addEventListener("click", () => press(b.dataset.key)));
+    document.querySelectorAll("[data-key]").forEach((b) => repeatable(b, b.dataset.key));
     document.querySelectorAll("[data-combo]").forEach((b) => b.addEventListener("click", () => {
         const parts = b.dataset.combo.split("+");
         const letter = (p) => /^Key[A-Z]$/.test(p) ? p.slice(3).toLowerCase() : ""; // the device takes its own key for it (azerty)
@@ -329,7 +362,7 @@
     }));
 
     const fkeys = $("fkeys");
-    for (let i = 1; i <= 12; ++i) {
+    for (let i = 1; i <= 24; ++i) {
         const b = document.createElement("button");
         b.type = "button";
         b.textContent = "F" + i;
@@ -337,6 +370,7 @@
         fkeys.append(b);
     }
     $("fkeysToggle").addEventListener("click", () => {fkeys.hidden = !fkeys.hidden;});
+    $("mediaToggle").addEventListener("click", () => {$("media").hidden = !$("media").hidden;});
     $("keyboardToggle").addEventListener("click", () => {
         $("keys").hidden = !$("keys").hidden;
         $("keyboardToggle").classList.toggle("on", !$("keys").hidden);
