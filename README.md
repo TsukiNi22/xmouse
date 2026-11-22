@@ -48,7 +48,7 @@ The moves go by **encrypted UDP** when it passes (drawn ahead while a packet is 
 | Android screen | The app lends the screen of the phone to the layout (Accessibility service): the cursors of the network are drawn over its apps, their clicks / drags / scrolls become touches, their text goes in the focused field, Esc = back; reached through the device it is paired with; the app updates itself from that device |
 | Windows between devices | With the network wide switch on, a window **dragged on an edge** (GNOME, Windows) or chosen on the map goes to the device on the other side: streamed there (JPEG frames, up to `windowFps`), driven from there (mouse, wheel, keys), given back by closing it; the document it shows can be **opened there instead** (handoff); switch off: the edge behaves as usual |
 | Interfaces | Qt panel (Network, Layout, Activity, Settings, tray, Auto / Light / Dark) or terminal panel (`--tty`, automatic without display: status, code, members, join / accept / private / place / ping / laser / follow / profile / link / send / pads commands) |
-| Platforms | Linux Wayland (GNOME: the xmouse GNOME Shell extension, no dialog; else the portal InputCapture + libei, as on KDE; uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (event tap + CGEvent, Accessibility permission), Android (app), any browser (pad) |
+| Platforms | Linux Wayland (GNOME: the xmouse GNOME Shell extension, no dialog; else the portal InputCapture + libei, as on KDE; uinput), Linux X11 (XTest / uinput, pointer grab), Windows (low level hooks, SendInput over the whole virtual desktop), macOS (event tap + CGEvent, Accessibility permission: written, its build waits for libutils on macOS), Android (app), any browser (pad) |
 
 ## Security
 
@@ -345,7 +345,7 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 > - Drag and drop to an edge needs the platform to tell the held button (GNOME extension 2, Windows, macOS): elsewhere, drop the files on the map or use Send files to.
 > - Windows between devices: dragged on an edge on GNOME (extension 2) and Windows; the picture of a window needs it on screen (not minimized); macOS shares its cursor, keyboard and clipboard but not its windows.
 > - Android: the foreign cursors touch through the Accessibility service (taps, long presses for the right button, drags, scrolls, text in the focused field, Esc = back); a pad page in a browser drives its device but cannot lend its screen; iOS lets no app do either.
-> - macOS: built from the sources (Homebrew); the Accessibility permission is asked at the first start (edges and injection need it).
+> - macOS: the backends are written (`src/xmouse/platform/macos/`, `Build - macOS (CI)` by hand) but cannot be built yet: libutils does not build on macOS (its epoll parts are Linux only, the Windows port uses WSAPoll); once it does, the Accessibility permission is asked at the first start.
 
 ## Roadmap
 
@@ -354,7 +354,7 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 | `v0.1` ✓ | Desktop: Linux (Wayland + X11) and Windows, network (code / QR, LAN, Tailscale, UPnP), layout, cursor through the borders, named overlays, teleported clicks, keyboard, text / image clipboard, panel protection (60 s request), rights, private mode, terminal panel |
 | `v0.2` ✓ | Encrypted UDP for the moves with prediction / reordering on lossy links, relay through a member, layout profiles, ping "look here", follow a member, laser pointer, files in the clipboard, drag and drop of files, send a link |
 | `v0.3` ✓ | Android application (touchpad multi finger, keyboard with special keys and combos, overlay of the foreign cursors) and the web pad |
-| `v0.4` ✓ | macOS, windows between devices (handoff of a document, streamed window), with the network wide switch |
+| `v0.4` ✓ | Windows between devices (handoff of a document, streamed window), with the network wide switch; macOS backends written (the build waits for libutils on macOS) |
 | `v1.0.0` | Stable: desktop + Android (`v1.0.0-pre` today: every stage in, stable once checked on real phones and Macs) |
 
 ## Windows (cross compilation)

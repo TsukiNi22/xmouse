@@ -63,10 +63,9 @@
                 buttons: deviceApk ? [Object.assign(deviceApk, {primary: true})] : [{label: "Install the app (.apk)", file: "apk", primary: true}],
             },
             {
-                id: "macos", name: "macOS", tag: "macOS 13+ · Homebrew", available: true,
-                text: "Built from the sources with Homebrew (Qt 6, OpenSSL): the edges, the clicks and the keys of the other devices go through the Accessibility permission (asked at the first start).",
-                command: SOURCES_COMMAND,
-                buttons: [{label: "Read the README", href: REPOSITORY + "#quick-setup---0-scripts"}],
+                id: "macos", name: "macOS", tag: "Coming", available: false,
+                text: "The macOS part of xmouse is written (edges, clicks, keys through the Accessibility permission); it builds once its library (libutils) builds on macOS.",
+                buttons: [{label: "Not available yet", file: "none"}],
             },
             {
                 id: "ios", name: "iPhone · iPad", tag: "Not available", available: false,
