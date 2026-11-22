@@ -41,6 +41,12 @@ if [[ "$BUILD_EXE" -eq 1 ]]; then
     cmake --build "$BUILD" --parallel
 fi
 [[ -x "$ROOT/xmouse" ]] || die "xmouse not built"
+# The Optimized build only: the tests and the Debug / Asan builds write the same ./xmouse (DWARF or the sanitizer in it)
+SECTIONS="$(readelf -S "$ROOT/xmouse")"
+SYMBOLS="$(nm -D "$ROOT/xmouse" 2> /dev/null || true)"
+if [[ "$SECTIONS" == *".debug_info"* || "$SYMBOLS" == *"__asan_init"* ]]; then
+    die "./xmouse is a Debug or Asan build: rebuild the Optimized one (cmake -S . -B build -DCMAKE_BUILD_TYPE=Optimized, rm xmouse, cmake --build build)"
+fi
 
 # The layout of a prefix: tar -xzf xmouse-linux-x86_64.tar.gz -C ~/.local --strip-components=1
 rm -rf "$DIST"
