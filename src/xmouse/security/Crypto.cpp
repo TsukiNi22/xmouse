@@ -102,6 +102,52 @@ QByteArray xmouse::security::hmac_sha256(const QByteArray& key, const QByteArray
     return QByteArray(reinterpret_cast<const char*>(out.data()), static_cast<qsizetype>(size));
 }
 
+QByteArray xmouse::security::aead_seal(const QByteArray& key, const QByteArray& nonce, const QByteArray& aad, const QByteArray& plain)
+{
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    QByteArray out(plain.size() + 16, '\0');
+    int size = 0;
+    int total = 0;
+    bool ok = ctx != nullptr && key.size() == 32 && nonce.size() == 12;
+
+    ok = ok && EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) == 1;
+    ok = ok && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) == 1;
+    ok = ok && EVP_EncryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()), reinterpret_cast<const unsigned char*>(nonce.constData())) == 1;
+    ok = ok && (aad.isEmpty() || EVP_EncryptUpdate(ctx, nullptr, &size, reinterpret_cast<const unsigned char*>(aad.constData()), static_cast<int>(aad.size())) == 1);
+    ok = ok && (plain.isEmpty() || EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(out.data()), &size, reinterpret_cast<const unsigned char*>(plain.constData()), static_cast<int>(plain.size())) == 1);
+    total = plain.isEmpty() ? 0 : size;
+    ok = ok && EVP_EncryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(out.data()) + total, &size) == 1;
+    ok = ok && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, out.data() + plain.size()) == 1;
+    EVP_CIPHER_CTX_free(ctx);
+    if (!ok) _unlikely
+        throw utils::exception::ErrorException(utils::exception::ExternalCode::Crypto, "AES-256-GCM seal failed");
+    return out;
+}
+
+QByteArray xmouse::security::aead_open(const QByteArray& key, const QByteArray& nonce, const QByteArray& aad, const QByteArray& sealed, bool& ok)
+{
+    EVP_CIPHER_CTX* ctx = nullptr;
+    const qsizetype length = sealed.size() - 16;
+    QByteArray out(std::max<qsizetype>(length, 0), '\0');
+    QByteArray tag = sealed.right(16);
+    int size = 0;
+
+    ok = false;
+    if (length < 0 || key.size() != 32 || nonce.size() != 12) return {};
+    ctx = EVP_CIPHER_CTX_new();
+    ok = ctx != nullptr;
+    ok = ok && EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) == 1;
+    ok = ok && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nullptr) == 1;
+    ok = ok && EVP_DecryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()), reinterpret_cast<const unsigned char*>(nonce.constData())) == 1;
+    ok = ok && (aad.isEmpty() || EVP_DecryptUpdate(ctx, nullptr, &size, reinterpret_cast<const unsigned char*>(aad.constData()), static_cast<int>(aad.size())) == 1);
+    ok = ok && (length == 0 || EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(out.data()), &size, reinterpret_cast<const unsigned char*>(sealed.constData()), static_cast<int>(length)) == 1);
+    ok = ok && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag.data()) == 1;
+    ok = ok && EVP_DecryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(out.data()) + (length == 0 ? 0 : size), &size) == 1; // the tag is checked here
+    if (ctx) EVP_CIPHER_CTX_free(ctx);
+    if (!ok) return {};
+    return out;
+}
+
 bool xmouse::security::constant_equal(const QByteArray& a, const QByteArray& b)
 {
     if (a.size() != b.size() || a.isEmpty()) return false;

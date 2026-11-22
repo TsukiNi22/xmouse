@@ -59,6 +59,10 @@ _hot _nodiscard QByteArray hmac_sha256(const QByteArray& key, const QByteArray& 
 _hot _nodiscard bool constant_equal(const QByteArray& a, const QByteArray& b); // timing safe comparison
 _cold _nodiscard QByteArray argon2id(const QByteArray& password, const QByteArray& salt, const int length = 32); // XMOUSE_ARGON2_* cost, throws Crypto
 
+/* aead */
+_hot _nodiscard QByteArray aead_seal(const QByteArray& key, const QByteArray& nonce, const QByteArray& aad, const QByteArray& plain); // AES-256-GCM: ciphertext + 16 bytes tag, throws Crypto
+_hot _nodiscard QByteArray aead_open(const QByteArray& key, const QByteArray& nonce, const QByteArray& aad, const QByteArray& sealed, bool& ok); // ok = false: forged / other key
+
 /* auth */
 _cold _nodiscard QByteArray auth_transcript(const QByteArray& serverNonce, const QByteArray& clientNonce, const QByteArray& certFingerprint, const QString& role); // "xmouse-auth-v1|role" + nonces + tls-server-end-point binding
 _cold _nodiscard QString fingerprint_text(const QByteArray& fingerprint); // "AB:CD:..." (sha256 of the DER certificate)
