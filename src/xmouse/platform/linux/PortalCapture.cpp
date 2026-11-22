@@ -35,6 +35,7 @@ File Description:
 #include <unistd.h>
 #include <libei.h>
 #include <dlfcn.h>
+#include <QTimer>
 #include <QFile>
 #include <cmath>
 
@@ -256,7 +257,9 @@ bool xmouse::platform::PortalCapture::start(void)
         const QString slot = QString("1on") + signal + "_(QDBusObjectPath,QVariantMap)";
         (void)bus.connect(PORTAL_SERVICE, PORTAL_PATH, PORTAL_INPUT_CAPTURE, signal, this, slot.toLatin1().constData());
     }
-    this->createSession_();
+
+    // No session yet: it is a dialog of the desktop, asked only once an edge opens on a device online (setEdges)
+    QTimer::singleShot(0, this, [this]() {emit this->ready();});
     return true;
 }
 
@@ -271,6 +274,7 @@ void xmouse::platform::PortalCapture::stop(void)
         this->_session.clear();
     }
     this->_started = false;
+    this->_requested = false;
     this->_enabled = false;
 }
 
@@ -393,7 +397,7 @@ void xmouse::platform::PortalCapture::getZones_(void)
         }
         arg.endArray();
         this->_zoneSet = results.value("zone_set").toUInt();
-        if (!this->_started) {this->_started = true; emit this->ready();}
+        this->_started = true;
         this->applyBarriers_();
     });
 }
@@ -401,6 +405,7 @@ void xmouse::platform::PortalCapture::getZones_(void)
 void xmouse::platform::PortalCapture::setEdges(const QList<core::Edge>& edges)
 {
     this->_edges = edges;
+    if (!edges.isEmpty() && !this->_requested) {this->_requested = true; this->createSession_(); return;} // the first neighbour online
     if (this->_started) this->applyBarriers_();
 }
 
