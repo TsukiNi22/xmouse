@@ -248,6 +248,7 @@ class Hub: public QObject {
         bool _laser = false;
         QString _following = ""; // member followed on the map and the overlays
         QPoint _padPointer; // local pointer moved by a pad when the platform does not tell it
+        QString _homePad; // the pad that drove last (its own cursor comes back with the cursor of this device)
 
         /* foreign cursors */
         QHash<QString, Foreign> _foreign;
@@ -321,11 +322,13 @@ class Hub: public QObject {
         void leaveTo_(const QPoint& global, const QString& device, const QPoint& local); // the cursor goes to device (capture or pad)
         void flushMove_(void);
         void sendPresence_(void);
-        void padMotion_(const double dx, const double dy); // a pad moves the cursor of this device
-        void padButton_(const net::MouseButton button, const bool down);
-        void padWheel_(const int dx, const int dy);
-        void padKey_(const QString& code, const bool down);
-        void padText_(const QString& text);
+        void padMotion_(const QString& pad, const double dx, const double dy); // a pad moves the cursor of this device (or its own one, phantom / private mode)
+        void padButton_(const QString& pad, const net::MouseButton button, const bool down);
+        void padWheel_(const QString& pad, const int dx, const int dy);
+        void padKey_(const QString& pad, const QString& code, const bool down);
+        void padText_(const QString& pad, const QString& text);
+        _hot bool padOwnCursor_(const QString& pad); // its own cursor made / dropped as the modes say, true when it has one
+        _hot void padPhantomAt_(const QString& pad, const QPoint& local);
         _cold _nodiscard QPoint localPointer_(void) const; // pointer of this device (capture, else the pad one)
 
         /* foreign cursors (Hub-foreign.cpp) */
@@ -377,6 +380,7 @@ class Hub: public QObject {
         /* tools */
         _cold inline void scheduleSave_(void)                                 {this->_saveTimer.start();}; // state written 1 s after the last change
         _hot _nodiscard inline QPoint injectPoint_(const QPoint& local) const {return local - this->_layout.bounds(this->_group.self()).topLeft();}; // desktop pixels -> injector pixels
+        _hot _nodiscard inline bool padPhantom_(void) const                   {return this->_config.settings().privateMode || this->_config.settings().foreignMode == "phantom";}; // private / phantom mode: a pad has its own cursor here
 
     public:
         // ---------- Pre-Function -------- //

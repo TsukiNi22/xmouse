@@ -994,9 +994,10 @@ void xmouse::core::Hub::housekeeping_(void)
         emit this->foreignChanged();
     }
     for (const QString& id: this->_foreign.keys())
-        if (!this->reachable(id)) this->foreignLeave_(id);
+        if (!this->_pads.contains(id) && !this->reachable(id)) this->foreignLeave_(id); // the own cursor of a pad goes with its socket
     for (auto it = this->_presence.begin(); it != this->_presence.end();) {
-        if (it.key() != this->_group.self() && now - it->seen > PRESENCE_TTL) {it = this->_presence.erase(it); presence = true;}
+        const bool padHere = this->_pads.contains(it.key()) && this->_foreign.contains(it.key()); // still, but still here
+        if (it.key() != this->_group.self() && !padHere && now - it->seen > PRESENCE_TTL) {it = this->_presence.erase(it); presence = true;}
         else ++it;
     }
     if (presence) emit this->presenceChanged();

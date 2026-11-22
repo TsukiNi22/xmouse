@@ -134,7 +134,10 @@ void xmouse::core::Hub::goHome_(const QPoint& global)
     this->_buttonsDown = 0;
     this->_flush.stop();
     this->_global = QPointF(global);
-    if (this->_awayByPad) {
+    if (this->_awayByPad && this->padPhantom_() && this->_pads.contains(this->_homePad)) {
+        // Left with a pad in phantom / private mode: its own cursor comes back here, the real pointer is not touched
+        this->padPhantomAt_(this->_homePad, local);
+    } else if (this->_awayByPad) {
         // Left with a pad: the local pointer was never held, it is put where the cursor comes back
         this->_padPointer = local;
         if (this->_injector) this->_injector->mouseMove(this->injectPoint_(local).x(), this->injectPoint_(local).y());
@@ -281,19 +284,56 @@ QPoint xmouse::core::Hub::localPointer_(void) const
 //----------------------------------------------------------------//
 /* PAD: THE CURSOR OF THIS DEVICE DRIVEN BY A PHONE / BROWSER */
 
-void xmouse::core::Hub::padMotion_(const double dx, const double dy)
+bool xmouse::core::Hub::padOwnCursor_(const QString& pad)
+{
+    // Pointer mode: the pad drives the real pointer (its own cursor dropped, the pointer goes on from there)
+    if (!this->padPhantom_()) {
+        if (this->_foreign.contains(pad)) {this->_padPointer = this->_foreign.value(pad).local; this->foreignLeave_(pad);}
+        return false;
+    }
+    if (!this->_foreign.contains(pad)) this->padPhantomAt_(pad, this->_padPointer.isNull() ? this->localPointer_() : this->_padPointer);
+    return true;
+}
+
+void xmouse::core::Hub::padPhantomAt_(const QString& pad, const QPoint& local)
 {
     const QString self = this->_group.self();
+
+    // Its own cursor, drawn over the screens with its name like the cursor of a member: private mode, it passes over
+    // and acts on nothing; phantom mode, the real pointer goes there only for its clicks
+    if (!this->_foreign.contains(pad)) {
+        Foreign f;
+        f.passing = this->_config.settings().privateMode;
+        f.id = pad;
+        f.name = this->_pads.value(pad).name.isEmpty() ? QString("Phone") : this->_pads.value(pad).name;
+        f.color = colorOf(pad);
+        f.local = local;
+        f.seen = now_ms();
+        this->_foreign[pad] = f;
+        this->_log.info("input", pad, "cursor of " + f.name + " here (" + (f.passing ? "private mode: passing" : "phantom") + ")");
+    }
+    this->foreignPointer_(pad, local, 0, false);
+    this->_presence[pad] = Presence{pad, self, this->_layout.toGlobal(self, this->_foreign.value(pad).local), this->_foreign.value(pad).local, 0, now_ms(), 0}; // on the map too
+    emit this->presenceChanged();
+}
+
+void xmouse::core::Hub::padMotion_(const QString& pad, const double dx, const double dy)
+{
+    const QString self = this->_group.self();
+    bool own = false;
     QPoint from;
     QPoint to;
     std::optional<Hit> hit;
 
     if (this->_away) {this->onMotion_(dx, dy); return;}
-    from = this->_layout.toGlobal(self, this->localPointer_());
+    own = this->padOwnCursor_(pad);
+    this->_homePad = pad;
+    from = this->_layout.toGlobal(self, own ? this->_foreign.value(pad).local : this->localPointer_());
     to = this->_layout.move(from, QPoint(static_cast<int>(std::lround(dx)), static_cast<int>(std::lround(dy))));
     hit = this->_layout.hit(to);
     if (hit && hit->device != self && this->reachable(hit->device)) {
         // Through the border of this device: the cursor goes on the other one (nothing to release here)
+        if (own) this->foreignLeave_(pad);
         this->_awayByPad = true;
         this->leaveTo_(to, hit->device, hit->local);
         return;
@@ -301,32 +341,37 @@ void xmouse::core::Hub::padMotion_(const double dx, const double dy)
     if (!hit || hit->device != self) to = this->_layout.clampTo(self, to); // a wall
     hit = this->_layout.hit(to);
     if (!hit) return;
+    if (own) {this->padPhantomAt_(pad, hit->local); return;}
     this->_padPointer = hit->local;
     if (this->_injector) this->_injector->mouseMove(this->injectPoint_(hit->local).x(), this->injectPoint_(hit->local).y());
     this->_presenceDirty = true;
 }
 
-void xmouse::core::Hub::padButton_(const net::MouseButton button, const bool down)
+void xmouse::core::Hub::padButton_(const QString& pad, const net::MouseButton button, const bool down)
 {
     if (this->_away) {this->onButton_(button, down); return;}
-    if (this->_injector && !this->_config.settings().privateMode) this->_injector->mouseButton(button, down);
+    if (this->padOwnCursor_(pad)) {this->foreignButton_(pad, button, down); return;} // at its own cursor (private mode: nothing)
+    if (this->_injector) this->_injector->mouseButton(button, down);
 }
 
-void xmouse::core::Hub::padWheel_(const int dx, const int dy)
+void xmouse::core::Hub::padWheel_(const QString& pad, const int dx, const int dy)
 {
     if (this->_away) {this->onWheel_(dx, dy); return;}
-    if (this->_injector && !this->_config.settings().privateMode) this->_injector->mouseWheel(dx, dy);
+    if (this->padOwnCursor_(pad)) {this->foreignWheel_(pad, dx, dy); return;}
+    if (this->_injector) this->_injector->mouseWheel(dx, dy);
 }
 
-void xmouse::core::Hub::padKey_(const QString& code, const bool down)
+void xmouse::core::Hub::padKey_(const QString& pad, const QString& code, const bool down)
 {
     if (this->_away) {this->onKey_(code, down); return;}
-    if (this->_injector && !this->_config.settings().privateMode) this->_injector->key(code, down);
+    if (this->padOwnCursor_(pad)) {this->foreignKey_(pad, code, down); return;}
+    if (this->_injector) this->_injector->key(code, down);
 }
 
-void xmouse::core::Hub::padText_(const QString& text)
+void xmouse::core::Hub::padText_(const QString& pad, const QString& text)
 {
     if (text.isEmpty()) return;
     if (this->_away) {this->sendBinaryTo_(this->_target, net::ByteWriter(net::Binary::Text).bytes(text.left(4096).toUtf8()).data()); return;}
-    if (this->_injector && !this->_config.settings().privateMode) this->_injector->text(text.left(4096)); // private mode: the pad acts only on the other devices
+    if (this->padOwnCursor_(pad)) {this->foreignText_(pad, text.left(4096)); return;} // private mode: the pad acts only on the other devices
+    if (this->_injector) this->_injector->text(text.left(4096));
 }

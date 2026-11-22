@@ -67,6 +67,7 @@ void xmouse::core::Hub::foreignLeave_(const QString& id)
     }
     if (this->_keyboardOwner == id) this->_keyboardOwner.clear();
     if (it->state == ForeignState::Asking) emit this->accessEnded(id, false);
+    if (this->_pads.contains(id) && this->_presence.remove(id) > 0) emit this->presenceChanged(); // the own cursor of a pad: off the map
     this->_foreign.erase(it);
     this->_restoreTimer.start(RESTORE_DELAY);
     emit this->foreignChanged();

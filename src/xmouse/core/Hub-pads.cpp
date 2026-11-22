@@ -131,6 +131,7 @@ void xmouse::core::Hub::onPadClosed_(net::WebSocket* ws)
         else ++p;
     }
     if (it != this->_pads.end()) {
+        if (it->control == ws && this->_foreign.contains(id)) this->foreignLeave_(id); // its own cursor goes with it
         if (it->control == ws) it->control = nullptr;
         if (it->display == ws) {
             it->display = nullptr;
@@ -268,19 +269,19 @@ void xmouse::core::Hub::padCommand_(const QString& pad, const QJsonObject& o)
 
     if (it == this->_pads.end()) return;
 
-    if (type == "move") {this->padMotion_(std::clamp(o.value("dx").toDouble(), -4000.0, 4000.0), std::clamp(o.value("dy").toDouble(), -4000.0, 4000.0)); return;}
+    if (type == "move") {this->padMotion_(pad, std::clamp(o.value("dx").toDouble(), -4000.0, 4000.0), std::clamp(o.value("dy").toDouble(), -4000.0, 4000.0)); return;}
     if (type == "button") {
         const int b = o.value("b").toInt(-1);
-        if (b >= 0 && b <= static_cast<int>(net::MouseButton::Forward)) this->padButton_(static_cast<net::MouseButton>(b), o.value("down").toBool());
+        if (b >= 0 && b <= static_cast<int>(net::MouseButton::Forward)) this->padButton_(pad, static_cast<net::MouseButton>(b), o.value("down").toBool());
         return;
     }
-    if (type == "wheel") {this->padWheel_(std::clamp(o.value("dx").toInt(), -32000, 32000), std::clamp(o.value("dy").toInt(), -32000, 32000)); return;}
+    if (type == "wheel") {this->padWheel_(pad, std::clamp(o.value("dx").toInt(), -32000, 32000), std::clamp(o.value("dy").toInt(), -32000, 32000)); return;}
     if (type == "key") {
         const QString code = o.value("code").toString().left(32);
-        if (!code.isEmpty()) this->padKey_(code, o.value("down").toBool());
+        if (!code.isEmpty()) this->padKey_(pad, code, o.value("down").toBool());
         return;
     }
-    if (type == "text") {this->padText_(o.value("text").toString().left(4096)); return;}
+    if (type == "text") {this->padText_(pad, o.value("text").toString().left(4096)); return;}
     if (type == "home") {this->comeBack(); return;}
     if (type == "ping") {this->ping(); return;}
     if (type == "laser") {this->setLaser(o.value("on").toBool()); return;}
