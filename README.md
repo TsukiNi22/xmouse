@@ -281,7 +281,7 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 ## Known limits
 
 > [!WARNING]
-> - Wayland (GNOME): the desktop asks once to allow the input capture (portal dialog, remembered with a restore token on portals >= v2, asked at every start on older ones); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
+> - Wayland (GNOME): the desktop asks to allow the input capture (portal dialog) once per run of xmouse, only when an edge opens on a device online (GNOME 50 implements the version 1 of the portal: no restore token; remembered on the portals >= v2); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
 > - Wayland: the overlays run on Xwayland (no layer shell on GNOME): a fullscreen Wayland app may cover them.
 > - One real pointer and one keyboard focus per OS: two foreign cursors clicking at the same moment on one device take turns; the keyboard of a member types where its cursor clicked last.
 > - Windows: the screens must share one scale (the hooks see physical pixels); Ctrl + Alt + Del and the secure desktop end a capture; the MinGW build of Fedora ships OpenSSL 3.2 (no ML-KEM): its links are `X25519` until an OpenSSL >= 3.5 is bundled.
