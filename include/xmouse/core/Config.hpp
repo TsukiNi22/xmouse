@@ -57,6 +57,8 @@ struct Rights {
     bool keyboard = true; // its keyboard types here (where its cursor clicked)
     bool clipboard = true; // its copies land in the clipboard of this device
     bool files = true; // its files can be dropped / pasted here
+    bool links = true; // the links it sends are shown here (opened after a click, or at once with links = "open")
+    bool windows = true; // it may stream a window here / drive the window this device streams to it
 };
 
 struct Settings {
@@ -69,6 +71,8 @@ struct Settings {
     Exposure exposure = Exposure::Lan; // how the device is reachable
     QString publicHost = ""; // Manual: public address / domain given to the others
     bool discovery = true; // udp broadcast on the LAN (members found without an address)
+    bool udp = true; // the moves and the presence go through encrypted udp when it passes (tcp otherwise)
+    bool relay = true; // this device carries the messages of two members that cannot reach each other
 
     /* access */
     int codeLength = 9; // characters of the pairing code (Crockford base32, 5 bits each)
@@ -85,6 +89,15 @@ struct Settings {
     bool restorePointer = true; // the real pointer goes back where it was after a foreign click (when the platform tells it)
     int edgeDelay = 0; // ms the cursor must push on an edge before it crosses (0 = at once)
     bool clipboard = true; // copies of this device go to the members (their rights decide)
+    /* files and links */
+    int clipboardFilesLimit = 64; // MiB: copied files downloaded at once by the members (bigger: drag them)
+    int filesLimit = 4096; // MiB: biggest transfer accepted here
+    QString downloadDir = ""; // received files ("" = Downloads/xmouse)
+    QString links = "ask"; // a link sent by a member: ask | open | never
+    /* phones and web pads */
+    bool pads = true; // a phone / browser may pair with the code and drive this device
+    /* windows */
+    int windowFps = 12; // frames per second of a window streamed to another device
 
     /* ui */
     QString theme = "system"; // system | dark | light

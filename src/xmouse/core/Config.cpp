@@ -66,7 +66,7 @@ xmouse::core::Exposure xmouse::core::exposure_from(const QString& name)
 
 QJsonObject xmouse::core::rights_to_json(const Rights& rights)
 {
-    return QJsonObject{{"mouse", rights.mouse}, {"keyboard", rights.keyboard}, {"clipboard", rights.clipboard}, {"files", rights.files}};
+    return QJsonObject{{"mouse", rights.mouse}, {"keyboard", rights.keyboard}, {"clipboard", rights.clipboard}, {"files", rights.files}, {"links", rights.links}, {"windows", rights.windows}};
 }
 
 xmouse::core::Rights xmouse::core::rights_from_json(const QJsonObject& object)
@@ -77,6 +77,8 @@ xmouse::core::Rights xmouse::core::rights_from_json(const QJsonObject& object)
     rights.keyboard = object.value("keyboard").toBool(rights.keyboard);
     rights.clipboard = object.value("clipboard").toBool(rights.clipboard);
     rights.files = object.value("files").toBool(rights.files);
+    rights.links = object.value("links").toBool(rights.links);
+    rights.windows = object.value("windows").toBool(rights.windows);
     return rights;
 }
 
@@ -163,6 +165,8 @@ void xmouse::core::Config::load(void)
     s.exposure = exposure_from(o.value("exposure").toString(exposure_name(s.exposure)));
     s.publicHost = o.value("publicHost").toString(s.publicHost);
     s.discovery = o.value("discovery").toBool(s.discovery);
+    s.udp = o.value("udp").toBool(s.udp);
+    s.relay = o.value("relay").toBool(s.relay);
 
     // Access
     s.codeLength = std::clamp(o.value("codeLength").toInt(s.codeLength), 6, 24);
@@ -182,6 +186,15 @@ void xmouse::core::Config::load(void)
     s.restorePointer = o.value("restorePointer").toBool(s.restorePointer);
     s.edgeDelay = std::clamp(o.value("edgeDelay").toInt(s.edgeDelay), 0, 2000);
     s.clipboard = o.value("clipboard").toBool(s.clipboard);
+
+    // Files, links, pads, windows
+    s.clipboardFilesLimit = std::clamp(o.value("clipboardFilesLimit").toInt(s.clipboardFilesLimit), 0, 4096);
+    s.filesLimit = std::clamp(o.value("filesLimit").toInt(s.filesLimit), 1, 1024 * 1024);
+    s.downloadDir = o.value("downloadDir").toString(s.downloadDir);
+    s.links = o.value("links").toString(s.links);
+    if (s.links != "ask" && s.links != "open" && s.links != "never") s.links = "ask";
+    s.pads = o.value("pads").toBool(s.pads);
+    s.windowFps = std::clamp(o.value("windowFps").toInt(s.windowFps), 1, 30);
 
     // Ui
     s.theme = o.value("theme").toString(s.theme);
@@ -204,6 +217,8 @@ void xmouse::core::Config::save(void) const
     o["exposure"] = exposure_name(s.exposure);
     o["publicHost"] = s.publicHost;
     o["discovery"] = s.discovery;
+    o["udp"] = s.udp;
+    o["relay"] = s.relay;
     o["codeLength"] = s.codeLength;
     o["codeLifetime"] = s.codeLifetime;
     o["joinApproval"] = s.joinApproval;
@@ -216,6 +231,12 @@ void xmouse::core::Config::save(void) const
     o["restorePointer"] = s.restorePointer;
     o["edgeDelay"] = s.edgeDelay;
     o["clipboard"] = s.clipboard;
+    o["clipboardFilesLimit"] = s.clipboardFilesLimit;
+    o["filesLimit"] = s.filesLimit;
+    o["downloadDir"] = s.downloadDir;
+    o["links"] = s.links;
+    o["pads"] = s.pads;
+    o["windowFps"] = s.windowFps;
     o["theme"] = s.theme;
     o["language"] = s.language;
     o["startMinimized"] = s.startMinimized;

@@ -72,13 +72,14 @@ class Group {
         _cold _nodiscard inline QByteArray memberProof(const QByteArray& transcript) const {return hmac_sha256(this->_key, transcript);}; // HMAC(key, transcript)
 
         /* getter */
-        _cold _nodiscard inline bool joined(void) const           {return !this->_id.isEmpty();};
-        _cold _nodiscard inline const QString& self(void) const   {return this->_self;};
-        _cold _nodiscard inline const QString& id(void) const     {return this->_id;};
-        _cold _nodiscard inline const QString& name(void) const   {return this->_name;};
-        _cold _nodiscard inline const QByteArray& key(void) const {return this->_key;};
-        _cold _nodiscard inline bool hasPrevious(void) const      {return this->_previous.size() == XMOUSE_GROUP_KEY_SIZE;};
-        _cold _nodiscard inline int epoch(void) const             {return this->_epoch;};
+        _cold _nodiscard inline bool joined(void) const                {return !this->_id.isEmpty();};
+        _cold _nodiscard inline const QString& self(void) const        {return this->_self;};
+        _cold _nodiscard inline const QString& id(void) const          {return this->_id;};
+        _cold _nodiscard inline const QString& name(void) const        {return this->_name;};
+        _cold _nodiscard inline const QByteArray& key(void) const      {return this->_key;};
+        _cold _nodiscard inline const QByteArray& previous(void) const {return this->_previous;}; // key of the epoch before ("" = none)
+        _cold _nodiscard inline bool hasPrevious(void) const           {return this->_previous.size() == XMOUSE_GROUP_KEY_SIZE;};
+        _cold _nodiscard inline int epoch(void) const                  {return this->_epoch;};
 
         // ------------ Operator ---------- //
         Group& operator=(const Group& other) = delete;

@@ -23,61 +23,47 @@ File Description:
 #include <utils/utils.hpp>
 #include "xmouse/security/Crypto.hpp"
 #include "xmouse/net/Protocol.hpp"
+#include "xmouse/core/Routing.hpp"
+#include "xmouse/core/Tools.hpp"
 #include "xmouse/core/Hub.hpp"
-#include <QCoreApplication>
-#include <QGuiApplication>
 #include <QJsonDocument>
 #include <QClipboard>
 #include <QJsonArray>
 #include <functional>
-#include <QMimeData>
 #include <QDateTime>
 #include <QUrlQuery>
 #include <algorithm>
 #include <QSysInfo>
 #include <QSslKey>
-#include <QBuffer>
 #include <QScreen>
-#include <QImage>
-#include <QFile>
 #include <cstdio>
-#include <cmath>
+#include <QFile>
 #include <QUrl>
 
 //----------------------------------------------------------------//
 /* DEFINE */
 
 #define FLUSH_INTERVAL 4 // ms between two moves sent (250 Hz at most, the latest position only)
-#define BACKPRESSURE_LIMIT (256 * 1024) // bytes waiting on a link before the moves are skipped (the next one carries the position)
-#define RESTORE_DELAY 40 // ms after the last button up before the real pointer goes back
-#define WHEEL_RESTORE_DELAY 350 // ms after the last wheel step
+#define PREDICT_INTERVAL 8 // ms between two predicted positions of a foreign cursor
 #define PRESENCE_TTL 10000 // ms a presence stays on the map without news
 #define JOIN_TIMEOUT 30000 // ms the local person has to accept a new device
+#define PUBLISH_DELAY 300 // ms after a link change before the device entry is written
+#define PAD_MAP_INTERVAL 100 // ms between two maps sent to the pads
+#define STALLED_TRANSFER 45000 // ms without a chunk before a transfer is dropped
+#define OFFER_LIFETIME (60 * 60 * 1000) // ms an offer of files can be fetched
+#define STREAM_TIMEOUT 10000 // ms without a frame before a viewer closes
 
 //----------------------------------------------------------------//
 /* TOOLS */
-
-_hot static inline qint64 now_ms(void) {return QDateTime::currentMSecsSinceEpoch();}
-
-// A graphical application (screens, clipboard, overlays): not the terminal panel of a machine without display
-_cold static bool is_gui(void)
-{
-    return qobject_cast<QGuiApplication*>(QCoreApplication::instance()) != nullptr;
-}
 
 _cold static QList<xmouse::core::Screen> local_screens(void)
 {
     QList<xmouse::core::Screen> screens;
 
-    if (!is_gui()) return screens;
+    if (!xmouse::core::is_gui()) return screens;
     for (QScreen* s: QGuiApplication::screens())
         screens.append(xmouse::core::Screen{s->name(), s->geometry(), s->devicePixelRatio()});
     return screens;
-}
-
-_cold static QString content_hash(const QString& mime, const QByteArray& data)
-{
-    return QString::fromLatin1(xmouse::security::sha256(mime.toUtf8() + '|' + data).toHex());
 }
 
 //----------------------------------------------------------------//
@@ -104,6 +90,20 @@ xmouse::core::Hub::Hub(Config& config, QObject* parent)
     QObject::connect(&this->_housekeeping, &QTimer::timeout, this, &Hub::housekeeping_);
     this->_restoreTimer.setSingleShot(true);
     QObject::connect(&this->_restoreTimer, &QTimer::timeout, this, &Hub::restorePointer_);
+    this->_predict.setInterval(PREDICT_INTERVAL);
+    this->_predict.setTimerType(Qt::PreciseTimer);
+    QObject::connect(&this->_predict, &QTimer::timeout, this, &Hub::predict_);
+    this->_udpProbe.setInterval(XMOUSE_UDP_PROBE_INTERVAL);
+    QObject::connect(&this->_udpProbe, &QTimer::timeout, this, &Hub::probeUdp_);
+    QObject::connect(&this->_udp, &net::Datagrams::received, this, &Hub::onDatagram_);
+    this->_publishSoon.setSingleShot(true);
+    this->_publishSoon.setInterval(PUBLISH_DELAY);
+    QObject::connect(&this->_publishSoon, &QTimer::timeout, this, &Hub::publishSelf_);
+    this->_transferPump.setInterval(2);
+    QObject::connect(&this->_transferPump, &QTimer::timeout, this, &Hub::pumpTransfers_);
+    QObject::connect(&this->_streamTimer, &QTimer::timeout, this, &Hub::pumpStreams_);
+    this->_padTimer.setInterval(PAD_MAP_INTERVAL);
+    QObject::connect(&this->_padTimer, &QTimer::timeout, this, &Hub::sendPadMaps_);
 }
 
 xmouse::core::Hub::~Hub()
@@ -152,6 +152,7 @@ void xmouse::core::Hub::start(void)
     this->_state.setSelf(this->_group.self());
     if (this->_group.joined()) this->_state.load(Config::dataDir() + "/state.json");
     this->_code.configure(s.codeLength, s.codeLifetime);
+    this->loadPads_();
 
     // Links
     ctx.group = &this->_group;
@@ -170,6 +171,7 @@ void xmouse::core::Hub::start(void)
         if (!this->_group.joined()) return "not in a network";
         if (this->_state.contains("removed/" + id)) return "removed from the network";
         if (!this->_state.contains("device/" + id)) return "unknown member (not in the network yet)";
+        if (!this->_state.value("device/" + id).toObject().value("via").toString().isEmpty()) return "a phone / pad links through its device only";
         return "";
     };
     ctx.pinned = [this](const QString& id) {
@@ -198,7 +200,13 @@ void xmouse::core::Hub::start(void)
         QTimer::singleShot(JOIN_TIMEOUT, peer, [peer]() {peer->approve(false);}); // nobody answered: refused
         emit this->joinApproval(peer);
     });
+    QObject::connect(&this->_mesh.server(), &net::Server::newPad, this, &Hub::onPadSocket_);
     this->_mesh.start(s.bind, s.port, server, s.discovery);
+
+    // Encrypted udp of the moves on the same port number (tcp only when it is taken or disabled)
+    this->_udp.setSelf(this->_group.self());
+    this->_udp.setKeys(this->_group.key(), this->_group.epoch(), this->_group.previous());
+    if (s.udp && !this->_udp.start(s.bind, this->_mesh.port())) this->_log.warn("network", "", "udp port " + QString::number(this->_mesh.port()) + " taken: the moves go by tcp");
 
     // https://<address>:<port>/ shows what this device is and how to join (its /api/info: nothing secret)
     this->_mesh.server().setInfo([this]() {
@@ -211,6 +219,7 @@ void xmouse::core::Hub::start(void)
             {"name", this->_config.deviceName()},
             {"network", this->_group.joined() ? this->_state.value("net/name").toString(this->_group.name()) : QString()},
             {"identity", security::fingerprint_short(this->_certificate.fingerprint())},
+            {"pads", this->_config.settings().pads},
         };
     });
 
@@ -229,7 +238,7 @@ void xmouse::core::Hub::start(void)
         if (!name.isEmpty()) this->_log.info("server", "", "Tailscale certificate for " + name + ": the browsers can open the page on this name");
     });
 
-    // Clipboard: Qt sees text and images, the X11 bridge (native Wayland) only text
+    // Clipboard: Qt sees text, images and files, the X11 bridge (native Wayland) only text
     if (this->_clipboard.backend() == "qt") QObject::connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &Hub::onLocalClipboard_);
     else QObject::connect(&this->_clipboard, &platform::Clipboard::changed, this, &Hub::onLocalClipboard_);
 
@@ -243,6 +252,7 @@ void xmouse::core::Hub::start(void)
         QObject::connect(qGuiApp, &QGuiApplication::screenRemoved, this, screens);
         for (QScreen* screen: QGuiApplication::screens())
             QObject::connect(screen, &QScreen::geometryChanged, this, screens);
+        if (QGuiApplication::platformName() != "offscreen") this->_windows = platform::create_windows();
     }
 
     this->publishSelf_();
@@ -251,17 +261,34 @@ void xmouse::core::Hub::start(void)
     this->startCapture_();
     this->_housekeeping.start();
     this->_presenceTimer.start();
-    this->_log.info("device", "", "started " + ctx.name + " on port " + QString::number(this->_mesh.port()) + " (" + security::tls_summary() + ")");
+    this->_udpProbe.start();
+    this->_padTimer.start();
+    this->_streamTimer.setInterval(1000 / std::max(1, s.windowFps));
+    this->_log.info("device", "", "started " + ctx.name + " on port " + QString::number(this->_mesh.port()) + " (" + security::tls_summary() + (this->_udp.isBound() ? ", udp" : "") + ")");
 }
 
 void xmouse::core::Hub::stop(void)
 {
     if (this->_away) this->comeBack();
+    for (const QString& id: this->_streams.keys())
+        this->stopStream(id);
+    for (const QString& id: this->_transfers.keys())
+        this->failTransfer_(id, "xmouse stopped", true);
+    for (Pad& pad: this->_pads) {
+        if (pad.control) pad.control->close(1001, "xmouse stopped");
+        if (pad.display) pad.display->close(1001, "xmouse stopped");
+    }
     if (this->_capture) this->_capture->stop();
     if (this->_injector) this->_injector->releaseAll();
     this->_housekeeping.stop();
     this->_presenceTimer.stop();
     this->_flush.stop();
+    this->_predict.stop();
+    this->_udpProbe.stop();
+    this->_padTimer.stop();
+    this->_streamTimer.stop();
+    this->_transferPump.stop();
+    this->_udp.stop();
     this->_mesh.stop();
     this->_exposure.stop();
     if (this->_saveTimer.isActive()) {
@@ -296,9 +323,11 @@ void xmouse::core::Hub::startCapture_(void)
     QObject::connect(this->_capture.get(), &platform::IInputCapture::button, this, &Hub::onButton_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::wheel, this, &Hub::onWheel_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::key, this, &Hub::onKey_);
+    QObject::connect(this->_capture.get(), &platform::IInputCapture::windowCrossed, this, &Hub::onWindowCrossed_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::ready, this, [this]() {
         this->_captureError.clear();
         this->updateEdges_();
+        this->_capture->setWindowMove(this->windowMoveEnabled() && this->_windows != nullptr);
         if (this->_capture->name() == "portal" && qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("GNOME", Qt::CaseInsensitive))
             this->setStatus_("edges: portal (GNOME asks once per run: scripts/install.sh --gnome removes the dialog)");
         else this->setStatus_("edges: " + this->_capture->name());
@@ -310,7 +339,7 @@ void xmouse::core::Hub::startCapture_(void)
         this->setStatus_("edges unavailable: " + error);
     });
     QObject::connect(this->_capture.get(), &platform::IInputCapture::ended, this, [this]() {
-        if (this->_away) this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
+        if (this->_away && !this->_awayByPad) this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
     });
     if (!this->_capture->start()) {
         this->_captureError = this->_capture->error();
@@ -325,7 +354,7 @@ void xmouse::core::Hub::updateEdges_(void)
 
     if (!this->_capture) return;
     for (const Edge& e: this->_layout.exits(this->_group.self()))
-        if (this->_mesh.isOnline(e.target)) edges.append(e); // an offline device is a wall
+        if (this->reachable(e.target)) edges.append(e); // an offline device is a wall
     this->_capture->setEdges(edges);
 }
 
@@ -366,6 +395,10 @@ void xmouse::core::Hub::publishSelf_(void)
     entry["port"] = this->_mesh.port();
     entry["addresses"] = addresses;
     entry["screens"] = screens_to_json(local_screens());
+    entry["links"] = QJsonArray::fromStringList(this->links_()); // the others relay through this device to them
+    entry["relay"] = this->_config.settings().relay;
+    entry["udp"] = this->_udp.isBound();
+    entry["windows"] = this->_windows != nullptr;
     entry["joined"] = old.contains("joined") ? old.value("joined") : QJsonValue(QString::number(now_ms()));
     this->broadcastDelta_(this->_state.set(key, entry));
     this->rebuildLayout_();
@@ -387,10 +420,14 @@ void xmouse::core::Hub::rebuildLayout_(void)
     layout.placeUnplaced();
     this->_layout = layout;
 
-    // This device has no place yet: the default one is written (only by itself, the others keep a guess)
-    if (this->_group.joined() && this->_layout.contains(self) && !this->_state.contains("layout/" + self)) {
-        const QPoint p = this->_layout.device(self).position;
-        this->broadcastDelta_(this->_state.set("layout/" + self, QJsonObject{{"x", p.x()}, {"y", p.y()}}));
+    // This device has no place yet: the default one is written (only by itself, the others keep a guess); its pads too
+    if (this->_group.joined()) {
+        for (const QString& id: this->_layout.devices().keys()) {
+            const bool mine = id == self || this->_pads.contains(id);
+            if (!mine || this->_state.contains("layout/" + id) || this->_layout.bounds(id).isEmpty()) continue;
+            const QPoint p = this->_layout.device(id).position;
+            this->broadcastDelta_(this->_state.set("layout/" + id, QJsonObject{{"x", p.x()}, {"y", p.y()}}));
+        }
     }
     this->refreshCandidates_();
     this->updateEdges_();
@@ -406,7 +443,7 @@ void xmouse::core::Hub::refreshCandidates_(void)
         QList<QPair<QString, quint16>> addresses;
 
         if (id == this->_group.self()) continue;
-        if (this->_state.contains("removed/" + id)) {this->_mesh.setCandidates(id, {}); continue;}
+        if (this->_state.contains("removed/" + id) || !device.value("via").toString().isEmpty()) {this->_mesh.setCandidates(id, {}); continue;} // a pad is reached through its device
         for (const QString& a: this->_mesh.addressesOf(id))
             addresses.append({a, port});
         for (const QJsonValue& a: device.value("addresses").toArray()) {
@@ -458,6 +495,15 @@ void xmouse::core::Hub::applyDelta_(const QJsonObject& delta, const QString& fro
         this->_mesh.setNetworkName(this->_state.value("net/name").toString());
         emit this->networkChanged();
     }
+    if (changed.contains("net/windowMove")) {
+        if (this->_capture) this->_capture->setWindowMove(this->windowMoveEnabled() && this->_windows != nullptr);
+        if (!this->windowMoveEnabled())
+            for (const QString& id: this->_streams.keys())
+                this->stopStream(id);
+        emit this->networkChanged();
+    }
+    for (const QString& key: changed)
+        if (key.startsWith("profile/")) {emit this->layoutChanged(); break;}
     if (layout) this->rebuildLayout_();
 }
 
@@ -470,6 +516,7 @@ void xmouse::core::Hub::createNetwork(const QString& name)
 
     if (this->_group.joined()) this->leave();
     this->_group.create(label);
+    this->_udp.setKeys(this->_group.key(), this->_group.epoch(), QByteArray());
     this->_state.clear();
     this->_state.setSelf(this->_group.self());
     (void)this->_state.set("net/name", label);
@@ -477,6 +524,8 @@ void xmouse::core::Hub::createNetwork(const QString& name)
     this->_mesh.setNetworkName(label);
     this->_log.info("network", "", "network created: " + label);
     this->publishSelf_();
+    for (const QString& id: this->_pads.keys())
+        this->publishPad_(id);
     this->scheduleSave_();
     emit this->networkChanged();
 }
@@ -517,12 +566,15 @@ void xmouse::core::Hub::onJoined_(const QJsonObject& welcome, const QString& thr
         emit this->joinResult(false, e.what());
         return;
     }
+    this->_udp.setKeys(this->_group.key(), this->_group.epoch(), QByteArray());
     this->_state.clear();
     this->_state.setSelf(this->_group.self());
     (void)this->_state.merge(welcome.value("state").toObject());
     this->_mesh.setNetworkName(this->_group.name());
     this->_log.info("network", through, "joined the network " + this->_group.name());
     this->publishSelf_();
+    for (const QString& id: this->_pads.keys())
+        this->publishPad_(id);
     this->scheduleSave_();
     emit this->networkChanged();
     emit this->joinResult(true, "Joined " + this->_group.name());
@@ -532,12 +584,19 @@ void xmouse::core::Hub::leave(void)
 {
     if (!this->_group.joined()) return;
     if (this->_away) this->comeBack();
+    for (const QString& id: this->_streams.keys())
+        this->stopStream(id);
+    for (const QString& id: this->_transfers.keys())
+        this->failTransfer_(id, "left the network", true);
     this->broadcastDelta_(this->_state.set("removed/" + this->_group.self(), true));
     this->_mesh.dropAll("left the network");
     this->_log.info("network", "", "left the network " + this->_group.name());
     for (const QString& id: this->_foreign.keys())
         this->foreignLeave_(id);
     this->_group.leave();
+    this->_udp.setKeys(QByteArray(), 0, QByteArray());
+    this->_udpUp.clear();
+    this->_udpPath.clear();
     this->_state.clear();
     this->_presence.clear();
     (void)QFile::remove(Config::dataDir() + "/state.json");
@@ -551,6 +610,7 @@ void xmouse::core::Hub::removeMember(const QString& id)
     QByteArray key;
 
     if (id == this->_group.self()) {this->leave(); return;}
+    if (this->_pads.contains(id)) {this->removePad(id); return;}
     if (!this->_group.joined() || !this->_state.contains("device/" + id)) return;
     this->broadcastDelta_(this->_state.set("removed/" + id, true));
     this->broadcastDelta_(this->_state.remove("layout/" + id));
@@ -558,6 +618,7 @@ void xmouse::core::Hub::removeMember(const QString& id)
     // New key for the others only: the removed device keeps an old key that opens nothing
     key = security::random_bytes(XMOUSE_GROUP_KEY_SIZE);
     this->_group.rekey(key, this->_group.epoch() + 1);
+    this->_udp.setKeys(this->_group.key(), this->_group.epoch(), this->_group.previous());
     for (const QString& peer: this->_mesh.ids())
         if (peer != id) this->_mesh.send(peer, QJsonObject{{"t", "rekey"}, {"key", QString::fromLatin1(key.toBase64())}, {"epoch", this->_group.epoch()}});
     this->_mesh.drop(id, "removed from the network");
@@ -621,6 +682,17 @@ QString xmouse::core::Hub::joinLink(const QString& host, const quint16 port) con
     return url.toString();
 }
 
+QString xmouse::core::Hub::padLink(const QString& host, const quint16 port) const
+{
+    QUrl url(this->joinLink(host, port));
+    QUrlQuery query(url);
+
+    url.setPath("/pad");
+    query.removeQueryItem("net");
+    url.setQuery(query);
+    return url.toString();
+}
+
 QList<xmouse::core::Member> xmouse::core::Hub::members(void) const
 {
     QList<Member> out;
@@ -628,15 +700,20 @@ QList<xmouse::core::Member> xmouse::core::Hub::members(void) const
     for (const QString& id: this->_state.ids("device/")) {
         const QJsonObject d = this->_state.value("device/" + id).toObject();
         const net::Peer* peer = this->_mesh.peer(id);
+        const Route route = this->routeTo_(id);
         Member m;
 
         if (this->_state.contains("removed/" + id)) continue;
         m.id = id;
         m.name = d.value("name").toString();
         m.os = d.value("os").toString();
+        m.kind = d.value("kind").toString("desktop");
         m.version = d.value("version").toString();
+        m.via = d.value("via").toString();
         m.self = id == this->_group.self();
-        m.online = m.self || peer != nullptr;
+        m.online = m.self || route.kind != RouteKind::None;
+        m.relayed = route.kind == RouteKind::Relay;
+        m.udp = this->udpUp(id);
         m.rtt = peer ? peer->rtt() : -1;
         m.port = static_cast<quint16>(d.value("port").toInt());
         m.screens = screens_from_json(d.value("screens").toArray());
@@ -657,6 +734,9 @@ QList<xmouse::net::Announce> xmouse::core::Hub::nearby(void) const
         if (!this->_group.joined() || a.group != this->_group.tag()) out.append(a);
     return out;
 }
+
+//----------------------------------------------------------------//
+/* LAYOUT */
 
 void xmouse::core::Hub::placeDevice(const QString& id, const QPoint& position)
 {
@@ -680,11 +760,61 @@ void xmouse::core::Hub::resetLayout(void)
     this->rebuildLayout_();
 }
 
+QStringList xmouse::core::Hub::profiles(void) const
+{
+    QStringList names = this->_state.ids("profile/");
+
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+void xmouse::core::Hub::saveProfile(const QString& name)
+{
+    const QString label = name.trimmed().left(48).replace('/', '-');
+    QJsonObject layout;
+
+    if (!this->_group.joined() || label.isEmpty()) return;
+    for (const Device& d: this->_layout.devices())
+        layout[d.id] = QJsonObject{{"x", d.position.x()}, {"y", d.position.y()}};
+    this->broadcastDelta_(this->_state.set("profile/" + label, QJsonObject{{"layout", layout}, {"saved", QString::number(now_ms())}, {"by", this->_config.deviceName()}}));
+    this->_log.info("layout", "", "layout profile saved: " + label);
+    emit this->layoutChanged();
+}
+
+void xmouse::core::Hub::applyProfile(const QString& name)
+{
+    const QHash<QString, QPoint> positions = profile_positions(this->_state, name);
+
+    if (!this->_group.joined() || positions.isEmpty()) return;
+    for (auto it = positions.constBegin(); it != positions.constEnd(); ++it)
+        if (this->_layout.contains(it.key())) this->broadcastDelta_(this->_state.set("layout/" + it.key(), QJsonObject{{"x", it.value().x()}, {"y", it.value().y()}}));
+    this->_log.info("layout", "", "layout profile applied: " + name);
+    this->rebuildLayout_();
+}
+
+void xmouse::core::Hub::deleteProfile(const QString& name)
+{
+    if (!this->_group.joined()) return;
+    this->broadcastDelta_(this->_state.remove("profile/" + name));
+    emit this->layoutChanged();
+}
+
 void xmouse::core::Hub::setNetworkSetting(const QString& name, const QJsonValue& value)
 {
     if (!this->_group.joined()) return;
     this->broadcastDelta_(this->_state.set("net/" + name, value));
+    if (name == "windowMove") {
+        if (this->_capture) this->_capture->setWindowMove(value.toBool() && this->_windows != nullptr);
+        if (!value.toBool())
+            for (const QString& id: this->_streams.keys())
+                this->stopStream(id);
+    }
     emit this->networkChanged();
+}
+
+bool xmouse::core::Hub::windowMoveEnabled(void) const
+{
+    return this->_group.joined() && this->_state.value("net/windowMove").toBool(true);
 }
 
 //----------------------------------------------------------------//
@@ -703,6 +833,8 @@ void xmouse::core::Hub::onPeerReady_(const QString& id)
     this->_mesh.send(id, QJsonObject{{"t", "state"}, {"d", this->_state.toJson()}});
     this->_log.info("network", id, "linked to " + (peer ? peer->name() : id) + (peer ? " (" + peer->address().toString() + ")" : QString()));
     if (this->_away && this->_target == id) this->_mesh.send(id, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
+    this->_publishSoon.start(); // links of this device (the others may relay through it)
+    this->probeUdp_();
     this->updateEdges_();
     emit this->membersChanged();
 }
@@ -710,9 +842,17 @@ void xmouse::core::Hub::onPeerReady_(const QString& id)
 void xmouse::core::Hub::onPeerLost_(const QString& id, const QString& reason)
 {
     this->_log.info("network", id, "link lost: " + reason);
-    if (this->_away && this->_target == id) this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
-    this->foreignLeave_(id);
-    this->_presence.remove(id);
+    this->_udpUp.remove(id);
+    this->_udpPath.remove(id);
+    this->_udp.forget(id);
+    this->_publishSoon.start();
+
+    // Still reachable through another member: the cursors and the transfers go on through it
+    if (!this->reachable(id)) {
+        if (this->_away && this->_target == id) this->goHome_(this->_layout.clampTo(this->_group.self(), this->_global.toPoint()));
+        this->foreignLeave_(id);
+        this->_presence.remove(id);
+    }
     this->updateEdges_();
     emit this->membersChanged();
     emit this->presenceChanged();
@@ -722,12 +862,23 @@ void xmouse::core::Hub::onMessage_(const QString& id, const QJsonObject& o)
 {
     const QString type = o.value("t").toString();
 
-    if (type == "state") {this->applyDelta_(o.value("d").toObject(), id); return;}
+    if (type == "relay") {this->onRelay_(id, o); return;}
+    if (type == "state") {
+        if (this->_mesh.isOnline(id)) this->applyDelta_(o.value("d").toObject(), id); // members only (never a relayed / pad sender)
+        return;
+    }
     if (type == "rekey") {
+        if (!this->_mesh.isOnline(id)) return;
         this->_group.rekey(QByteArray::fromBase64(o.value("key").toString().toLatin1()), o.value("epoch").toInt());
+        this->_udp.setKeys(this->_group.key(), this->_group.epoch(), this->_group.previous());
         return;
     }
     if (type == "clip") {this->onRemoteClipboard_(id, o); return;}
+    if (type == "files") {this->onFilesOffer_(id, o); return;}
+    if (type == "fget") {this->onFileGet_(id, o); return;}
+    if (type == "fend") {this->onFileEnd_(id, o); return;}
+    if (type == "link") {this->onLink_(id, o); return;}
+    if (type.startsWith("w")) {this->onStreamMessage_(id, o); return;} // window streams: wopen, wclose, winput, wdoc
 
     // Foreign cursor (it is the owner)
     if (type == "enter") {this->foreignEnter_(id, o); return;}
@@ -753,18 +904,25 @@ void xmouse::core::Hub::onBinary_(const QString& id, const QByteArray& data)
 {
     net::ByteReader r(data);
 
+    if (data.isEmpty()) return;
     switch (static_cast<net::Binary>(static_cast<std::uint8_t>(data[0]))) {
         case net::Binary::Pointer: {
-            (void)r.u16();
+            const quint16 seq = r.u16();
             const int x = r.i32();
             const int y = r.i32();
-            if (r.ok()) this->foreignPointer_(id, QPoint(x, y));
+            if (r.ok()) this->foreignPointer_(id, QPoint(x, y), seq, true);
             break;
         }
         case net::Binary::Button: {
             const std::uint8_t b = r.u8();
             const bool down = r.u8() != 0;
-            if (r.ok() && b <= static_cast<std::uint8_t>(net::MouseButton::Forward)) this->foreignButton_(id, static_cast<net::MouseButton>(b), down);
+            if (!r.ok() || b > static_cast<std::uint8_t>(net::MouseButton::Forward)) break;
+            if (r.remaining() >= 8) { // where the click is (the moves may come late by udp)
+                const int x = r.i32();
+                const int y = r.i32();
+                if (r.ok()) this->foreignPointer_(id, QPoint(x, y), 0, false);
+            }
+            this->foreignButton_(id, static_cast<net::MouseButton>(b), down);
             break;
         }
         case net::Binary::Wheel: {
@@ -786,7 +944,7 @@ void xmouse::core::Hub::onBinary_(const QString& id, const QByteArray& data)
         }
         case net::Binary::Presence: {
             Presence p;
-            (void)r.u16();
+            p.seq = r.u16();
             p.id = id;
             p.on = r.text8();
             const int x = r.i32(); // one read per statement: the order of the arguments of a call is not defined
@@ -795,407 +953,27 @@ void xmouse::core::Hub::onBinary_(const QString& id, const QByteArray& data)
             p.flags = r.u8();
             p.seen = now_ms();
             if (!r.ok()) break;
+            if (this->_presence.contains(id) && static_cast<qint16>(p.seq - this->_presence.value(id).seq) <= 0 && now_ms() - this->_presence.value(id).seen < 2000) break; // late (reordered udp)
             this->_presence[id] = p;
             emit this->presenceChanged();
             break;
         }
+        case net::Binary::Relay:
+            this->onRelayBinary_(id, data);
+            break;
+        case net::Binary::FileChunk:
+            this->onFileChunk_(id, data);
+            break;
+        case net::Binary::WindowFrame:
+            this->onWindowFrame_(id, data);
+            break;
         default:
             break;
     }
 }
 
 //----------------------------------------------------------------//
-/* MY CURSOR */
-
-void xmouse::core::Hub::onCrossed_(const QPoint& local, const QPoint& push)
-{
-    const QString self = this->_group.self();
-    const QPoint global = this->_layout.toGlobal(self, local);
-    const std::optional<Hit> hit = this->_layout.hit(global + push);
-
-    // Nothing there (a layout changed meanwhile) or the device is not linked: the pointer stays here
-    if (!hit || hit->device == self || !this->_mesh.isOnline(hit->device)) {
-        this->_capture->release(local - push * 2);
-        return;
-    }
-    this->_away = true;
-    this->_target = hit->device;
-    this->_global = QPointF(global + push);
-    this->_targetLocal = hit->local;
-    this->_keysDown.clear();
-    this->_buttonsDown = 0;
-    this->_mesh.send(this->_target, QJsonObject{{"t", "enter"}, {"x", hit->local.x()}, {"y", hit->local.y()}, {"name", this->_config.deviceName()}});
-    this->_moveDirty = true;
-    this->_presenceDirty = true;
-    this->_flush.start();
-    emit this->awayChanged();
-}
-
-void xmouse::core::Hub::onMotion_(const double dx, const double dy)
-{
-    QPoint from;
-    QPoint to;
-    std::optional<Hit> hit;
-
-    if (!this->_away) return;
-    from = this->_global.toPoint();
-    this->_global += QPointF(dx, dy);
-    to = this->_layout.move(from, this->_global.toPoint() - from);
-    if (to != this->_global.toPoint()) this->_global = QPointF(to); // stopped on a border: no hidden drift
-    hit = this->_layout.hit(to);
-    if (!hit) return;
-    if (hit->device == this->_group.self()) {this->goHome_(to); return;}
-    if (hit->device != this->_target) {
-        if (!this->_mesh.isOnline(hit->device)) {this->_global = QPointF(from); return;} // an offline device is a wall
-        this->switchTarget_(hit->device);
-    }
-    this->_targetLocal = hit->local;
-    this->_moveDirty = true;
-    this->_presenceDirty = true;
-    if (!this->_flush.isActive()) this->_flush.start();
-}
-
-void xmouse::core::Hub::flushMove_(void)
-{
-    const net::Peer* peer = this->_mesh.peer(this->_target);
-
-    if (!this->_away) {this->_flush.stop(); return;}
-    if (!this->_moveDirty || !peer) return;
-    if (peer->pending() > BACKPRESSURE_LIMIT) return; // a slow link: the next flush sends the latest position
-    this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Pointer).u16(++this->_seq).i32(this->_targetLocal.x()).i32(this->_targetLocal.y()).data());
-    this->_moveDirty = false;
-}
-
-void xmouse::core::Hub::switchTarget_(const QString& device)
-{
-    // Nothing stays held on the device left (a drag across devices drops there)
-    for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
-        if (this->_buttonsDown & (1 << b)) this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
-    for (const QString& code: this->_keysDown)
-        this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Key).u8(0).text8(code).data());
-    this->_buttonsDown = 0;
-    this->_mesh.send(this->_target, QJsonObject{{"t", "leave"}});
-    this->_target = device;
-    this->_mesh.send(this->_target, QJsonObject{{"t", "enter"}, {"x", this->_targetLocal.x()}, {"y", this->_targetLocal.y()}, {"name", this->_config.deviceName()}});
-    emit this->awayChanged();
-}
-
-void xmouse::core::Hub::goHome_(const QPoint& global)
-{
-    const QString self = this->_group.self();
-    const std::optional<Hit> hit = this->_layout.hit(global);
-    const QPoint local = hit && hit->device == self ? hit->local : this->_layout.bounds(self).center();
-
-    if (!this->_away) return;
-    for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
-        if (this->_buttonsDown & (1 << b)) this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(b)).u8(0).data());
-    for (const QString& code: this->_keysDown)
-        this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Key).u8(0).text8(code).data());
-    this->_mesh.send(this->_target, QJsonObject{{"t", "leave"}});
-    this->_away = false;
-    this->_target.clear();
-    this->_keysDown.clear();
-    this->_buttonsDown = 0;
-    this->_flush.stop();
-    this->_global = QPointF(global);
-    if (this->_capture) this->_capture->release(local);
-    this->_presenceDirty = true;
-    emit this->awayChanged();
-}
-
-void xmouse::core::Hub::comeBack(void)
-{
-    QScreen* primary = is_gui() ? QGuiApplication::primaryScreen() : nullptr;
-
-    if (!this->_away) return;
-    this->goHome_(this->_layout.toGlobal(this->_group.self(), primary ? primary->geometry().center() : this->_layout.bounds(this->_group.self()).center()));
-}
-
-void xmouse::core::Hub::onButton_(const net::MouseButton button, const bool down)
-{
-    const int bit = 1 << static_cast<int>(button);
-
-    if (!this->_away) return;
-    if (down) this->_buttonsDown |= bit;
-    else this->_buttonsDown &= ~bit;
-    this->flushMove_(); // the click lands where the cursor is drawn
-    this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Button).u8(static_cast<std::uint8_t>(button)).u8(down ? 1 : 0).data());
-    this->_presenceDirty = true;
-}
-
-void xmouse::core::Hub::onWheel_(const int dx, const int dy)
-{
-    if (!this->_away || (dx == 0 && dy == 0)) return;
-    this->flushMove_();
-    this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Wheel).i16(static_cast<std::int16_t>(std::clamp(dx, -32000, 32000))).i16(static_cast<std::int16_t>(std::clamp(dy, -32000, 32000))).data());
-}
-
-void xmouse::core::Hub::onKey_(const QString& code, const bool down)
-{
-    const std::function<bool(const QString&, const QString&)> held = [this](const QString& a, const QString& b) {return this->_keysDown.contains(a) || this->_keysDown.contains(b);};
-
-    if (!this->_away) return;
-    if (down) this->_keysDown.insert(code);
-    else this->_keysDown.remove(code);
-
-    // Ctrl + Alt + Shift: back on this device at once (the modifiers are released on the other side)
-    if (down && held("ControlLeft", "ControlRight") && held("AltLeft", "AltRight") && held("ShiftLeft", "ShiftRight")) {
-        this->comeBack();
-        return;
-    }
-    this->_mesh.sendBinary(this->_target, net::ByteWriter(net::Binary::Key).u8(down ? 1 : 0).text8(code).data());
-}
-
-void xmouse::core::Hub::sendPresence_(void)
-{
-    Presence mine;
-    QString on;
-    QPoint global;
-    int flags = 0;
-
-    if (!this->_presenceDirty || !this->_group.joined()) return;
-    this->_presenceDirty = false;
-    if (this->_away) {
-        on = this->_target;
-        global = this->_global.toPoint();
-        if (this->_buttonsDown) flags |= XMOUSE_PRESENCE_DOWN;
-    } else {
-        on = this->_group.self();
-        global = this->_capture && this->_capture->knowsPointer() ? this->_layout.toGlobal(on, this->_capture->pointer()) : this->_global.toPoint();
-        flags |= XMOUSE_PRESENCE_HIDDEN;
-    }
-    mine = Presence{this->_group.self(), on, global, flags, now_ms()};
-    this->_presence[mine.id] = mine;
-    this->_mesh.broadcastBinary(net::ByteWriter(net::Binary::Presence).u16(++this->_seq).text8(on).i32(global.x()).i32(global.y()).u8(static_cast<std::uint8_t>(flags)).data());
-    emit this->presenceChanged();
-}
-
-//----------------------------------------------------------------//
-/* FOREIGN CURSORS */
-
-void xmouse::core::Hub::foreignEnter_(const QString& id, const QJsonObject& o)
-{
-    const Rights rights = this->_config.rightsOf(id);
-    Foreign f;
-
-    if (this->_config.settings().privateMode) {this->_mesh.send(id, QJsonObject{{"t", "deny"}, {"reason", "private mode"}}); return;}
-    if (!rights.mouse) {this->_mesh.send(id, QJsonObject{{"t", "deny"}, {"reason", "no mouse right here"}}); return;}
-    f.id = id;
-    f.name = this->_layout.device(id).name.isEmpty() ? o.value("name").toString().left(64) : this->_layout.device(id).name;
-    f.color = colorOf(id);
-    f.local = QPoint(o.value("x").toInt(), o.value("y").toInt());
-    f.seen = now_ms();
-    if (this->_foreign.contains(id)) f.state = this->_foreign.value(id).state;
-    this->_foreign[id] = f;
-    this->_log.info("input", id, "cursor of " + f.name + " entered");
-    emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::foreignLeave_(const QString& id)
-{
-    auto it = this->_foreign.find(id);
-
-    if (it == this->_foreign.end()) return;
-    if (this->_injector) {
-        for (int b = 0; b <= static_cast<int>(net::MouseButton::Forward); ++b)
-            if (it->buttons & (1 << b)) this->_injector->mouseButton(static_cast<net::MouseButton>(b), false);
-        if (this->_keyboardOwner == id) this->_injector->releaseAll(); // no modifier left held by its keyboard
-    }
-    if (this->_keyboardOwner == id) this->_keyboardOwner.clear();
-    if (it->state == ForeignState::Asking) emit this->accessEnded(id, false);
-    this->_foreign.erase(it);
-    this->_restoreTimer.start(RESTORE_DELAY);
-    emit this->foreignChanged();
-}
-
-bool xmouse::core::Hub::blocked_(Foreign& f, const QPoint& at)
-{
-    bool over = false;
-
-    if (f.state == ForeignState::Granted) return false;
-    for (const QRect& r: this->_panelRects)
-        if (r.contains(at)) over = true;
-    if (!this->_panelFocused && !over) {
-        if (f.state == ForeignState::Paused) {f.state = ForeignState::Free; emit this->foreignChanged();}
-        return false;
-    }
-
-    // First touch: held and told; a second one asks the access (granted after the delay unless refused)
-    if (f.state == ForeignState::Free) {
-        f.state = ForeignState::Paused;
-        this->_mesh.send(f.id, QJsonObject{{"t", "access"}, {"text", "the xmouse panel is protected: click again to ask the access"}});
-    } else if (f.state == ForeignState::Paused && this->_config.settings().focusRequest) {
-        f.state = ForeignState::Asking;
-        f.askedAt = now_ms();
-        this->_log.warn("access", f.id, f.name + " asks the access to the panel (" + QString::number(this->_config.settings().focusRequestDelay) + " s)");
-        this->_mesh.send(f.id, QJsonObject{{"t", "access"}, {"text", "access asked, granted in " + QString::number(this->_config.settings().focusRequestDelay) + " s unless refused"}});
-        emit this->accessRequested(f.id, f.name, this->_config.settings().focusRequestDelay);
-    }
-    emit this->foreignChanged();
-    return true;
-}
-
-void xmouse::core::Hub::foreignPointer_(const QString& id, const QPoint& local)
-{
-    auto it = this->_foreign.find(id);
-    const QRect desktop = this->_layout.bounds(this->_group.self());
-
-    if (it == this->_foreign.end()) return;
-    it->local = QPoint(std::clamp(local.x(), desktop.left(), std::max(desktop.left(), desktop.right())), std::clamp(local.y(), desktop.top(), std::max(desktop.top(), desktop.bottom())));
-    it->seen = now_ms();
-    if (it->state == ForeignState::Paused && !this->_panelFocused) {
-        bool over = false;
-        for (const QRect& r: this->_panelRects)
-            if (r.contains(it->local)) over = true;
-        if (!over) it->state = ForeignState::Free;
-    }
-
-    // A drag: the real pointer follows the cursor that holds the button
-    if (it->buttons != 0 && this->_injector && it->state != ForeignState::Paused && it->state != ForeignState::Asking) this->_injector->mouseMove(this->injectPoint_(it->local).x(), this->injectPoint_(it->local).y());
-    emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::foreignButton_(const QString& id, const net::MouseButton button, const bool down)
-{
-    auto it = this->_foreign.find(id);
-    const int bit = 1 << static_cast<int>(button);
-    bool anyHeld = false;
-    QPoint at;
-
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).mouse) return;
-    if (down && this->blocked_(*it, it->local)) return;
-    if (!down && !(it->buttons & bit)) return; // the down was held back: its up too
-    for (const Foreign& f: this->_foreign)
-        if (f.buttons != 0) anyHeld = true;
-
-    // Teleported click: the real pointer goes there, clicks, and comes back after the last button up
-    if (down && !anyHeld && !this->_hasSavedPointer && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
-        this->_savedPointer = this->_capture->pointer();
-        this->_hasSavedPointer = true;
-    }
-    this->_restoreTimer.stop();
-    at = this->injectPoint_(it->local);
-    this->_lastInject = now_ms();
-    this->_injector->mouseMove(at.x(), at.y());
-    this->_injector->mouseButton(button, down);
-    if (down) {it->buttons |= bit; this->_keyboardOwner = id;}
-    else it->buttons &= ~bit;
-    anyHeld = false;
-    for (const Foreign& f: this->_foreign)
-        if (f.buttons != 0) anyHeld = true;
-    if (!anyHeld) this->_restoreTimer.start(RESTORE_DELAY);
-    emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::foreignWheel_(const QString& id, const int dx, const int dy)
-{
-    auto it = this->_foreign.find(id);
-    QPoint at;
-
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).mouse) return;
-    if (this->blocked_(*it, it->local)) return;
-    if (!this->_hasSavedPointer && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
-        this->_savedPointer = this->_capture->pointer();
-        this->_hasSavedPointer = true;
-    }
-    at = this->injectPoint_(it->local);
-    this->_lastInject = now_ms();
-    this->_injector->mouseMove(at.x(), at.y()); // the wheel scrolls what is under the pointer
-    this->_injector->mouseWheel(dx, dy);
-    this->_restoreTimer.start(WHEEL_RESTORE_DELAY);
-}
-
-void xmouse::core::Hub::foreignKey_(const QString& id, const QString& code, const bool down)
-{
-    auto it = this->_foreign.find(id);
-
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
-    if (down && this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
-    this->_keyboardOwner = id;
-    this->_lastInject = now_ms();
-    this->_injector->key(code, down);
-}
-
-void xmouse::core::Hub::foreignText_(const QString& id, const QString& text)
-{
-    auto it = this->_foreign.find(id);
-
-    if (it == this->_foreign.end() || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
-    if (this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
-    this->_lastInject = now_ms();
-    this->_injector->text(text);
-}
-
-void xmouse::core::Hub::restorePointer_(void)
-{
-    QPoint at;
-
-    for (const Foreign& f: this->_foreign)
-        if (f.buttons != 0) return;
-    if (!this->_hasSavedPointer || !this->_injector) return;
-    at = this->injectPoint_(this->_savedPointer);
-    this->_injector->mouseMove(at.x(), at.y());
-    this->_hasSavedPointer = false;
-}
-
-void xmouse::core::Hub::setPanelFocused(const bool focused)
-{
-    this->_panelFocused = focused;
-    if (focused) return; // held at their next click / key (blocked_), told then
-    for (Foreign& f: this->_foreign) {
-        if (f.state == ForeignState::Paused) f.state = ForeignState::Free;
-    }
-    emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::panelUsedLocally(void)
-{
-    bool changed = false;
-
-    for (Foreign& f: this->_foreign) {
-        if (f.state != ForeignState::Granted && f.state != ForeignState::Asking) continue;
-        if (f.state == ForeignState::Asking) emit this->accessEnded(f.id, false);
-        f.state = ForeignState::Paused;
-        changed = true;
-    }
-    if (changed) emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::refuseAccess(const QString& id)
-{
-    auto it = this->_foreign.find(id);
-
-    if (it == this->_foreign.end() || it->state != ForeignState::Asking) return;
-    it->state = ForeignState::Paused;
-    this->_log.info("access", id, "access to the panel refused for " + it->name);
-    this->_mesh.send(id, QJsonObject{{"t", "access"}, {"text", "access to the panel refused"}});
-    emit this->accessEnded(id, false);
-    emit this->foreignChanged();
-}
-
-void xmouse::core::Hub::kickCursor(const QString& id)
-{
-    this->_mesh.send(id, QJsonObject{{"t", "kick"}});
-    this->foreignLeave_(id);
-}
-
-void xmouse::core::Hub::setPrivateMode(const bool enabled)
-{
-    this->_config.settings().privateMode = enabled;
-    this->_config.save();
-    if (enabled)
-        for (const QString& id: this->_foreign.keys())
-            this->kickCursor(id);
-    this->_log.info("settings", "", QString("private mode ") + (enabled ? "on" : "off"));
-}
-
-void xmouse::core::Hub::setRights(const QString& id, const Rights& rights)
-{
-    this->_config.settings().rights[id] = rights;
-    this->_config.save();
-    if (!rights.mouse && this->_foreign.contains(id)) this->kickCursor(id);
-    this->_log.info("settings", id, "rights changed");
-}
+/* HOUSEKEEPING */
 
 void xmouse::core::Hub::housekeeping_(void)
 {
@@ -1208,71 +986,33 @@ void xmouse::core::Hub::housekeeping_(void)
         if (f.state != ForeignState::Asking || now - f.askedAt < static_cast<qint64>(this->_config.settings().focusRequestDelay) * 1000) continue;
         f.state = ForeignState::Granted;
         this->_log.warn("access", f.id, "access to the panel granted to " + f.name + " (not refused in time)");
-        this->_mesh.send(f.id, QJsonObject{{"t", "access"}, {"text", "access to the panel granted"}});
+        this->sendTo_(f.id, QJsonObject{{"t", "access"}, {"text", "access to the panel granted"}});
         emit this->accessEnded(f.id, true);
         emit this->foreignChanged();
     }
     for (const QString& id: this->_foreign.keys())
-        if (!this->_mesh.isOnline(id)) this->foreignLeave_(id);
+        if (!this->reachable(id)) this->foreignLeave_(id);
     for (auto it = this->_presence.begin(); it != this->_presence.end();) {
         if (it.key() != this->_group.self() && now - it->seen > PRESENCE_TTL) {it = this->_presence.erase(it); presence = true;}
         else ++it;
     }
     if (presence) emit this->presenceChanged();
     if (!this->_away) this->_presenceDirty = this->_capture && this->_capture->knowsPointer();
+
+    // Files: stalled transfers dropped, old offers forgotten
+    for (const QString& id: this->_transfers.keys())
+        if (now - this->_transfers.value(id).touched > STALLED_TRANSFER) this->failTransfer_(id, "stalled", true);
+    for (auto it = this->_offers.begin(); it != this->_offers.end();) {
+        if (now - it->created > OFFER_LIFETIME) it = this->_offers.erase(it);
+        else ++it;
+    }
+
+    // Windows: a viewer without frames for a while is closed
+    for (const QString& id: this->_streams.keys()) {
+        const Stream s = this->_streams.value(id);
+        if (!s.outgoing && s.lastFrame != 0 && now - s.lastFrame > STREAM_TIMEOUT) this->stopStream(id);
+        else if (!this->reachable(s.peer)) this->stopStream(id);
+    }
     if (++ticks % 30 == 0) this->publishSelf_(); // addresses (dhcp, tailscale up / down)
     emit this->membersChanged(); // latencies
-}
-
-//----------------------------------------------------------------//
-/* CLIPBOARD */
-
-void xmouse::core::Hub::onLocalClipboard_(void)
-{
-    QJsonObject message{{"t", "clip"}};
-    QByteArray data;
-    QString mime;
-
-    if (!this->_config.settings().clipboard || !this->_group.joined() || this->_mesh.ids().isEmpty()) return;
-    if (this->_clipboard.backend() == "qt") {
-        const QMimeData* m = QGuiApplication::clipboard()->mimeData();
-        if (!m) return;
-        if (m->hasImage()) {
-            const QImage image = qvariant_cast<QImage>(m->imageData());
-            QBuffer buffer(&data);
-            buffer.open(QIODevice::WriteOnly);
-            if (image.isNull() || !image.save(&buffer, "PNG")) return;
-            mime = "image/png";
-        } else if (m->hasText()) {
-            data = m->text().toUtf8();
-            mime = "text/plain";
-        } else return;
-    } else {
-        data = this->_clipboard.text().toUtf8();
-        mime = "text/plain";
-    }
-    if (data.isEmpty() || data.size() > XMOUSE_MAX_CLIPBOARD) return;
-    const QString hash = content_hash(mime, data);
-    if (hash == this->_lastClipboardHash) return; // set here by a member: not sent back
-    this->_lastClipboardHash = hash;
-    message["mime"] = mime;
-    message["data"] = QString::fromLatin1(data.toBase64());
-    this->_mesh.broadcast(message);
-}
-
-void xmouse::core::Hub::onRemoteClipboard_(const QString& id, const QJsonObject& o)
-{
-    const QString mime = o.value("mime").toString();
-    const QByteArray data = QByteArray::fromBase64(o.value("data").toString().toLatin1());
-
-    if (!this->_config.rightsOf(id).clipboard || data.isEmpty() || data.size() > XMOUSE_MAX_CLIPBOARD) return;
-    this->_lastClipboardHash = content_hash(mime, data);
-    if (mime == "image/png") {
-        QImage image;
-        if (!image.loadFromData(data, "PNG") || this->_clipboard.backend() != "qt") return;
-        QGuiApplication::clipboard()->setImage(image);
-    } else if (mime == "text/plain") {
-        if (this->_clipboard.backend() == "qt") QGuiApplication::clipboard()->setText(QString::fromUtf8(data));
-        else this->_clipboard.setText(QString::fromUtf8(data));
-    }
 }

@@ -47,12 +47,15 @@ set(SRC
     ## Core (sub-part: core)
     xmouse/core/State.cpp
     xmouse/core/Layout.cpp
+    xmouse/core/Routing.cpp
+    xmouse/core/Tools.cpp
 
     ## Security (sub-part: security)
     xmouse/security/Group.cpp
 
     ## Network (sub-part: net)
     xmouse/net/Mesh.cpp
+    xmouse/net/Datagrams.cpp
 )
 add_executable(${TARGET} ${SRC} ${SRC_PROJECT})
 
