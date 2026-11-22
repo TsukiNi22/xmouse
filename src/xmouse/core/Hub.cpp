@@ -160,6 +160,9 @@ void xmouse::core::Hub::start(void)
     ctx.os = osName();
     security::configure_tls(client, true); // devices: post-quantum only
     ctx.tls = client;
+    ctx.tlsCompat = QSslConfiguration::defaultConfiguration();
+    security::configure_tls(ctx.tlsCompat, false);
+    ctx.postQuantum = [this](const QString& id) {return this->_state.value("device/" + id).toObject().value("pq").toBool(true);};
     ctx.memberCheck = [this](const QString& id) -> QString {
         if (!this->_group.joined()) return "not in a network";
         if (this->_state.contains("removed/" + id)) return "removed from the network";
@@ -317,6 +320,7 @@ void xmouse::core::Hub::publishSelf_(void)
     entry["kind"] = net::device_kind_name(net::DeviceKind::Desktop);
     entry["version"] = XMOUSE_VERSION;
     entry["fp"] = QString::fromLatin1(this->_certificate.fingerprint().toHex());
+    entry["pq"] = security::pq_available(); // the others dial this device post-quantum only when it can
     entry["port"] = this->_mesh.port();
     entry["addresses"] = addresses;
     entry["screens"] = screens_to_json(local_screens());

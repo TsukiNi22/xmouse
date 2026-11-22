@@ -70,6 +70,8 @@ struct PeerContext {
     QString os = ""; // "linux" | "windows" | "macos" | "android"
     quint16 port = 0; // listening port of this device (the others dial it)
     QSslConfiguration tls; // client side configuration (post-quantum groups)
+    QSslConfiguration tlsCompat; // client side for a device without ML-KEM (OpenSSL < 3.5) and for the joins (hybrid first, classic accepted)
+    std::function<bool(const QString&)> postQuantum; // id -> the device has ML-KEM (true when unknown)
     std::function<QString(const QString&)> memberCheck; // id -> "" = a member that may connect, else why not
     std::function<QByteArray(const QString&)> pinned; // id -> its known certificate fingerprint ("" = unknown)
     std::function<QJsonObject(void)> state; // full replicated state (sent to a new member)
@@ -123,7 +125,7 @@ class Peer: public QObject {
     public:
         // ---------- Pre-Function -------- //
         _cold static Peer* accept(WebSocket* ws, const PeerContext& ctx, QObject* parent = nullptr); // server side (hello sent at once)
-        _cold static Peer* dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code = "", QObject* parent = nullptr); // client side, code = join
+        _cold static Peer* dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code = "", QObject* parent = nullptr, const bool compat = false); // client side, code = join, compat = tlsCompat
         _cold void approve(const bool accepted); // server: answer of the local person to a join
         _cold void close(const QString& reason);
 

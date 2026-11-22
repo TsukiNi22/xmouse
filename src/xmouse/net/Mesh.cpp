@@ -222,7 +222,7 @@ void xmouse::net::Mesh::dialAll_(void)
             const QString key = id + "|" + address.first + ":" + QString::number(address.second);
             if (now - this->_lastDial.value(key, 0) < DIAL_RETRY) continue;
             this->_lastDial[key] = now;
-            Peer* peer = Peer::dial(address.first, address.second, this->_ctx, "", this);
+            Peer* peer = Peer::dial(address.first, address.second, this->_ctx, "", this, this->_ctx.postQuantum && !this->_ctx.postQuantum(id));
             peer->setProperty("xmouse_target", id);
             this->_pending.append(peer);
             this->watch_(peer);
@@ -233,7 +233,7 @@ void xmouse::net::Mesh::dialAll_(void)
 
 xmouse::net::Peer* xmouse::net::Mesh::join(const QString& host, const quint16 port, const QString& code)
 {
-    Peer* peer = Peer::dial(host, port, this->_ctx, code, this);
+    Peer* peer = Peer::dial(host, port, this->_ctx, code, this, true); // the device joined may lack ML-KEM: hybrid first, classic accepted
 
     this->_pending.append(peer);
     this->watch_(peer);

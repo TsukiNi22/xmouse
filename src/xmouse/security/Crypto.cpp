@@ -173,12 +173,19 @@ void xmouse::security::configure_tls(QSslConfiguration& config, const bool stric
 {
     // TLS 1.3 only: forward secrecy, no renegotiation, encrypted certificate
     config.setProtocol(QSsl::TlsV1_3OrLater);
-    config.setBackendConfigurationOption("Groups", QByteArray(strict_pq ? XMOUSE_TLS_GROUPS_STRICT : XMOUSE_TLS_GROUPS));
+    if (!pq_available()) config.setBackendConfigurationOption("Groups", QByteArray(XMOUSE_TLS_GROUPS_CLASSIC)); // unknown groups would break every handshake
+    else config.setBackendConfigurationOption("Groups", QByteArray(strict_pq ? XMOUSE_TLS_GROUPS_STRICT : XMOUSE_TLS_GROUPS));
     config.setSslOption(QSsl::SslOptionDisableSessionTickets, true);
     config.setSslOption(QSsl::SslOptionDisableCompression, true);
 }
 
 QString xmouse::security::tls_summary(void)
 {
+    if (!pq_available()) return QString("TLS 1.3 / X25519, no post-quantum (%1: 3.5 needed for ML-KEM)").arg(QString::fromLatin1(OpenSSL_version(OPENSSL_VERSION)));
     return QString("TLS 1.3 / X25519MLKEM768 hybrid (%1)").arg(QString::fromLatin1(OpenSSL_version(OPENSSL_VERSION)));
+}
+
+bool xmouse::security::pq_available(void)
+{
+    return OpenSSL_version_num() >= 0x30500000UL; // the library loaded, not the headers of the build
 }

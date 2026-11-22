@@ -85,9 +85,9 @@ xmouse::net::Peer* xmouse::net::Peer::accept(WebSocket* ws, const PeerContext& c
     return peer;
 }
 
-xmouse::net::Peer* xmouse::net::Peer::dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code, QObject* parent)
+xmouse::net::Peer* xmouse::net::Peer::dial(const QString& host, const quint16 port, const PeerContext& ctx, const QString& code, QObject* parent, const bool compat)
 {
-    WebSocket* ws = WebSocket::connectTo(host, port, "/ws", ctx.tls);
+    WebSocket* ws = WebSocket::connectTo(host, port, "/ws", compat ? ctx.tlsCompat : ctx.tls);
     Peer* peer = new Peer(ws, ctx, true, parent);
 
     peer->_host = host;

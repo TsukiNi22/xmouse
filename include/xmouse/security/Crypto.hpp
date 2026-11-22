@@ -36,6 +36,7 @@ File Description:
     /* tls */
     #define XMOUSE_TLS_GROUPS "X25519MLKEM768:SecP256r1MLKEM768:X25519:secp256r1" // hybrid post-quantum key exchange first
     #define XMOUSE_TLS_GROUPS_STRICT "X25519MLKEM768:SecP256r1MLKEM768" // native peers: post-quantum only
+    #define XMOUSE_TLS_GROUPS_CLASSIC "X25519:secp256r1" // OpenSSL < 3.5 (no ML-KEM: the Windows build of Fedora)
 
     /* argon2id (pairing code proof) */
     #define XMOUSE_ARGON2_MEMORY 65536 // KiB
@@ -66,6 +67,7 @@ _cold _nodiscard QString fingerprint_short(const QByteArray& fingerprint); // fi
 /* tls */
 _cold void configure_tls(QSslConfiguration& config, const bool strict_pq = false); // TLS 1.3 only, ML-KEM hybrid groups, no session tickets
 _cold _nodiscard QString tls_summary(void); // "TLS 1.3 / X25519MLKEM768 (OpenSSL x.y.z)"
+_cold _nodiscard bool pq_available(void); // the OpenSSL loaded has ML-KEM (>= 3.5): the hybrid groups can be used
 
 } // namespace end
 #endif /* CRYPTO_H */
