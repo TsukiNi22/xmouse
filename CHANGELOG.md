@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+
+## [v1.0.12-pre] - 2026-11-22
 ### Fixed
 - **The clicks on a phone worked one time in two**: when Android stopped the Accessibility service (battery saving, the app swiped away), the app lent the screen again without it, and the two links of the screen took turns; the app no longer lends the screen without the service while it is turned on in the settings, a link replaced by the other one stops instead of coming back, and the guide adds Battery > Unrestricted
 - Android: the overlay service declares itself in the foreground before stopping at once (else Android ends the app)
