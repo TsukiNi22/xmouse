@@ -21,6 +21,8 @@ File Description:
 #define _Attribute
 #include <utils/utils.hpp>
 #include "xmouse/ui/gui/Theme.hpp"
+#include <QHeaderView>
+#include <QTableView>
 #include <QStyledItemDelegate>
 #include <QAbstractButton>
 #include <QTemporaryDir>
@@ -662,7 +664,13 @@ QColor xmouse::ui::gui::Theme::terminalColor(const int index)
 
 void xmouse::ui::gui::Theme::decorate(QAbstractItemView* view)
 {
+    QTableView* table = qobject_cast<QTableView*>(view);
+
     view->setItemDelegate(new RowDelegate(view));
     view->setFocusPolicy(Qt::StrongFocus);
     view->setMouseTracking(true); // hover of the rows
+    if (table) { // room for the buttons / check boxes of the cells (a button is ~30 px: never cut)
+        table->verticalHeader()->setMinimumSectionSize(40);
+        table->verticalHeader()->setDefaultSectionSize(40);
+    }
 }

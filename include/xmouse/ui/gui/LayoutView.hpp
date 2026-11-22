@@ -53,9 +53,14 @@ class LayoutView final: public QWidget {
         bool _editable = true;
         QString _dropTarget = ""; // device under files being dragged over the map
         QTimer _anim; // 30 ms while a "look here" wave is shown
+        bool _fitted = false; // the view was fitted once: it stays where the person put it (the corner button fits it again)
+        bool _panning = false; // the background is dragged
+        QPoint _panStart; // widget pixels
+        QPointF _panOrigin; // offset when the pan started
+        QWidget* _recenter = nullptr; // corner button: the whole layout in view again
 
         // ---------- Pre-Function -------- //
-        void fit_(void); // _view, _scale, _offset from the layout
+        void fit_(void); // _view, _scale, _offset from the layout (once, then the corner button)
         _hot _nodiscard QString deviceAt_(const QPoint& widget) const;
 
         // ------------ Function ---------- //
@@ -69,6 +74,8 @@ class LayoutView final: public QWidget {
         void mouseMoveEvent(QMouseEvent* event) override;
         void mouseReleaseEvent(QMouseEvent* event) override;
         void contextMenuEvent(QContextMenuEvent* event) override; // follow, send files / a link, show a window there
+        void wheelEvent(QWheelEvent* event) override; // zoom around the pointer
+        void resizeEvent(QResizeEvent* event) override; // the center stays the center
         void dragEnterEvent(QDragEnterEvent* event) override;
         void dragMoveEvent(QDragMoveEvent* event) override;
         void dragLeaveEvent(QDragLeaveEvent* event) override;

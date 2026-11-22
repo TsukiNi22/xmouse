@@ -26,6 +26,9 @@ File Description:
 #include <QContextMenuEvent>
 #include <QFontMetrics>
 #include <QInputDialog>
+#include <QResizeEvent>
+#include <QToolButton>
+#include <QWheelEvent>
 #include <QMouseEvent>
 #include <QFileDialog>
 #include <QMimeData>
@@ -55,6 +58,15 @@ xmouse::ui::gui::LayoutView::LayoutView(core::Hub& hub, QWidget* parent)
     QObject::connect(&hub, &core::Hub::membersChanged, this, qOverload<>(&QWidget::update));
     QObject::connect(&hub, &core::Hub::followChanged, this, qOverload<>(&QWidget::update));
     this->setAcceptDrops(true);
+    {
+        QToolButton* recenter = new QToolButton(this);
+        recenter->setText("Recenter");
+        recenter->setToolTip("The whole layout in view again (drag the background to move the view, the wheel zooms)");
+        recenter->setCursor(Qt::PointingHandCursor);
+        recenter->adjustSize();
+        QObject::connect(recenter, &QToolButton::clicked, this, [this]() {this->_fitted = false; this->update();});
+        this->_recenter = recenter;
+    }
     this->_anim.setInterval(30);
     QObject::connect(&this->_anim, &QTimer::timeout, this, [this]() {
         bool waving = false;
@@ -75,8 +87,9 @@ void xmouse::ui::gui::LayoutView::fit_(void)
     const double w = std::max(1, this->width() - 2 * MARGIN);
     const double h = std::max(1, this->height() - 2 * MARGIN);
 
-    if (!this->_dragged.isEmpty() && this->_view.isValid()) return; // stable while dragging
+    if (this->_fitted) return; // the view stays where the person put it (never recentered by itself)
     if (box.isEmpty()) box = QRect(0, 0, 1920, 1080);
+    else this->_fitted = true; // fitted on a real layout: kept from now on
     box.adjust(-box.width() / 6, -box.height() / 6, box.width() / 6, box.height() / 6); // room to move a device around
     this->_view = box;
     this->_scale = std::min(w / box.width(), h / box.height());
@@ -149,6 +162,7 @@ void xmouse::ui::gui::LayoutView::paintEvent(QPaintEvent*)
         QColor color = m.color.isValid() ? m.color : palette.accent;
 
         if (hidden && !m.self) continue; // on its own device: its OS draws it, the map shows it only for this device
+        if (pr.flags & XMOUSE_PRESENCE_UNKNOWN) continue; // its platform does not tell where it is: never a stale dot
         if (!this->rect().contains(at.toPoint())) continue;
         if (pr.flags & XMOUSE_PRESENCE_PING) { // "look here": waves around it
             const double t = static_cast<double>(QDateTime::currentMSecsSinceEpoch() % 900) / 900.0;
@@ -181,6 +195,14 @@ void xmouse::ui::gui::LayoutView::mousePressEvent(QMouseEvent* event)
 {
     const QString id = this->deviceAt_(event->position().toPoint());
 
+    // The background (or the middle button anywhere): the view moves
+    if (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && id.isEmpty())) {
+        this->_panning = true;
+        this->_panStart = event->position().toPoint();
+        this->_panOrigin = this->_offset;
+        this->setCursor(Qt::ClosedHandCursor);
+        return;
+    }
     if (!this->_editable || event->button() != Qt::LeftButton || id.isEmpty()) return;
     this->_hub.panelUsedLocally();
     this->_dragged = id;
@@ -192,6 +214,12 @@ void xmouse::ui::gui::LayoutView::mousePressEvent(QMouseEvent* event)
 
 void xmouse::ui::gui::LayoutView::mouseMoveEvent(QMouseEvent* event)
 {
+    if (this->_panning) {
+        this->_fitted = true;
+        this->_offset = this->_panOrigin + QPointF(event->position().toPoint() - this->_panStart);
+        this->update();
+        return;
+    }
     if (this->_dragged.isEmpty()) {
         this->setCursor(this->_editable && !this->deviceAt_(event->position().toPoint()).isEmpty() ? Qt::OpenHandCursor : Qt::ArrowCursor);
         return;
@@ -206,6 +234,7 @@ void xmouse::ui::gui::LayoutView::mouseReleaseEvent(QMouseEvent* event)
 {
     const QString id = this->_dragged;
 
+    if (this->_panning) {this->_panning = false; this->setCursor(Qt::ArrowCursor); return;}
     if (id.isEmpty() || event->button() != Qt::LeftButton) return;
     core::Layout check = this->_hub.layout();
 
@@ -286,4 +315,28 @@ void xmouse::ui::gui::LayoutView::dropEvent(QDropEvent* event)
         if (url.isLocalFile()) files.append(url.toLocalFile());
     if (id.isEmpty() || files.isEmpty()) return;
     if (!this->_hub.sendFiles(id, files).isEmpty()) event->acceptProposedAction();
+}
+
+//----------------------------------------------------------------//
+/* VIEW */
+
+void xmouse::ui::gui::LayoutView::wheelEvent(QWheelEvent* event)
+{
+    const QPointF at = event->position();
+    const QPointF global = (at - this->_offset) / this->_scale; // the point under the pointer stays under it
+    const double factor = std::pow(1.15, event->angleDelta().y() / 120.0);
+
+    this->fit_();
+    this->_fitted = true;
+    this->_scale = std::clamp(this->_scale * factor, 0.005, 2.0);
+    this->_offset = at - global * this->_scale;
+    this->update();
+    event->accept();
+}
+
+void xmouse::ui::gui::LayoutView::resizeEvent(QResizeEvent* event)
+{
+    if (this->_fitted && event->oldSize().isValid()) this->_offset += QPointF(event->size().width() - event->oldSize().width(), event->size().height() - event->oldSize().height()) / 2.0;
+    if (this->_recenter) this->_recenter->move(this->width() - this->_recenter->width() - 8, 8);
+    QWidget::resizeEvent(event);
 }

@@ -762,7 +762,18 @@ QWidget* xmouse::ui::gui::MainWindow::buildSettings_(void)
 
     card = make_panel("Input and clipboard", body);
     body->addWidget(check("Copies of this device go to the members (text and images)", s.clipboard, ""));
-    body->addWidget(check("The real pointer goes back after a foreign click (X11, Windows)", s.restorePointer, ""));
+    form = new QFormLayout();
+    {
+        QComboBox* mode = new QComboBox();
+        mode->addItem("Move the real pointer (like a second mouse)", "pointer");
+        mode->addItem("Phantom cursors drawn over the apps (Canva-like)", "phantom");
+        mode->setCurrentIndex(std::max(0, mode->findData(s.foreignMode)));
+        mode->setToolTip("Pointer: the cursor of a member moves the pointer of this device. Phantom: it is drawn with its name over the apps, your pointer stays yours (it only jumps for one of its clicks, then comes back)");
+        form->addRow("The cursors of the others here", mode);
+        QObject::connect(mode, &QComboBox::currentIndexChanged, this, [this, mode, save](const int) {this->_hub.config().settings().foreignMode = mode->currentData().toString(); save(); this->_overlay.refresh();});
+    }
+    body->addLayout(form);
+    body->addWidget(check("Phantom mode: the real pointer goes back after a foreign click (X11, Windows, GNOME extension)", s.restorePointer, ""));
     body->addWidget(make_label("Ctrl + Alt + Shift brings the cursor of this device back at once.", "muted"));
     layout->addWidget(card);
 
@@ -1072,7 +1083,7 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
         this->_members->setItem(row, 4, new QTableWidgetItem(m.self ? "" : this->_hub.mesh().addressesOf(m.id).join(", ")));
         rightsLayout->setContentsMargins(4, 0, 4, 0);
         rightsLayout->setSpacing(8);
-        if (!m.self) {
+        if (!m.self && m.via.isEmpty()) { // a phone / pad drives its own device: no rights to give it here
             const std::array<std::pair<QString, int>, 6> boxes = {std::pair<QString, int>{"Mouse", 0}, {"Keys", 1}, {"Clipboard", 2}, {"Files", 3}, {"Links", 4}, {"Windows", 5}};
             for (const auto& [label, index]: boxes) {
                 QCheckBox* box = new QCheckBox(label);
@@ -1094,8 +1105,11 @@ void xmouse::ui::gui::MainWindow::refreshMembers_(void)
         this->_members->setCellWidget(row, 5, rights);
         if (!m.self) {
             QPushButton* remove = make_button("Remove", "ghost");
-            QObject::connect(remove, &QPushButton::clicked, this, [this, id = m.id, name = m.name]() {
-                if (QMessageBox::question(this, "Remove " + name, name + " leaves the network: the key of the network changes, it needs a new code to come back.") == QMessageBox::Yes) this->_hub.removeMember(id);
+            const bool padOfThis = m.via == this->_hub.group().self();
+            if (!m.via.isEmpty() && !padOfThis) remove->setEnabled(false); // the pad of another device: removed there
+            QObject::connect(remove, &QPushButton::clicked, this, [this, id = m.id, name = m.name, padOfThis]() {
+                const QString text = padOfThis ? name + " can no longer drive this device (it pairs again with a new code)." : name + " leaves the network: the key of the network changes, it needs a new code to come back.";
+                if (QMessageBox::question(this, "Remove " + name, text) == QMessageBox::Yes) this->_hub.removeMember(id);
             });
             this->_members->setCellWidget(row, 6, remove);
         } else this->_members->setCellWidget(row, 6, nullptr);
