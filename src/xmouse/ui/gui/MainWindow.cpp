@@ -763,7 +763,8 @@ void xmouse::ui::gui::MainWindow::refreshEndpoints_(void)
     }
     for (int i = 0; i < endpoints.size(); ++i) {
         const net::Endpoint& e = endpoints[i];
-        const QString address = "https://" + e.host + ":" + QString::number(e.port);
+        const QString urlHost = QUrl(e.url).host().isEmpty() ? e.host : QUrl(e.url).host(); // the tailnet name only with its certificate (HSTS), else the address
+        const QString address = "https://" + urlHost + ":" + QString::number(e.port);
         const QString kind = e.label == "Tailscale" ? "tailscale" : (e.label == "LAN" ? "lan" : (e.label == "This PC" ? "local" : "internet"));
         QFrame* row = new QFrame(this->_endpointList);
         QHBoxLayout* rowLayout = new QHBoxLayout(row);
@@ -785,14 +786,14 @@ void xmouse::ui::gui::MainWindow::refreshEndpoints_(void)
         texts->setSpacing(3);
         texts->addWidget(make_label(address, "address"));
         texts->addWidget(reach);
-        copy->setToolTip("Copy " + e.host + ":" + QString::number(e.port) + " (Connect to a network on the other device)");
+        copy->setToolTip("Copy " + address + " (Connect to a network on the other device, or a browser)");
         qr->setToolTip("QR code of this address (with the code)");
         qr->setVisible(kind != "local"); // "This device" only: no QR code for another device
         rowLayout->addWidget(tag, 0, Qt::AlignVCenter);
         rowLayout->addLayout(texts, 1);
         rowLayout->addWidget(copy);
         rowLayout->addWidget(qr);
-        QObject::connect(copy, &QPushButton::clicked, this, [copy, text = e.host + ":" + QString::number(e.port)]() {
+        QObject::connect(copy, &QPushButton::clicked, this, [copy, text = address]() {
             QGuiApplication::clipboard()->setText(text);
             copy->setText("Copied");
             QTimer::singleShot(1500, copy, [copy]() {copy->setText("");});
@@ -840,7 +841,7 @@ void xmouse::ui::gui::MainWindow::showQr_(const int endpoint)
     for (int i = 0; i < endpoints.size(); ++i) {
         if (endpoints[i].label == "This PC") continue;
         if (i == endpoint || (endpoint < 0 && first < 0)) first = address->count();
-        address->addItem(endpoints[i].label + "  ·  " + endpoints[i].host + ":" + QString::number(endpoints[i].port), i);
+        address->addItem(endpoints[i].label + "  ·  " + (QUrl(endpoints[i].url).host().isEmpty() ? endpoints[i].host : QUrl(endpoints[i].url).host()) + ":" + QString::number(endpoints[i].port), i);
     }
     address->setCurrentIndex(std::max(0, first));
     layout->addWidget(address);
@@ -856,7 +857,8 @@ void xmouse::ui::gui::MainWindow::showQr_(const int endpoint)
     layout->addLayout(buttons);
     draw = [this, address, image, link, endpoints]() {
         const int index = address->currentData().toInt();
-        const QString text = index >= 0 && index < endpoints.size() ? this->_hub.joinLink(endpoints[index].host, endpoints[index].port) : this->_hub.joinLink();
+        const QString host = index >= 0 && index < endpoints.size() ? (QUrl(endpoints[index].url).host().isEmpty() ? endpoints[index].host : QUrl(endpoints[index].url).host()) : QString();
+        const QString text = host.isEmpty() ? this->_hub.joinLink() : this->_hub.joinLink(host, endpoints[index].port);
         image->setPixmap(qr_pixmap(text, 300));
         link->setText(text.section('?', 0, 0) + "  ·  code " + this->_hub.code().display()); // the identity is too long to show: in the tooltip and the copy
         link->setToolTip(text);

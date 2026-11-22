@@ -160,9 +160,11 @@ void xmouse::core::Hub::start(void)
     ctx.name = this->_config.deviceName();
     ctx.os = osName();
     security::configure_tls(client, true); // devices: post-quantum only
+    client.setSslOption(QSsl::SslOptionDisableServerNameIndication, true); // no SNI: the pinned certificate, even on the tailnet name (the browsers asking it get the tailscale one)
     ctx.tls = client;
     ctx.tlsCompat = QSslConfiguration::defaultConfiguration();
     security::configure_tls(ctx.tlsCompat, false);
+    ctx.tlsCompat.setSslOption(QSsl::SslOptionDisableServerNameIndication, true);
     ctx.postQuantum = [this](const QString& id) {return this->_state.value("device/" + id).toObject().value("pq").toBool(true);};
     ctx.memberCheck = [this](const QString& id) -> QString {
         if (!this->_group.joined()) return "not in a network";
@@ -177,6 +179,7 @@ void xmouse::core::Hub::start(void)
     server.setLocalCertificate(this->_certificate.certificate());
     server.setPrivateKey(this->_certificate.key());
     security::configure_tls(server, false); // browsers (the web pad) may not speak ML-KEM yet
+    this->_serverTls = server;
     this->_mesh.setMaxFailures(s.maxAuthFailures);
     this->_mesh.setNetworkName(this->_group.name());
     QObject::connect(&this->_mesh, &net::Mesh::peerReady, this, &Hub::onPeerReady_);
@@ -215,6 +218,16 @@ void xmouse::core::Hub::start(void)
     exposure.discovery = false;
     this->_exposure.start(exposure, this->_mesh.port(), ctx.name, security::fingerprint_short(ctx.fingerprint));
     QObject::connect(&this->_exposure, &net::Exposure::changed, this, &Hub::publishSelf_);
+
+    // The browsers asking the tailnet name (HSTS preloaded: a self-signed certificate is refused without exception) get the tailscale certificate
+    QObject::connect(&this->_exposure, &net::Exposure::certificateChanged, this, [this]() {
+        const QString name = this->_exposure.certificateName();
+        QSslConfiguration named = this->_serverTls;
+        named.setLocalCertificateChain(this->_exposure.certificateChain());
+        named.setPrivateKey(this->_exposure.certificateKey());
+        this->_mesh.server().setNamedCertificate(name, name.isEmpty() ? QSslConfiguration() : named);
+        if (!name.isEmpty()) this->_log.info("server", "", "Tailscale certificate for " + name + ": the browsers can open the page on this name");
+    });
 
     // Clipboard: Qt sees text and images, the X11 bridge (native Wayland) only text
     if (this->_clipboard.backend() == "qt") QObject::connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &Hub::onLocalClipboard_);
@@ -592,7 +605,7 @@ QString xmouse::core::Hub::joinLink(const QString& host, const quint16 port) con
     // The first address another device can use (the public / tailnet ones come first, "This PC" last)
     for (const net::Endpoint& e: this->_exposure.endpoints()) {
         if (!target.isEmpty() || e.host.isEmpty() || e.label == "This PC") continue;
-        target = e.host;
+        target = QUrl(e.url).host().isEmpty() ? e.host : QUrl(e.url).host(); // a browser opens it: the tailnet name only with its certificate
         targetPort = e.port;
     }
     if (target.isEmpty() && !net::Exposure::lanAddresses().isEmpty()) target = net::Exposure::lanAddresses().front();

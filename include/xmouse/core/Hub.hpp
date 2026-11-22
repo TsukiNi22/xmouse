@@ -38,6 +38,7 @@ File Description:
     #include "Config.hpp"                           // xmouse::core::Config
     #include "Layout.hpp"                           // xmouse::core::Layout
     #include "State.hpp"                            // xmouse::core::State
+    #include <QSslConfiguration>                    // QSslConfiguration
     #include <QElapsedTimer>                        // QElapsedTimer
     #include <QStringList>                          // QStringList
     #include <QDateTime>                            // QDateTime
@@ -121,6 +122,7 @@ class Hub: public QObject {
         platform::Clipboard _clipboard;
         std::unique_ptr<platform::IInputInjector> _injector;
         std::unique_ptr<platform::IInputCapture> _capture;
+        QSslConfiguration _serverTls; // pinned self-signed certificate (the tailscale one is added for its name)
         QString _injectorError = "";
         QString _captureError = "";
         QTimer _saveTimer; // state written 1 s after the last change
