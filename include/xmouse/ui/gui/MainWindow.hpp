@@ -93,6 +93,7 @@ class MainWindow final: public QMainWindow {
         /* settings page */
         QLineEdit* _deviceName = nullptr;
         QCheckBox* _private = nullptr;
+        QPushButton* _leave = nullptr; // leave the network (red) | create / join one (green)
         QLabel* _backends = nullptr;
         QLabel* _status = nullptr;
 

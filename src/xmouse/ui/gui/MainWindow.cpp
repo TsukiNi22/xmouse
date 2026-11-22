@@ -74,6 +74,15 @@ static QPushButton* make_button(const QString& text, const QString& kind = "", c
     return button;
 }
 
+// Style property: the style sheet is applied again only when the value changes
+static void set_prop(QWidget* widget, const char* name, const QVariant& value)
+{
+    if (widget->property(name) == value) return;
+    widget->setProperty(name, value);
+    widget->style()->unpolish(widget);
+    widget->style()->polish(widget);
+}
+
 static void set_tone(QLabel* label, const QString& tone)
 {
     if (label->property("tone").toString() == tone) return;
@@ -206,6 +215,19 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     this->_status = make_label("", "muted");
     this->_status->setWordWrap(true);
     sideLayout->addWidget(this->_status);
+
+    // Network switch at the bottom (always in reach, like the sharing switch of xdesk): red = leave, green = create / join
+    this->_leave = make_button("", "", "power");
+    this->_leave->setObjectName("share");
+    sideLayout->addSpacing(6);
+    sideLayout->addWidget(this->_leave);
+    QObject::connect(this->_leave, &QPushButton::clicked, this, [this]() {
+        if (!this->_hub.group().joined()) {this->showPage(0); this->_createName->setFocus(); return;}
+        if (QMessageBox::question(this, "Leave the network",
+            "This device leaves the network <b>" + this->_hub.state().value("net/name").toString(this->_hub.group().name()).toHtmlEscaped() + "</b>.<br><br>"
+            "The other members stay linked together: there is no server, the network lives as long as one of its members runs. "
+            "To come back, this device needs a new code of a member.") == QMessageBox::Yes) this->_hub.leave();
+    });
     QObject::connect(this->_private, &QCheckBox::toggled, this, [this](const bool on) {this->_hub.setPrivateMode(on);});
     QObject::connect(comeBack, &QPushButton::clicked, &hub, &core::Hub::comeBack);
 
@@ -433,15 +455,7 @@ QWidget* xmouse::ui::gui::MainWindow::buildNetwork_(void)
     QListWidget* nearbyJoined = nullptr;
     joinedLayout->addWidget(joinCard(nearbyJoined));
     this->_nearby = nearbyJoined;
-    QPushButton* leave = make_button("Leave this network", "danger", "power");
-    QHBoxLayout* leaveRow = new QHBoxLayout();
-    leaveRow->addStretch();
-    leaveRow->addWidget(leave);
-    joinedLayout->addLayout(leaveRow);
     joinedLayout->addStretch();
-    QObject::connect(leave, &QPushButton::clicked, this, [this]() {
-        if (QMessageBox::question(this, "Leave the network", "This device leaves the network: the others forget it, a new code of a member is needed to come back.") == QMessageBox::Yes) this->_hub.leave();
-    });
 
     this->_networkStack->addWidget(alone);
     this->_networkStack->addWidget(joined);
@@ -603,6 +617,9 @@ void xmouse::ui::gui::MainWindow::refreshNetwork_(void)
     const QString name = this->_hub.state().value("net/name").toString(this->_hub.group().name());
 
     this->_networkStack->setCurrentIndex(joined ? 1 : 0);
+    this->_leave->setText(joined ? "Leave the network" : "Create or join");
+    this->_leave->setIcon(Theme::icon("power", joined ? QColor(Qt::white) : Theme::palette().accentText));
+    set_prop(this->_leave, "on", joined); // the #share style: true = red, false = green
     this->_networkTitle->setText(name);
     this->_windowMove->blockSignals(true);
     this->_windowMove->setChecked(this->_hub.state().value("net/windowMove").toBool(true));
