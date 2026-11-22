@@ -97,4 +97,8 @@ jobs:
             sha256sum "${assets[@]}" | sed 's|  .*/|  |' > SHA256SUMS
             assets+=(SHA256SUMS)
           fi
+          # No file for macOS yet: said in the notes (the build waits for libutils on macOS)
+          if ! printf '%s\n' "${assets[@]}" | grep -qi 'macos'; then
+            printf '\n\n> [!NOTE]\n> **macOS: soon** - the macOS part is written, it builds once libutils builds on macOS.\n' >> notes.md
+          fi
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md "${prerelease[@]}" "${assets[@]}"

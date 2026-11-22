@@ -1,8 +1,16 @@
 name: Build - macOS (CI)
 
 # The macOS backends (event tap, CGEvent) only build on a Mac: Qt and OpenSSL from Homebrew, libutils from its sources
-# By hand only for now: libutils does not build on macOS yet (its epoll parts, Linux only), xmouse needs it
+# While libutils does not build on macOS (its epoll parts, Linux only), the run stays green with a "macOS: soon" warning;
+# once it builds, the build of xmouse is real (its errors fail the run)
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'web/**'
+      - 'android/**'
   workflow_dispatch:
 
 concurrency:
@@ -26,14 +34,31 @@ jobs:
         run: brew install qt openssl@3
 
       - name: Build and install libutils (sources)
+        id: libutils
         run: |
-          set -euo pipefail
+          set -uo pipefail
           git clone --depth 1 https://github.com/TsukiNi22/libutils.git "$RUNNER_TEMP/libutils"
-          cmake -S "$RUNNER_TEMP/libutils" -B "$RUNNER_TEMP/libutils/build" -DCMAKE_BUILD_TYPE=Optimized -DCMAKE_INSTALL_PREFIX="$HOME/.local"
-          cmake --build "$RUNNER_TEMP/libutils/build" --parallel 3
-          cmake --install "$RUNNER_TEMP/libutils/build"
+          if cmake -S "$RUNNER_TEMP/libutils" -B "$RUNNER_TEMP/libutils/build" -DCMAKE_BUILD_TYPE=Optimized -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+            && cmake --build "$RUNNER_TEMP/libutils/build" --parallel 3 \
+            && cmake --install "$RUNNER_TEMP/libutils/build"; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=macOS: soon::libutils does not build on macOS yet (platform/Epoll needs sys/epoll.h, Linux only): the macOS build of xmouse waits for it"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: macOS soon
+        if: steps.libutils.outputs.ready != 'true'
+        run: |
+          {
+            echo "### 🟠 macOS: soon"
+            echo
+            echo "The macOS backends of xmouse are written (event tap, CGEvent, key map), they build once libutils builds on macOS"
+            echo "(its epoll parts are Linux only; the Windows port of libutils uses WSAPoll, macOS needs poll / kqueue)."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build xmouse (macOS backends)
+        if: steps.libutils.outputs.ready == 'true'
         run: |
           set -euo pipefail
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Optimized -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix openssl@3);$HOME/.local"
