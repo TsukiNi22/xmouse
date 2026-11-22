@@ -44,7 +44,7 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 
 | Layer | What |
 | ----- | ---- |
-| Transport | TLS 1.3 only, `X25519MLKEM768` hybrid key exchange first (OpenSSL >= 3.5); the links between members refuse anything not post-quantum |
+| Transport | TLS 1.3 only, `X25519MLKEM768` hybrid key exchange first (OpenSSL >= 3.5); the links between members refuse anything not post-quantum, except with a device whose OpenSSL has no ML-KEM (it tells it in the network: `X25519`, still protected by TLS 1.3 and its pinned certificate) |
 | Identity | Self-signed ECDSA P-256 certificate per device, its fingerprint replicated in the network: a member whose certificate changed is refused |
 | Join | `HMAC(Argon2id(code, salt), transcript)` with `transcript = nonces + sha256(certificate)` on both sides: no offline brute force, no relay by a man in the middle; the code is used once, then rotated; optional local approval (30 s, refused by default) |
 | Members | 256 bits group key, the same HMAC proof bound to the TLS session, mutual (a fake member is caught) |
@@ -281,10 +281,10 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 ## Known limits
 
 > [!WARNING]
-> - Wayland (GNOME): the desktop asks once per session to allow the input capture (portal dialog); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
+> - Wayland (GNOME): the desktop asks once to allow the input capture (portal dialog, remembered with a restore token on portals >= v2, asked at every start on older ones); the real pointer cannot be put back after a foreign click (Wayland never tells a client where the pointer is), it stays where the foreign cursor clicked.
 > - Wayland: the overlays run on Xwayland (no layer shell on GNOME): a fullscreen Wayland app may cover them.
 > - One real pointer and one keyboard focus per OS: two foreign cursors clicking at the same moment on one device take turns; the keyboard of a member types where its cursor clicked last.
-> - Windows: the screens must share one scale (the hooks see physical pixels); Ctrl + Alt + Del and the secure desktop end a capture.
+> - Windows: the screens must share one scale (the hooks see physical pixels); Ctrl + Alt + Del and the secure desktop end a capture; the MinGW build of Fedora ships OpenSSL 3.2 (no ML-KEM): its links are `X25519` until an OpenSSL >= 3.5 is bundled.
 > - The files of the clipboard, drag and drop, the relay through a member and the phone / web pad come with the next versions (see the roadmap).
 
 ## Roadmap
