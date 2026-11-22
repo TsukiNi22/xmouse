@@ -123,6 +123,13 @@ set(SRC
     src/xmouse/main.cpp
 )
 
+# Windows: the icon and the version of xmouse.exe (resource compiled by windres)
+if(WIN32)
+    enable_language(RC)
+    configure_file(${CMAKE_SOURCE_DIR}/packaging/windows/xmouse.rc.in ${CMAKE_BINARY_DIR}/xmouse.rc @ONLY)
+    list(APPEND SRC ${CMAKE_BINARY_DIR}/xmouse.rc)
+endif()
+
 # Shared by the executable and the library (the <name>_lib target when both exist)
 set(SRC_SHARED
     # Entry
