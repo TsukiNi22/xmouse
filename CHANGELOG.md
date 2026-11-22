@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Changed
+- **No lag of the drawn cursors**: the overlay repaints only around the cursors (a whole screen of pixels per frame lagged under Xwayland), one frame per refresh of the screen at most (at once when the last one is old enough), raised above the windows when shown then every 2 s (it was at every move, up to 250 times a second)
+- A phone (pad or member) receives the moves of a cursor 60 times a second (it was 250: its screen draws at 60 Hz), the lent screen of the app draws once per frame
+- A click of my cursor on a phone that only shows it is told on the desktop (Accessibility service needed to touch); the app says the mode of its lent screen (cursors shown / touch / off)
+
+### Fixed
+- **The cursor stuck away** (shown on the phone while the mouse is on the computer, or the mouse held): it comes back when the real mouse moves while it left with a pad, when the capture of the pointer is lost without a word (twice in a row), when the screen of the phone it is on goes; it stays on a device whose screens change under it (a phone turned), comes back if that device leaves the layout; the real mouse pushing an edge while the cursor is away with a pad takes it over
+
 
 ## [v1.0.3-pre] - 2026-11-22
 ### Added
