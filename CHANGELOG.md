@@ -18,7 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [pre-release] (empty)
+## [pre-release]
+### Added
+- Windows installer `xmouse-windows-x64-setup.exe` (NSIS, LZMA: 22 MB): Start menu, firewall of the private networks, start with Windows as an option, Add or remove programs, uninstaller; built by the CI and attached to the releases
+- Page of a device: a button per file of the newest release (pre-releases included, through the GitHub API): installer and zip for Windows, `.rpm` / `.deb` / `.pkg.tar.zst` for Linux, the `.apk`; a missing file is shown disabled
+
+### Changed
+- The Windows binaries are stripped (the zip: 48 MB -> 33 MB)
+- The commands of the page show in full (scrolled, no more cut)
 
 ## [v0.1.1-pre] - 2026-11-22
 ### Changed
