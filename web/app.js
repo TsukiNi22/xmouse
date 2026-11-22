@@ -59,7 +59,7 @@
             },
             {
                 id: "android", name: "Android", tag: "Phone · tablet", available: deviceApk !== null || asset("apk") !== null,
-                text: "The app: touchpad, keyboard, and its screen in the layout (the cursors of the network go on it, Accessibility service). It updates itself from the devices of the network.",
+                text: "The app: a member like a computer (it creates a network and shows its QR code, or joins one), touchpad, keyboard, and its screen in the layout (the cursors of the network go on it). It updates itself from the xmouse website or the devices of the network.",
                 buttons: deviceApk ? [Object.assign(deviceApk, {primary: true})] : [{label: "Install the app (.apk)", file: "apk", primary: true}],
             },
             {

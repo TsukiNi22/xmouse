@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- Android: **a home like the panel of a computer**, the app opens on it: the network of the phone with its **QR code** and its code (time left, new code, share the link), create / join (scan a QR code or paste a link) / **disconnect - connect** / leave, the members (remove), the touchpad and the screen lent, the touchpad of a paired computer, the **settings** (name, private mode of the screen, updates at every launch, check now); every phone is a member and a server of its network by default
+- Android: **updates from the xmouse website** (`app/version.json` + `app/xmouse.apk` on gh-pages, synced by the CI with the packages, the sha256 checked) and from the device, the newest one: a phone alone needs no computer to update
+- Android: a QR code encoder (port of the qrcodegen of Project Nayuki, MIT)
+
+### Changed
+- **The pad of a phone / browser in phantom or private mode** has its own cursor on its device (drawn over the apps with its name, on the maps too) instead of moving the real pointer: private mode, it passes over and acts on nothing; phantom mode, a click moves the real pointer there only for the click (pointer mode unchanged)
+
+### Fixed
+- Android: the screen lent and the updates failed on a device reached by its Tailscale name (the device gives its Tailscale certificate there, the app wanted only the pinned one): a real certificate made for that name is accepted too, as the touchpad page does
+- Android: the screen lent while the phone is in no network goes to the paired computer (not to the node of the phone)
 
 ## [v1.0.1-pre] - 2026-11-22
 ### Added
