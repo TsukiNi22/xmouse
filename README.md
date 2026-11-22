@@ -28,7 +28,7 @@ Every link is end to end **TLS 1.3 with a post-quantum hybrid key exchange (X255
 
 | Feature | Content |
 | ------- | ------- |
-| Network | One group per desk: the first device creates it, any member adds the next one (one time code `K7F-29Q-XM4`, rotated after each use, or the QR code `xmouse://host:port?fp=..&code=..`), then every member knows it; the members link to each other directly (mesh, one link per pair, the link opened by the smaller id wins) |
+| Network | One group per desk: the first device creates it, any member adds the next one (one time code `K7F-29Q-XM4`, rotated after each use, or the QR code / link `https://host:port/?code=..&fp=..&net=..`, whose identity is checked when joining), then every member knows it; the members link to each other directly (mesh, one link per pair, the link opened by the smaller id wins) |
 | Discovery | LAN broadcast (the members find each other without an address), Tailscale addresses, UPnP / `bore` / `ngrok` / manual exposure (from xdesk), every known address of a member tried in turn |
 | Layout | Every screen of every member on one canvas: drag a device, its borders snap to the others; a device may have several screens or none (a controller only); the same layout on every member (replicated state, last writer wins) |
 | Cursor | Past a border shared with another device, the local pointer is captured and hidden, the cursor goes on: moves, buttons, wheel and keys go to the device it is on, from screen to screen and device to device; an offline device is a wall; `Ctrl + Alt + Shift` brings it back at once |
@@ -103,9 +103,21 @@ scripts/install.sh --autostart       # xmouse at login (tray)
 scripts/install.sh --uninstall
 ```
 
+```powershell
+# Windows (PowerShell): the zip of a release (xmouse-windows-x64.zip: xmouse.exe and its dll), extracted, then
+powershell -ExecutionPolicy Bypass -File install.ps1             # %LOCALAPPDATA%\Programs\xmouse, PATH, Start menu, firewall
+powershell -ExecutionPolicy Bypass -File install.ps1 -Autostart
+powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
+```
+
+> [!TIP]
+> Every device serves a page on its address (`https://<address>:47900/`, the link of its QR code): what it is, its code, and how to install xmouse on the platform of the visitor (Linux packages, Windows zip, the Android app the device carries), then how to join.
+
 | Script | Effect |
 | ------ | ------ |
 | `scripts/install.sh` | `--deps` (dnf / apt / pacman / brew + libutils), `--uinput` (udev `uaccess` rule on `/dev/uinput`), `--gnome` (GNOME Shell extension), `--autostart`, `--prefix DIR`, `--uninstall` |
+| `scripts/install.ps1` | Windows, from the zip: `-Zip <file>`, `-Prefix`, `-Port`, `-Autostart`, `-NoFirewall`, `-Uninstall` (no zip next to it: the newest release) |
+| `scripts/bundle_windows.sh` | Fedora: cross compiles `xmouse.exe` and packs every dll (Qt, OpenSSL) in `dist/xmouse-windows-x64.zip` (`--no-build`: the exe already built; the CI attaches it to the releases) |
 
 > [!TIP]
 > GNOME Wayland: the extension `xmouse@tsukini22.github.io` puts the barriers on the edges and captures the input itself: no dialog of the input capture portal (GNOME 50 asks it at every start of xmouse otherwise), and the real pointer goes back where it was after a foreign click. Only the `xmouse` program may use it, the events go to it only, Ctrl + Alt + Shift gives the input back even if xmouse does not answer. Without the extension (or disabled), xmouse uses the portal.
@@ -196,7 +208,7 @@ curl -fsSL https://raw.githubusercontent.com/TsukiNi22/xmouse/main/setup.sh | ba
 xmouse                                   # the panel (graphical, or the terminal panel without display)
 xmouse --tty                             # terminal panel (the cursors are still drawn when a display exists)
 xmouse join 192.168.1.24:47900 K7F-29Q-XM4    # join the network of a member (its address and its code)
-xmouse join 'xmouse://192.168.1.24:47900?fp=..&code=K7F-29Q-XM4'   # the same with the link / QR code
+xmouse join 'https://192.168.1.24:47900/?code=K7F-29Q-XM4&fp=..'   # the same with the link / QR code (identity checked)
 xmouse scan                              # devices announced on the LAN
 xmouse paths                             # configuration, data and log folders
 xmouse --port 47910 --name desk-pc       # port / name of this device for this run
@@ -277,7 +289,8 @@ cmake --build $BUILD_DIR --target get_unregistered_files  # .cpp files missing f
 | `cmake/toolchain/mingw-w64.cmake` | Windows cross compilation toolchain |
 | `cmake/package/` | CMake package config (`find_package(xmouse)`) and the CPack prefix of the Windows packages |
 | `docs/` | HTML documentation (technical page, project graph), `logo.svg` |
-| `scripts/install.sh` | Build + install in `~/.local`, menu entry, uinput access, autostart |
+| `scripts/install.sh` | Build + install in `~/.local`, menu entry, uinput access, GNOME extension, autostart |
+| `web/` | Page served by every device on its address (embedded in the binary) |
 | `include/xmouse/exception/generated_external_exception_header.hpp` | Generated at build time from the JSON files (not committed) |
 
 > [!NOTE]
