@@ -809,10 +809,12 @@ public class MainActivity extends Activity {
                 "Android lets an app click in the other apps only through an Accessibility service:\n\n"
                     + "1. Accessibility: Installed apps (or Downloaded apps) > xmouse screen > on.\n\n"
                     + "2. Greyed out, \"Restricted setting\"? App info > the menu at the top right > Allow restricted settings, then step 1 again.\n\n"
+                    + "3. App info > Battery > Unrestricted: else Android stops the service now and then (the clicks then do nothing until it comes back).\n\n"
                     + "The cursors then click, drag, scroll and type on this phone (off at any time in the same place).",
                 "Android ne laisse une appli cliquer dans les autres que par un service d'Accessibilité :\n\n"
                     + "1. Accessibilité : Applications installées (ou téléchargées) > xmouse screen > activé.\n\n"
                     + "2. Grisé, « Paramètre restreint » ? Infos de l'appli > le menu en haut à droite > Autoriser les paramètres restreints, puis l'étape 1 à nouveau.\n\n"
+                    + "3. Infos de l'appli > Batterie > Sans restriction : sinon Android arrête le service de temps en temps (les clics ne font alors rien jusqu'à son retour).\n\n"
                     + "Les curseurs cliquent, glissent, défilent et tapent alors sur ce téléphone (désactivable à tout moment au même endroit)."))
             .setPositiveButton(this.tr("1. Accessibility", "1. Accessibilité"), (d, w) -> this.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)))
             .setNeutralButton(this.tr("2. App info", "2. Infos de l'appli"), (d, w) -> this.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + this.getPackageName()))))

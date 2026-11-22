@@ -133,7 +133,10 @@ final class WsClient {
                 }
                 if (length > MAX_MESSAGE) throw new IOException("message too big");
                 byte[] payload = readFully(in, (int) length);
-                if (opcode == 0x8) break; // close
+                if (opcode == 0x8) { // close, with its reason ("replaced": another link of this phone took the screen)
+                    if (payload.length > 2) reason = new String(payload, 2, payload.length - 2, StandardCharsets.UTF_8);
+                    break;
+                }
                 if (opcode == 0x9) {synchronized (this) {this.writeFrame(0xA, payload);} continue;} // ping -> pong
                 if (opcode == 0xA) continue;
                 message.write(payload);

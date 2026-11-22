@@ -32,9 +32,16 @@ public class OverlayService extends Service {
         if (_running != null) _running.stopSelf();
     }
 
-    // Lends the screen (phantom) when the overlay is allowed and the Accessibility service is not already lending it
+    // The Accessibility service of xmouse is turned on in the settings (running now, or coming back after Android
+    // stopped the app): the screen is lent by it, never by two links at once (the clicks worked one time in two)
+    static boolean touchEnabled(Context context) {
+        String enabled = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return enabled != null && enabled.contains(context.getPackageName() + "/");
+    }
+
+    // Lends the screen (phantom) when the overlay is allowed and the Accessibility service does not lend it
     static boolean start(Context context) {
-        if (ScreenService.running() || _running != null) return true;
+        if (ScreenService.running() || touchEnabled(context) || _running != null) return true;
         if (!Settings.canDrawOverlays(context)) return false;
         Intent intent = new Intent(context, OverlayService.class);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
@@ -52,9 +59,9 @@ public class OverlayService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int id) {
         if (_running != null) return START_STICKY;
-        if (ScreenService.running() || !Settings.canDrawOverlays(this)) {this.stopSelf(); return START_NOT_STICKY;}
+        this.foreground(); // first: a service started in the foreground must say so even to stop at once (else Android ends the app)
+        if (ScreenService.running() || touchEnabled(this) || !Settings.canDrawOverlays(this)) {this.stopSelf(); return START_NOT_STICKY;}
         _running = this;
-        this.foreground();
         this._link = new ScreenLink(this, null, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
         this._link.start();
         return START_STICKY;

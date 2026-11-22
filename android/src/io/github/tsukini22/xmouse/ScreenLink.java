@@ -180,6 +180,11 @@ final class ScreenLink {
                     ScreenLink.this._cursors.clear();
                     if (ScreenLink.this._view != null) ScreenLink.this._view.postInvalidateOnAnimation();
                     if (ScreenLink.this._stopped) return;
+                    // The touch link of this phone took the screen: the phantom one gives way (never two links taking turns)
+                    if ("replaced".equals(reason) && ScreenLink.this._actions == null && ScreenLink.this._context instanceof android.app.Service) {
+                        ((android.app.Service) ScreenLink.this._context).stopSelf();
+                        return;
+                    }
                     long wait = RECONNECT[Math.min(ScreenLink.this._tries++, RECONNECT.length - 1)];
                     ScreenLink.this._ui.postDelayed(ScreenLink.this::connect, wait);
                 });
