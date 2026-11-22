@@ -22,7 +22,9 @@ Same cause: the portal does not hide the cursor while it is on another device; t
 
 ## The cursor is stuck on another device {#cursor-stuck}
 
-<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd>, or **Bring my cursor back**, brings it home at once. xmouse also brings it back by itself when the device it is on goes, when its screen changes under it, or when the capture is lost.
+<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd>, or **Bring my cursor back**, brings it home at once. xmouse also brings it back by itself when the device it is on goes, when its screen changes under it, or when the capture is lost (the log says which).
+
+Before 1.0.13, on GNOME with the input capture portal, the cursor also came back by itself after a few seconds without moving: each refresh of the edges ended the capture. Since 1.0.13 the edges are set again only when they change, never under a capture.
 
 ## The others cannot click or type here (Linux Wayland) {#uinput}
 
