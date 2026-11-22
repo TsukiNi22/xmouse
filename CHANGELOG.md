@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Added
+- Panel access request: an **Accept** button (granted at once, no waiting for the delay)
+
+### Changed
+- **The own cursor of a pad travels under its own name** (phantom / private mode): through a border it goes to the other device as the cursor of the phone (its moves, clicks, wheel, keys, text relayed with its identity), the cursor of this device stays with the person; it comes back as its own cursor, ends when its pad or its device goes; the Home button of the pad brings it back
+- An access to the panel stays given to its cursor when it comes back (a pad that reconnects, a cursor that went away) until the local person uses the panel
+
+### Fixed
+- The pad of a phone in phantom mode sent the cursor of this device to the phone screen (the mouse of the computer then shown there and stuck)
+- An access to the panel was asked again at the first click: the injected click of the cursor was taken for the local person using the panel (150 ms window; the map did not check at all): 600 ms or a button of a foreign cursor held
+
 
 ## [v1.0.4-pre] - 2026-11-22
 ### Changed

@@ -248,10 +248,13 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
     accessLayout->setContentsMargins(14, 10, 10, 10);
     this->_accessText = new QLabel(this->_accessBanner);
     this->_accessText->setWordWrap(true);
+    QPushButton* accept = make_button("Accept", "primary");
     QPushButton* refuse = make_button("Refuse", "danger");
     accessLayout->addWidget(this->_accessText, 1);
+    accessLayout->addWidget(accept);
     accessLayout->addWidget(refuse);
     this->_accessBanner->hide();
+    QObject::connect(accept, &QPushButton::clicked, this, [this]() {this->_hub.grantAccess(this->_accessId);});
     QObject::connect(refuse, &QPushButton::clicked, this, [this]() {this->_hub.refuseAccess(this->_accessId);});
     mainLayout->addWidget(this->_accessBanner);
     this->_noticeBanner = new QWidget(main);
@@ -351,7 +354,7 @@ xmouse::ui::gui::MainWindow::MainWindow(core::Hub& hub, QWidget* parent)
         if (this->_accessBanner->isVisible()) {
             const core::Foreign f = this->_hub.foreign().value(this->_accessId);
             const qint64 left = this->_hub.config().settings().focusRequestDelay - (QDateTime::currentMSecsSinceEpoch() - f.askedAt) / 1000;
-            this->_accessText->setText("<b>" + f.name.toHtmlEscaped() + "</b> asks to use this xmouse panel with its cursor: granted in <b>" + QString::number(std::max<qint64>(0, left)) + " s</b> unless you refuse (or use the panel yourself).");
+            this->_accessText->setText("<b>" + f.name.toHtmlEscaped() + "</b> asks to use this xmouse panel with its cursor: granted in <b>" + QString::number(std::max<qint64>(0, left)) + " s</b> unless you refuse (or use the panel yourself), or at once if you accept.");
         }
     });
     this->_tick.start();
@@ -1442,7 +1445,7 @@ void xmouse::ui::gui::MainWindow::hideEvent(QHideEvent* event)
 bool xmouse::ui::gui::MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
     // A click / key of the local person in a window of xmouse ends the accesses granted to the foreign cursors
-    if ((event->type() == QEvent::MouseButtonPress || event->type() == QEvent::KeyPress) && watched->isWidgetType() && !this->_hub.injectingNow())
+    if ((event->type() == QEvent::MouseButtonPress || event->type() == QEvent::KeyPress) && watched->isWidgetType() && !this->_hub.foreignInputNow())
         this->_hub.panelUsedLocally();
     if (event->type() == QEvent::WindowActivate || event->type() == QEvent::WindowDeactivate) QTimer::singleShot(0, this, &MainWindow::reportPanel_);
     return QMainWindow::eventFilter(watched, event);

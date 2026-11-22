@@ -33,6 +33,7 @@ File Description:
 #define WHEEL_RESTORE_DELAY 350 // ms after the last wheel step
 #define PREDICT_HORIZON 80 // ms a cursor is drawn ahead of its last packet at most
 #define PREDICT_INTERVAL_GUARD 16 // ms more: the last predicted frame is drawn back on the real position
+#define FOREIGN_INPUT_WINDOW 600 // ms an injected click / key may take to reach the panel (uinput, compositor, Xwayland)
 
 //----------------------------------------------------------------//
 /* ENTER / LEAVE */
@@ -49,6 +50,7 @@ void xmouse::core::Hub::foreignEnter_(const QString& id, const QJsonObject& o)
     f.color = colorOf(id);
     f.local = QPoint(o.value("x").toInt(), o.value("y").toInt());
     f.seen = now_ms();
+    if (this->_granted.contains(id)) f.state = ForeignState::Granted; // given the panel before: still, until the local person uses it
     if (this->_foreign.contains(id)) {f.state = this->_foreign.value(id).state; f.told = this->_foreign.value(id).told;}
     this->_foreign[id] = f;
     this->_log.info("input", id, "cursor of " + f.name + " entered");
@@ -264,10 +266,19 @@ void xmouse::core::Hub::setPanelFocused(const bool focused)
     emit this->foreignChanged();
 }
 
+bool xmouse::core::Hub::foreignInputNow(void) const
+{
+    if (now_ms() - this->_lastInject < FOREIGN_INPUT_WINDOW) return true;
+    for (const Foreign& f: this->_foreign)
+        if (f.buttons != 0) return true;
+    return false;
+}
+
 void xmouse::core::Hub::panelUsedLocally(void)
 {
     bool changed = false;
 
+    this->_granted.clear();
     for (Foreign& f: this->_foreign) {
         if (f.state != ForeignState::Granted && f.state != ForeignState::Asking) continue;
         if (f.state == ForeignState::Asking) emit this->accessEnded(f.id, false);
@@ -283,9 +294,23 @@ void xmouse::core::Hub::refuseAccess(const QString& id)
 
     if (it == this->_foreign.end() || it->state != ForeignState::Asking) return;
     it->state = ForeignState::Paused;
+    this->_granted.remove(id);
     this->_log.info("access", id, "access to the panel refused for " + it->name);
     this->sendTo_(id, QJsonObject{{"t", "access"}, {"text", "access to the panel refused"}});
     emit this->accessEnded(id, false);
+    emit this->foreignChanged();
+}
+
+void xmouse::core::Hub::grantAccess(const QString& id)
+{
+    auto it = this->_foreign.find(id);
+
+    if (it == this->_foreign.end() || it->state != ForeignState::Asking) return;
+    it->state = ForeignState::Granted;
+    this->_granted.insert(id);
+    this->_log.warn("access", id, "access to the panel granted to " + it->name + " (accepted)");
+    this->sendTo_(id, QJsonObject{{"t", "access"}, {"text", "access to the panel granted"}});
+    emit this->accessEnded(id, true);
     emit this->foreignChanged();
 }
 
