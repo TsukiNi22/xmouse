@@ -36,6 +36,10 @@ An app installed from a browser can be blocked by Play Protect: tap **More detai
 
 Its screen is in **Show the cursors** mode: Android lets an app click in the others only through an Accessibility service. In the app: **This screen in the layout** > **Let them touch** (see [the phone](page:phone#screen)). The computer tells it too, the first time a cursor goes there.
 
+## The clicks work one time in two on the phone {#phone-clicks-sometimes}
+
+Android stopped the Accessibility service (battery saving, the app swiped away) and the screen was lent without it for a while. Set App info > **Battery** > **Unrestricted** for xmouse; since 1.0.12 the app never lends the screen without the service while it is turned on.
+
 ## The phone screen is not on the map {#phone-screen}
 
 **This screen in the layout** must be on (the notification says it), and the phone must reach the computer it is paired with (same LAN, Tailscale). Update the app: [updates](page:phone#updates).
