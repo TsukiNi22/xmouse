@@ -29,10 +29,12 @@ Like a computer, the phone creates a network (it is then its first device: compu
 | One finger | Moves the cursor (faster when the finger moves fast) |
 | Tap | Left click |
 | Two fingers | Scroll; tap: right click |
+| Two fingers apart / together | Zoom in / out where the cursor is (<kbd>Ctrl</kbd> + wheel on a computer, a pinch on a phone screen) |
 | Three fingers | Middle click |
+| Three fingers to the right / left | Back / forward (the side buttons of a mouse) |
 | Tap, then hold | Drag |
 
-The keyboard of the touchpad has sticky modifiers, the special keys and the F-keys. Any browser can be a touchpad too: on the computer, **Network** > **Pair a phone or a browser**, then open its QR code (`https://<address>:47900/pad`).
+The keyboard of the touchpad has sticky modifiers, the special keys and the F-keys. A shortcut keeps its letter on every layout: <kbd>Ctrl</kbd> + <kbd>A</kbd> typed on an AZERTY computer is <kbd>Ctrl</kbd> + <kbd>A</kbd> on a QWERTY one or on a phone, never <kbd>Ctrl</kbd> + <kbd>Q</kbd>. On a phone screen, <kbd>Shift</kbd> + <kbd>Enter</kbd> is a new line and <kbd>Shift</kbd> + <kbd>Tab</kbd> the previous field; while a cursor of a computer is on it, the phone screen stays on (5 minutes after its last move). Any browser can be a touchpad too: on the computer, **Network** > **Pair a phone or a browser**, then open its QR code (`https://<address>:47900/pad`).
 
 ## The screen in the layout {#screen}
 

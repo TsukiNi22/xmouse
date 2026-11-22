@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [pre-release]
+### Fixed
+- **The cursor came back by itself when it stayed still on another device** (GNOME, input capture portal): every refresh of the edges (a pad that sends its screen, a state applied, about every 30 s) set the barriers again; GNOME refuses them on an enabled session, xmouse then disabled the session and the capture ended under the cursor. The edges are now sent to the capture only when they change, and the portal backend never sets barriers under a capture (they wait for its end, the session disabled first then enabled again); the log says when the compositor ends a capture
+- **Shortcuts across keyboard layouts**: every key sent to another device carries the letter it types on the layout of the sender, and the other side presses the key of that letter on its own layout (AZERTY Ctrl + A was Ctrl + Q on a QWERTY computer or a phone member); the touchpad of a phone member sends it too; the keys released when the cursor comes back carry it as well (never a key stuck)
+- Phone screen: Shift + Enter is a new line (never the send of a chat), Shift + Tab the previous field, Caps Lock changes the case of the letters typed there
+
+### Added
+- Touchpad: two fingers apart / together zoom where the cursor is (Ctrl + wheel), three fingers to the right / left are back / forward
+- Phone screen: Ctrl + wheel (a zoom on a computer) is a pinch of two fingers where the cursor is
+- Phone screen: it stays on while a cursor of a computer drives it (5 minutes after its last input), else Android turned it off and locked it under the cursor
 
 ## [v1.0.12-pre] - 2026-11-22
 ### Fixed

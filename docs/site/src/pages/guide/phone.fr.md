@@ -27,10 +27,12 @@ Comme un ordinateur, le téléphone crée un réseau (il en est alors le premier
 | Un doigt | Déplace le curseur (plus vite quand le doigt va vite) |
 | Toucher | Clic gauche |
 | Deux doigts | Défilement ; toucher : clic droit |
+| Deux doigts qui s'écartent / se rapprochent | Zoom avant / arrière là où est le curseur (<kbd>Ctrl</kbd> + molette sur un ordinateur, un pincement sur un écran de téléphone) |
 | Trois doigts | Clic du milieu |
+| Trois doigts vers la droite / la gauche | Précédent / suivant (les boutons de côté d'une souris) |
 | Toucher, puis tenir | Glisser |
 
-Le clavier du touchpad a les modificateurs maintenus, les touches spéciales et les touches F. N'importe quel navigateur peut aussi être un touchpad : sur l'ordinateur, **Network** > **Pair a phone or a browser**, puis ouvrez son QR code (`https://<adresse>:47900/pad`).
+Le clavier du touchpad a les modificateurs maintenus, les touches spéciales et les touches F. Un raccourci garde sa lettre sur toutes les dispositions : <kbd>Ctrl</kbd> + <kbd>A</kbd> tapé sur un ordinateur AZERTY reste <kbd>Ctrl</kbd> + <kbd>A</kbd> sur un QWERTY ou sur un téléphone, jamais <kbd>Ctrl</kbd> + <kbd>Q</kbd>. Sur un écran de téléphone, <kbd>Maj</kbd> + <kbd>Entrée</kbd> fait un retour à la ligne et <kbd>Maj</kbd> + <kbd>Tab</kbd> le champ précédent ; tant qu'un curseur d'ordinateur est dessus, l'écran du téléphone reste allumé (5 minutes après son dernier mouvement). N'importe quel navigateur peut aussi être un touchpad : sur l'ordinateur, **Network** > **Pair a phone or a browser**, puis ouvrez son QR code (`https://<adresse>:47900/pad`).
 
 ## L'écran dans la disposition {#screen}
 

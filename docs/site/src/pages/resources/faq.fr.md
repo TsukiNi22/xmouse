@@ -20,7 +20,9 @@ Même cause : le portail ne cache pas le curseur pendant qu'il est sur un autre 
 
 ## Le curseur est bloqué sur un autre appareil {#cursor-stuck}
 
-<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Maj</kbd>, ou **Bring my cursor back**, le ramène aussitôt. xmouse le ramène aussi tout seul quand l'appareil où il est s'en va, quand son écran change sous lui, ou quand la capture est perdue.
+<kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Maj</kbd>, ou **Bring my cursor back**, le ramène aussitôt. xmouse le ramène aussi tout seul quand l'appareil où il est s'en va, quand son écran change sous lui, ou quand la capture est perdue (le journal dit laquelle).
+
+Avant la 1.0.13, sous GNOME avec le portail de capture des entrées, le curseur revenait aussi tout seul après quelques secondes sans bouger : chaque rafraîchissement des bords mettait fin à la capture. Depuis la 1.0.13, les bords ne sont reposés que quand ils changent, jamais pendant une capture.
 
 ## Les autres ne peuvent ni cliquer ni taper ici (Linux Wayland) {#uinput}
 
