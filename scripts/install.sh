@@ -36,7 +36,7 @@ Usage: scripts/install.sh [options]
 HELP
 }
 
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --deps) DEPS=1 ;;
         --uinput) UINPUT=1 ;;
@@ -49,16 +49,16 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ "$(id -u)" -ne 0 ] && command -v sudo > /dev/null && SUDO="sudo"
+[[ "$(id -u)" -ne 0 ]] && command -v sudo > /dev/null && SUDO="sudo"
 
 say() { printf '\033[1;34mxmouse\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mxmouse\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ===== Uninstall =====
-if [ "$UNINSTALL" -eq 1 ]; then
+if [[ "$UNINSTALL" -eq 1 ]]; then
     rm -f "$PREFIX/bin/xmouse" "$HOME/.local/share/applications/xmouse.desktop" \
         "$HOME/.config/autostart/xmouse.desktop" "$HOME/.local/share/icons/hicolor/scalable/apps/xmouse.svg"
-    if [ -d "$EXTENSION_DIR" ]; then
+    if [[ -d "$EXTENSION_DIR" ]]; then
         gnome-extensions disable "$EXTENSION" 2> /dev/null || true
         rm -rf "$EXTENSION_DIR"
     fi
@@ -68,7 +68,7 @@ fi
 
 # ===== Dependencies =====
 install_libutils() {
-    if [ -f /usr/include/utils/utils.hpp ] || [ -f /usr/local/include/utils/utils.hpp ]; then return; fi
+    if [[ -f /usr/include/utils/utils.hpp ]] || [[ -f /usr/local/include/utils/utils.hpp ]]; then return; fi
     say "installing libutils (TsukiNi22/libutils)"
     if command -v dnf > /dev/null || command -v apt-get > /dev/null; then
         curl -fsSL https://raw.githubusercontent.com/TsukiNi22/libutils/main/setup.sh | $SUDO bash
@@ -84,7 +84,7 @@ install_libutils() {
     fi
 }
 
-if [ "$DEPS" -eq 1 ]; then
+if [[ "$DEPS" -eq 1 ]]; then
     say "installing the build dependencies"
     if command -v dnf > /dev/null; then
         $SUDO dnf install -y cmake clang ccache python3 qt6-qtbase-devel openssl-devel gtest-devel libXtst-devel libei git curl
@@ -106,7 +106,7 @@ command -v cmake > /dev/null || die "cmake missing (run with --deps)"
 say "building xmouse (Optimized)"
 cmake -S "$ROOT" -B "$BUILD" -DCMAKE_BUILD_TYPE=Optimized > /dev/null
 cmake --build "$BUILD" --parallel
-[ -x "$ROOT/xmouse" ] || die "build failed"
+[[ -x "$ROOT/xmouse" ]] || die "build failed"
 
 # ===== Install =====
 mkdir -p "$PREFIX/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/scalable/apps"
@@ -122,14 +122,14 @@ Icon=xmouse
 Categories=Utility;Network;
 Terminal=false
 DESKTOP
-if [ "$AUTOSTART" -eq 1 ]; then
+if [[ "$AUTOSTART" -eq 1 ]]; then
     mkdir -p "$HOME/.config/autostart"
     cp "$HOME/.local/share/applications/xmouse.desktop" "$HOME/.config/autostart/xmouse.desktop"
     say "xmouse starts at login (set startMinimized in the settings to start in the tray)"
 fi
 
 # ===== GNOME Shell extension (edges without the portal dialog) =====
-if [ "$GNOME" -eq 1 ]; then
+if [[ "$GNOME" -eq 1 ]]; then
     mkdir -p "$EXTENSION_DIR"
     cp "$ROOT/gnome-extension/$EXTENSION/"* "$EXTENSION_DIR/"
     # A new extension is only seen by GNOME Shell after a new login (Wayland): enabled now in the settings if needed
@@ -147,7 +147,7 @@ if [ "$GNOME" -eq 1 ]; then
 fi
 
 # ===== uinput (clicks / keys of the other devices on Wayland) =====
-if [ "$UINPUT" -eq 1 ]; then
+if [[ "$UINPUT" -eq 1 ]]; then
     # uaccess: the user logged in at the screen gets an ACL on /dev/uinput (no group change: works next to the xdesk rule)
     say "giving the user at the screen access to /dev/uinput (sudo)"
     echo 'KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"' | $SUDO tee /etc/udev/rules.d/61-xmouse-uinput.rules > /dev/null
