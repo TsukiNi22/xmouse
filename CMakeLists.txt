@@ -178,7 +178,9 @@ set(SRC_LINUX
 )
 set(SRC_DBUS
     src/xmouse/platform/linux/PortalCapture.cpp
+    src/xmouse/platform/linux/ShellCapture.cpp
     ${CMAKE_SOURCE_DIR}/include/xmouse/platform/linux/PortalCapture.hpp # Q_OBJECT (moc)
+    ${CMAKE_SOURCE_DIR}/include/xmouse/platform/linux/ShellCapture.hpp # Q_OBJECT (moc)
 )
 set(SRC_XTEST
     src/xmouse/platform/linux/XTestInjector.cpp
@@ -477,6 +479,14 @@ if(XMOUSE_PACKAGE_BIN)
     install(TARGETS ${TARGET}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT bin
     )
+
+    # GNOME Shell extension (Wayland edges without the portal dialog), enabled by the user: gnome-extensions enable xmouse@tsukini22.github.io
+    if(UNIX AND NOT APPLE)
+        install(DIRECTORY ${CMAKE_SOURCE_DIR}/gnome-extension/xmouse@tsukini22.github.io
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions
+            COMPONENT bin
+        )
+    endif()
 endif()
 
 # Library (component lib) and its export (component headers: find_package(xmouse CONFIG REQUIRED))

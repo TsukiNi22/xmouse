@@ -271,7 +271,9 @@ void xmouse::core::Hub::startCapture_(void)
     QObject::connect(this->_capture.get(), &platform::IInputCapture::ready, this, [this]() {
         this->_captureError.clear();
         this->updateEdges_();
-        this->setStatus_("edges: " + this->_capture->name());
+        if (this->_capture->name() == "portal" && qEnvironmentVariable("XDG_CURRENT_DESKTOP").contains("GNOME", Qt::CaseInsensitive))
+            this->setStatus_("edges: portal (GNOME asks once per run: scripts/install.sh --gnome removes the dialog)");
+        else this->setStatus_("edges: " + this->_capture->name());
     });
     QObject::connect(this->_capture.get(), &platform::IInputCapture::failed, this, [this](const QString& error) {
         this->_captureError = error;
