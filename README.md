@@ -112,6 +112,9 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Autostart
 powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 ```
 
+> [!NOTE]
+> Every release carries `SHA256SUMS`: `sha256sum -c SHA256SUMS --ignore-missing` in the folder of the downloaded files.
+
 > [!TIP]
 > Every device serves a page on its address (`https://<address>:47900/`, the link of its QR code): what it is, its code, and how to install xmouse on the platform of the visitor (Linux packages, Windows zip, the Android app the device carries), then how to join.
 
@@ -119,6 +122,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 | ------ | ------ |
 | `scripts/install.sh` | `--deps` (dnf / apt / pacman / brew + libutils), `--uinput` (udev `uaccess` rule on `/dev/uinput`), `--gnome` (GNOME Shell extension), `--autostart`, `--prefix DIR`, `--uninstall` |
 | `scripts/install.ps1` | Windows, from the zip: `-Zip <file>`, `-Prefix`, `-Port`, `-Autostart`, `-NoFirewall`, `-Uninstall` (no zip next to it: the newest release) |
+| `scripts/bundle_linux.sh` | `dist/xmouse-linux-x86_64.tar.gz` for the distributions without the package repository (`bin/xmouse` stripped, menu entry, icon, GNOME extension): `tar -xzf xmouse-linux-x86_64.tar.gz -C ~/.local --strip-components=1` (`--no-build`: the binary already built; the CI attaches it to the releases) |
 | `scripts/bundle_windows.sh` | Fedora: cross compiles `xmouse.exe` and packs every dll (Qt, OpenSSL, stripped) in `dist/xmouse-windows-x64.zip`, `--installer`: `dist/xmouse-windows-x64-setup.exe` (NSIS `packaging/windows/xmouse.nsi`, `mingw32-nsis`), `--no-build`: the exe already built (the CI attaches both to the releases) |
 
 > [!TIP]
