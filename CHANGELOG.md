@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 ### Added
+- Linux tarball `xmouse-linux-x86_64.tar.gz` (`scripts/bundle_linux.sh`: the binary stripped, menu entry, icon, GNOME extension, unpacked into `~/.local`) for the distributions without the package repository, built by the CI
+- `SHA256SUMS` of every file of a release, the link on the page of a device
+- `xmouse.exe` carries its icon and its version (Windows resource `packaging/windows/xmouse.rc.in`)
 - Windows installer `xmouse-windows-x64-setup.exe` (NSIS, LZMA: 22 MB): Start menu, firewall of the private networks, start with Windows as an option, Add or remove programs, uninstaller; built by the CI and attached to the releases
 - Page of a device: a button per file of the newest release (pre-releases included, through the GitHub API): installer and zip for Windows, `.rpm` / `.deb` / `.pkg.tar.zst` for Linux, the `.apk`; a missing file is shown disabled
 
