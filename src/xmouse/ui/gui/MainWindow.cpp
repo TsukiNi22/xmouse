@@ -124,9 +124,9 @@ static QPixmap qr_pixmap(const QString& text, const int size)
     const int modules = qr.getSize() + 8;
     const int scale = std::max(1, size / modules);
     QImage image(modules * scale, modules * scale, QImage::Format_RGB32);
-    QPainter p(&image);
 
-    image.fill(Qt::white);
+    image.fill(Qt::white); // before the painter
+    QPainter p(&image);
     p.setPen(Qt::NoPen);
     p.setBrush(Qt::black);
     for (int y = 0; y < qr.getSize(); ++y)
@@ -139,9 +139,9 @@ static QPixmap qr_pixmap(const QString& text, const int size)
 static QPixmap color_dot(const QColor& color)
 {
     QPixmap pix(12, 12);
-    QPainter p(&pix);
 
-    pix.fill(Qt::transparent);
+    pix.fill(Qt::transparent); // before the painter: a pixmap being painted on cannot be filled
+    QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
     p.setBrush(color);
