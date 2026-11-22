@@ -16,7 +16,9 @@
         rpm: /^xmouse-op(-pre)?-\d[^/]*\.rpm$/,
         deb: /^xmouse-op(-pre)?-\d[^/]*\.deb$/,
         arch: /^xmouse-op(-pre)?-\d[^/]*\.pkg\.tar\.zst$/,
+        tarball: /^xmouse-linux-x86_64\.tar\.gz$/,
         apk: /\.apk$/,
+        sums: /^SHA256SUMS$/,
     };
     const UA = navigator.userAgent || "";
     const params = new URLSearchParams(location.search);
@@ -47,7 +49,7 @@
                 id: "linux", name: "Linux", tag: "Fedora · Debian · Ubuntu · Arch", available: true,
                 text: "The signed package repository of xmouse: this command adds it and installs xmouse (dnf, apt or pacman), the updates come with the system ones. Or a package of the release:",
                 command: LINUX_COMMAND,
-                buttons: [{label: ".rpm (Fedora)", file: "rpm"}, {label: ".deb (Debian, Ubuntu)", file: "deb"}, {label: ".pkg.tar.zst (Arch)", file: "arch"}],
+                buttons: [{label: ".rpm (Fedora)", file: "rpm"}, {label: ".deb (Debian, Ubuntu)", file: "deb"}, {label: ".pkg.tar.zst (Arch)", file: "arch"}, {label: ".tar.gz (other distributions, into ~/.local)", file: "tarball"}],
                 note: "GNOME: enable the extension once (no input capture dialog): gnome-extensions enable xmouse@tsukini22.github.io, then a new login.",
             },
             {
@@ -143,7 +145,17 @@
             node.append(row);
         }
         if (p.note) node.append(element("p", "muted small", p.note));
-        if (hero && release && p.buttons && p.buttons.some((b) => b.file)) node.append(element("p", "muted small", "From the release " + release.tag + " (" + REPOSITORY.replace("https://", "") + "/releases)."));
+        if (hero && release && p.buttons && p.buttons.some((b) => b.file)) {
+            const from = element("p", "muted small", "From the release " + release.tag + ". ");
+            const sums = asset("sums");
+            if (sums) {
+                const link = element("a", "", "SHA256SUMS");
+                link.href = sums.url;
+                link.rel = "noreferrer";
+                from.append("Check a file: sha256sum -c ", link, " --ignore-missing.");
+            }
+            node.append(from);
+        }
     }
 
     function render() {
