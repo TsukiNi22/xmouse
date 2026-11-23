@@ -34,6 +34,8 @@ const EVDEV_OFFSET = 8; // X / Clutter key code = evdev code + 8
 const WHEEL_NOTCH = 120; // 1/120 of a notch, like Qt angleDelta
 const WATCHDOG_MS = 500; // a capture checked this often until it gets its first event (the input is never lost)
 const DRIFT = 8; // px the real pointer may drift from the held point before a capture that gets nothing is given back
+const SUPER_KEYS = [125, 126]; // evdev Super left / right: Mutter keeps the release of the overlay key pressed alone
+const SUPER_POLL_MS = 40; // how often a Super held on the other device is checked against the keyboard
 
 // The seat of the pointer (its API moved: GNOME 47+ through the context of the stage, older through the backend);
 // global.backend.get_default_seat() is gone on GNOME 50: the warps failed and a capture ended without telling xmouse
@@ -151,6 +153,8 @@ class XmouseService {
         this._hit = [0, 0]; // where it crossed
         this._cursorHidden = false;
         this._events = 0; // events received by the current capture
+        this._supers = new Set(); // Super keys sent down to xmouse and not released yet
+        this._superPoll = 0;
         this._watchdog = 0;
         this._windowMove = false; // a dragged window on an edge goes to xmouse (else the usual border)
         this._dragged = null; // window being moved now
@@ -446,7 +450,30 @@ class XmouseService {
             this._end();
             return;
         }
-        this._emit("Key", "(ub)", [ev.get_key_code() - EVDEV_OFFSET, down]);
+        const code = ev.get_key_code() - EVDEV_OFFSET;
+
+        this._emit("Key", "(ub)", [code, down]);
+        if (SUPER_KEYS.includes(code)) this._trackSuper(code, down);
+    }
+
+    // Super pressed alone: Mutter takes its release (the overlay key, even under the grab), the other device kept Super
+    // held and the next key there was Super + that key; its release is sent when the keyboard no longer holds Super
+    _trackSuper(code, down) {
+        if (down) this._supers.add(code);
+        else this._supers.delete(code);
+        if (this._supers.size === 0 || this._superPoll !== 0) return;
+        this._superPoll = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SUPER_POLL_MS, () => {
+            const mods = global.get_pointer()[2];
+
+            if (this._grab !== null && this._supers.size > 0 && (mods & (Clutter.ModifierType.MOD4_MASK | Clutter.ModifierType.SUPER_MASK)) !== 0)
+                return GLib.SOURCE_CONTINUE;
+            for (const held of this._supers) {
+                if (this._grab !== null) this._emit("Key", "(ub)", [held, false]);
+            }
+            this._supers.clear();
+            this._superPoll = 0;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _release(x, y) {
@@ -454,6 +481,9 @@ class XmouseService {
         this._watchdog = 0;
         if (this._filter !== 0) Clutter.Event.remove_filter(this._filter);
         this._filter = 0;
+        if (this._superPoll !== 0) GLib.source_remove(this._superPoll);
+        this._superPoll = 0;
+        this._supers.clear(); // xmouse releases every key of the other device when the cursor comes back
         // The pointer is shown again first, whatever happens next: never a hidden pointer left behind
         if (this._cursorHidden) global.backend.get_cursor_tracker().uninhibit_cursor_visibility();
         this._cursorHidden = false;
