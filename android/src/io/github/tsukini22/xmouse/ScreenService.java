@@ -276,6 +276,26 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     }
 
     // The root of the window a touch at (x, y) goes to: the top one there (the overlays of the cursors let it through)
+    // The touchpad of this app (its page in a WebView) is the top window under (x, y)
+    @Override
+    public boolean ownTouchpadAt(float x, float y) {
+        AccessibilityNodeInfo root = this.windowAt(Math.round(x), Math.round(y));
+
+        return root != null && this.getPackageName().contentEquals(root.getPackageName() == null ? "" : root.getPackageName()) && hasWebView(root, 0);
+    }
+
+    private static boolean hasWebView(AccessibilityNodeInfo node, int depth) {
+        AccessibilityNodeInfo child;
+
+        if (node == null || depth > 6) return false;
+        if ("android.webkit.WebView".contentEquals(node.getClassName() == null ? "" : node.getClassName())) return true;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            child = node.getChild(i);
+            if (hasWebView(child, depth + 1)) return true;
+        }
+        return false;
+    }
+
     private AccessibilityNodeInfo windowAt(int x, int y) {
         Rect bounds = new Rect();
 

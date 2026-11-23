@@ -60,6 +60,7 @@ final class ScreenLink {
         void refresh(float x, float y); // reload: a pull down at the cursor
         boolean key(String code, String character, boolean down, int meta); // the real key event in a focused text field (Android 13+), false: none
         boolean enterKey(boolean newLine); // Enter in a field of several lines as the keyboard of the phone (Android 13+), false: another field
+        boolean ownTouchpadAt(float x, float y); // the touchpad of this app is under (x, y): a cursor never clicks it
         boolean editing(); // a text field has the focus
         void back();
         void home();
@@ -404,6 +405,8 @@ final class ScreenLink {
         }
         if (b == 3) {if (down) this._actions.back(); return;} // back button of the mouse
         if (b == 1 || b == 4) return; // middle, forward: Android has none (never a touch by mistake)
+        // Never on the touchpad of this app: the cursor may be the one it drives, each tap clicked there again without end
+        if (down && (b == 0 || b == 2) && !c.down && this._actions.ownTouchpadAt(c.x, c.y)) return;
         if (b == 2) {if (down) this._actions.longPress(c.x, c.y); return;} // right button: a long press at once (the context menu of Android)
         // Left button: a finger, put and lifted with the button, its moves sent as they come: a drag follows the cursor,
         // a long press lasts what the button is held, a quick click is a tap
