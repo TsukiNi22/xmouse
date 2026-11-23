@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.view.InputDevice;
 import android.view.KeyCharacterMap;
@@ -394,6 +395,11 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
         return Build.VERSION.SDK_INT >= 33 && Native.key(this, code, character, down, meta);
     }
 
+    @Override
+    public boolean enterKey(boolean newLine) {
+        return Build.VERSION.SDK_INT >= 33 && Native.enter(this, newLine);
+    }
+
     // Android 13+ only (the input method of an Accessibility service): its classes loaded only there
     private static final class Native {
         private Native() {}
@@ -455,6 +461,26 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
 
         private static void send(android.accessibilityservice.InputMethod.AccessibilityInputConnection input, int keyCode, boolean down, int repeat, int meta, long downTime, long now) {
             input.sendKeyEvent(new KeyEvent(downTime, now, down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP, keyCode, repeat, meta, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, KeyEvent.FLAG_SOFT_KEYBOARD | KeyEvent.FLAG_KEEP_TOUCH_MODE, InputDevice.SOURCE_KEYBOARD));
+        }
+
+        // Enter in a field of several lines, as the keyboard of the phone: the action its Enter key shows (a field that asks
+        // for one: send...), else a new line typed as text (an app that sends on the Enter key of a keyboard sent on a plain
+        // Enter); newLine (Shift / Ctrl + Enter): a new line, never the action; false: no field of several lines
+        static boolean enter(ScreenService service, boolean newLine) {
+            android.accessibilityservice.InputMethod method = service.getInputMethod();
+            android.accessibilityservice.InputMethod.AccessibilityInputConnection input = method == null ? null : method.getCurrentInputConnection();
+            EditorInfo info = method == null ? null : method.getCurrentInputEditorInfo();
+            int action;
+
+            if (input == null || info == null) return false;
+            if ((info.inputType & InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT || (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) == 0) return false;
+            action = info.imeOptions & EditorInfo.IME_MASK_ACTION;
+            if (!newLine && (info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0 && action != EditorInfo.IME_ACTION_UNSPECIFIED && action != EditorInfo.IME_ACTION_NONE) {
+                input.performEditorAction(action);
+                return true;
+            }
+            input.commitText("\n", 1, null);
+            return true;
         }
 
         static boolean commit(ScreenService service, String text) {
@@ -583,11 +609,11 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     @Override
     public void enter(boolean newLine) {
         AccessibilityNodeInfo node = this.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        if (node == null) {this.global("center"); return;} // no text field: the d-pad center (Android 13+) clicks what has the focus
-        if (newLine && node.isEditable()) {this.insert("\n"); return;} // Shift + Enter: a new line, never the send of a chat
-        // The action of the keyboard of the field (Android 11+): send, search, go, next; else a new line where it fits
-        if (Build.VERSION.SDK_INT >= 30 && node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())) return;
-        if (node.isMultiLine()) this.insert("\n");
+        if (node == null || !node.isEditable()) {this.global("center"); return;} // no text field: the d-pad center (Android 13+) clicks what has the focus
+        // As the keyboard of the phone: a new line in a field of several lines (Shift / Ctrl + Enter too, never the send of
+        // a chat), the action of a field of one line (Android 11+): send, search, go, next
+        if (node.isMultiLine()) {this.insert("\n"); return;}
+        if (Build.VERSION.SDK_INT >= 30) node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());
     }
 
     @Override

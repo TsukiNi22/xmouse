@@ -59,6 +59,7 @@ final class ScreenLink {
         void scroll(float x, float y, int direction, boolean toEdge); // the list under (x, y): a page, or up to its top / bottom
         void refresh(float x, float y); // reload: a pull down at the cursor
         boolean key(String code, String character, boolean down, int meta); // the real key event in a focused text field (Android 13+), false: none
+        boolean enterKey(boolean newLine); // Enter in a field of several lines as the keyboard of the phone (Android 13+), false: another field
         boolean editing(); // a text field has the focus
         void back();
         void home();
@@ -71,7 +72,7 @@ final class ScreenLink {
         void selectAll();
         void undo(); // the edits made from the computers
         void redo();
-        void enter(boolean newLine); // the action of the keyboard of the field (send, search, next); Shift: a new line
+        void enter(boolean newLine); // as the keyboard of the phone: a new line in a field of several lines, else its action (send, search, next)
         void nextField(boolean back); // Tab, Shift + Tab
         void caret(int unit, int delta, boolean select); // the arrows: a character, a word (Ctrl), a line (Up / Down); Shift selects
         void caretEdge(boolean end, boolean whole, boolean select); // Home / End: the line, Ctrl: the text; Shift selects
@@ -581,6 +582,8 @@ final class ScreenLink {
     // except the keys of the whole phone; else the action of the phone that does what the key does on a computer
     private void onKeyEvent(String id, String code, String character, boolean down) {
         String key = NUMPAD_NAVIGATION.containsKey(code) ? NUMPAD_NAVIGATION.get(code) : code;
+        boolean enter;
+        int meta;
 
         if (key.startsWith("OS")) key = "Meta" + key.substring(2);
         if (MODIFIERS.contains(key)) {
@@ -590,12 +593,18 @@ final class ScreenLink {
             return;
         }
         if (this.actions() == null) return;
+        // Enter as the keyboard of the phone: the action its Enter key shows (send, search, go, next), else a new line;
+        // Shift / Ctrl + Enter: a new line, never the action; a field of one line takes none: its action, its press and
+        // its release without Shift / Ctrl (a field acts on the release of an Enter without modifier)
+        enter = (key.equals("Enter") || key.equals("NumpadEnter")) && !this.alt() && !this.meta();
+        meta = enter ? this.metaState() & ~(KeyEvent.META_SHIFT_MASK | KeyEvent.META_CTRL_MASK) : this.metaState();
         if (!down) {
-            if (this._native.remove(key)) this._actions.key(key, character, false, this.metaState());
+            if (this._native.remove(key)) this._actions.key(key, character, false, meta);
             return;
         }
         this._metaAlone = false;
-        if (!this.systemKey(key) && this._actions.key(key, character, true, this.metaState())) {this._native.add(key); return;}
+        if (enter && this._actions.enterKey(this.shift() || this.ctrl())) return;
+        if (!this.systemKey(key) && this._actions.key(key, character, true, meta)) {this._native.add(key); return;}
         this.onKey(id, key, character);
     }
 
@@ -688,7 +697,7 @@ final class ScreenLink {
             case "F5": case "BrowserRefresh": this._actions.refresh(x, y); break;
             case "Backspace": this._actions.backspace(ctrl); break;
             case "Delete": this._actions.deleteForward(ctrl); break;
-            case "Enter": case "NumpadEnter": this._actions.enter(shift && !ctrl); break;
+            case "Enter": case "NumpadEnter": this._actions.enter(shift || ctrl); break;
             case "Tab": this._actions.nextField(shift); break;
             case "ArrowLeft": this._actions.caret(ctrl ? Actions.BY_WORD : Actions.BY_CHARACTER, -1, shift); break;
             case "ArrowRight": this._actions.caret(ctrl ? Actions.BY_WORD : Actions.BY_CHARACTER, 1, shift); break;
