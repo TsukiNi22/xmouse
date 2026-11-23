@@ -28,7 +28,7 @@ La disposition associe à chaque appareil un rectangle d'un espace global partag
 <figure class="stepper" data-steps="4">
   <ol class="captions">
     <li><b>Pousser.</b> Votre curseur atteint le bord droit de A en <code>x = 1919</code>, et B touche ce bord dans la disposition.</li>
-    <li><b>Retenir.</b> A retient son vrai pointeur (caché, figé au bord) : il ne lit plus que de combien vous bougez.</li>
+    <li><b>Retenir.</b> A retient son vrai pointeur (caché, figé au bord, ou au milieu de son écran avec l'extension GNOME) : il ne lit plus que de combien vous bougez.</li>
     <li><b>Entrer.</b> A dit <code>enter</code> à B avec la position sur B (<code>x = 0</code>) : B dessine là le curseur de A.</li>
     <li><b>Bouger.</b> Vous bougez de 150 px vers la droite : A envoie la nouvelle position, B déplace le curseur (ou son vrai pointeur) en <code>x = 150</code>.</li>
   </ol>
