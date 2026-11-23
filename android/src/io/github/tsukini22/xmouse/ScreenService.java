@@ -149,7 +149,7 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
             held = op[0] != TOUCH_UP;
             path.moveTo(this._fingerX, this._fingerY);
             this.lineTo(path, op[1], op[2]);
-            while (held && this._touches.peek() != null && this._touches.peek()[0] != TOUCH_DOWN) {
+            while (op[0] != TOUCH_STEP && held && this._touches.peek() != null && this._touches.peek()[0] != TOUCH_DOWN && this._touches.peek()[0] != TOUCH_STEP) {
                 float[] next = this._touches.poll();
                 this.lineTo(path, next[1], next[2]);
                 held = next[0] != TOUCH_UP;

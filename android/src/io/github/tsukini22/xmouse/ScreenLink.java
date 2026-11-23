@@ -24,6 +24,7 @@ import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -45,6 +46,7 @@ final class ScreenLink {
         int TOUCH_DOWN = 0; // a finger put on the screen
         int TOUCH_MOVE = 1; // it moved (sent as it comes, never replayed at the end)
         int TOUCH_UP = 2; // lifted
+        int TOUCH_STEP = 3; // it moved, in a piece of its own (never merged with the moves after it)
         int BY_CHARACTER = 0; // units of the moves of the caret
         int BY_WORD = 1;
         int BY_LINE = 2;
@@ -423,10 +425,16 @@ final class ScreenLink {
             // At the cursor, moved back from the border it goes to: the content under the cursor follows it
             x0 = mx > 0 ? Math.min(c.x, m.widthPixels * 0.75f) : (mx < 0 ? Math.max(c.x, m.widthPixels * 0.25f) : c.x);
             y0 = my > 0 ? Math.min(c.y, m.heightPixels * 0.75f) : (my < 0 ? Math.max(c.y, m.heightPixels * 0.25f) : c.y);
+            // Never in the margin itself: a cursor at a border (where it came in) put the finger again at each notch
+            x0 = Math.max(margin * 2, Math.min(m.widthPixels - margin * 2, x0));
+            y0 = Math.max(margin * 2, Math.min(m.heightPixels - margin * 2, y0));
             this._wheelBy = id;
-            this._wheelX = x0;
-            this._wheelY = y0;
             this._actions.touch(Actions.TOUCH_DOWN, x0, y0);
+            // A first step just past the touch slop, alone: a list takes the drag from the row under the finger on the
+            // move that crosses the slop, and that move scrolls nothing (a whole notch in it: a slow wheel scrolled none)
+            this._wheelX = x0 + Math.signum(mx) * (ViewConfiguration.get(this._context).getScaledTouchSlop() + 2);
+            this._wheelY = y0 + Math.signum(my) * (ViewConfiguration.get(this._context).getScaledTouchSlop() + 2);
+            this._actions.touch(Actions.TOUCH_STEP, this._wheelX, this._wheelY);
         }
         this._wheelX = Math.max(0, Math.min(m.widthPixels - 1, this._wheelX + mx));
         this._wheelY = Math.max(0, Math.min(m.heightPixels - 1, this._wheelY + my));
