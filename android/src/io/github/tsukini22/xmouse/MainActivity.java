@@ -787,7 +787,10 @@ public class MainActivity extends Activity {
     private final class Bridge {
         @JavascriptInterface public String token() {return MainActivity.this._prefs.getString("token", "");}
 
-        @JavascriptInterface public void saveToken(String token) {MainActivity.this._prefs.edit().putString("token", token == null ? "" : token).apply();}
+        @JavascriptInterface public void saveToken(String token) {
+            MainActivity.this._prefs.edit().putString("token", token == null ? "" : token).commit();
+            if (token != null && !token.isEmpty()) ScreenLink.pairingChanged(); // the screen goes to this device (it read no token, or the one before)
+        }
 
         @JavascriptInterface public void paired(String token, String fp) {this.saveToken(token);}
 

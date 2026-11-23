@@ -32,6 +32,7 @@
     let laser = false;
     let map = null; // last {devices, cursors, me}
     const mods = new Set(); // sticky modifiers (Ctrl, Alt, Shift, Super)
+    let helloToken = ""; // the token of the last hello: kept by the app once the device welcomes it
 
     //----------------------------------------------------------------//
     /* STORE */
@@ -67,6 +68,7 @@
         ws.onopen = () => {
             tries = 0;
             const t = token();
+            helloToken = t;
             if (t) send({t: "hello", token: t, role: "pad"});
         };
         ws.onmessage = (event) => {
@@ -88,6 +90,9 @@
         switch (o.t) {
             case "welcome":
                 paired = true;
+                // The app forgets its token when a link of another device opens; this page kept it: given back, else
+                // the screen of the phone was never lent to this device again ("pair the app with a device first")
+                if (helloToken) saveToken(helloToken);
                 showPad(o.device);
                 break;
             case "paired":

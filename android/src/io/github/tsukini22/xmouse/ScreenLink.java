@@ -114,6 +114,8 @@ final class ScreenLink {
     private boolean _keepOn = false;
     private float _density = 1;
     private int _tries = 0;
+    private String _linkKey = ""; // the device and the token the link was opened with (a new pairing opens it again)
+    private final Runnable _reconnect = this::connect;
     private boolean _stopped = false;
     private boolean _local = false; // the phone is a member: the events come from its node
     private final Set<String> _held = new HashSet<>(); // the modifiers held by the cursors on this screen (Ctrl, Shift, Alt, Meta)
@@ -145,6 +147,25 @@ final class ScreenLink {
     // Life cycle
 
     static ScreenLink active() {return _active;}
+
+    // The pairing changed (another device paired, a token given back by the pad page): the screen goes to that device now,
+    // never left on the device before nor given up (a link that had no token waited for the service to start again)
+    static void pairingChanged() {
+        ScreenLink link = _active;
+        if (link != null) link._ui.post(link::relink);
+    }
+
+    private void relink() {
+        String token = this.prefs().getString("token", "");
+        WsClient old = this._ws;
+
+        if (this._stopped || this._local || token.isEmpty() || (this.prefs().getString("host", "") + "|" + token).equals(this._linkKey)) return;
+        this._ui.removeCallbacks(this._reconnect);
+        this._ws = null;
+        if (old != null) old.close();
+        this._tries = 0;
+        this.connect();
+    }
 
     void start() {
         this._stopped = false;
@@ -208,18 +229,21 @@ final class ScreenLink {
             return;
         }
         android.net.Uri uri = android.net.Uri.parse(origin);
-        this._ws = new WsClient(uri.getHost(), uri.getPort() > 0 ? uri.getPort() : 47900, "/padws", fp, new WsClient.Listener() {
+        final WsClient[] self = new WsClient[1]; // a link replaced by a new pairing: its last events and its close ignored
+        this._linkKey = origin + "|" + token;
+        self[0] = new WsClient(uri.getHost(), uri.getPort() > 0 ? uri.getPort() : 47900, "/padws", fp, new WsClient.Listener() {
             @Override public void onOpen() {
                 ScreenLink.this._tries = 0;
-                ScreenLink.this.send(json("t", "hello", "token", token, "role", "screen"));
+                if (self[0] == ScreenLink.this._ws) ScreenLink.this.send(json("t", "hello", "token", token, "role", "screen"));
             }
 
             @Override public void onText(String text) {
-                ScreenLink.this._ui.post(() -> ScreenLink.this.onMessage(text));
+                ScreenLink.this._ui.post(() -> {if (self[0] == ScreenLink.this._ws) ScreenLink.this.onMessage(text);});
             }
 
             @Override public void onClose(String reason) {
                 ScreenLink.this._ui.post(() -> {
+                    if (self[0] != ScreenLink.this._ws) return;
                     ScreenLink.this._cursors.clear();
                     if (ScreenLink.this._view != null) ScreenLink.this._view.postInvalidateOnAnimation();
                     if (ScreenLink.this._stopped) return;
@@ -229,10 +253,11 @@ final class ScreenLink {
                         return;
                     }
                     long wait = RECONNECT[Math.min(ScreenLink.this._tries++, RECONNECT.length - 1)];
-                    ScreenLink.this._ui.postDelayed(ScreenLink.this::connect, wait);
+                    ScreenLink.this._ui.postDelayed(ScreenLink.this._reconnect, wait);
                 });
             }
         });
+        this._ws = self[0];
         this._ws.start();
     }
 
