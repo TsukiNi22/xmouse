@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 
+## [v1.0.16-pre] - 2026-11-23
+### Fixed
+- **A loop of clicks without end**: with the cursor of a computer on the phone over the touchpad page of the app, a click there tapped that touchpad, which clicked the computer again, without end (xmouse had to be killed); on Linux the clicks of the touchpad of a phone on the computer also came back to the phone through the capture of the pointer while the mouse of the computer was on the phone. A cursor of a computer never taps the touchpad page of the app any more, the computer drops the presses of a touchpad on its own screen, it does not play the clicks and keys of the other cursors while its mouse is away under a capture that would take them (Linux: the portal, the GNOME extension, X11; the log says it once) and drops what such a capture gives back just after an injection; any loop of clicks is cut (more than 15 clicks in a second or 24 in 4 seconds, the log says it)
+- **The wheel on the phone screen is smooth again**: each notch was a jump of a frame, and a finger lifted just after a jump was thrown thousands of pixels down; the finger of the wheel now glides where the notches take it, speeding up then slowing down (a spring solved exactly at each frame), 84 dp a notch (96 before), at most 3 notches behind the wheel and 2400 dp/s, and it lifts once arrived and still (the content stops with the wheel)
+
+### Changed
+- Phone screen: **Enter acts as the keyboard of the phone**: the action its Enter key shows for the field (send, search, go, next), else a new line (a note, a chat without a send key), typed as text like that keyboard; **Shift + Enter and Ctrl + Enter are always a new line**, never the send (in a field of one line, where no line fits, they validate like Enter)
+
 ## [v1.0.15-pre] - 2026-11-23
 ### Fixed
 - **The GNOME extension moves the cursor on another device on GNOME 50**: under the grab of a capture, GNOME 50 gives the moves, the buttons and the wheel to no actor (only the keys reached the capture) and its seat moved (the pointer was never put back); the extension now reads every input of a capture with an event filter, holds the hidden pointer at the middle of its screen (room in every direction) and finds the seat where each GNOME version keeps it
