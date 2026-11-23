@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [pre-release]
 
+## [v1.0.15-pre] - 2026-11-23
+### Fixed
+- **The GNOME extension moves the cursor on another device on GNOME 50**: under the grab of a capture, GNOME 50 gives the moves, the buttons and the wheel to no actor (only the keys reached the capture) and its seat moved (the pointer was never put back); the extension now reads every input of a capture with an event filter, holds the hidden pointer at the middle of its screen (room in every direction) and finds the seat where each GNOME version keeps it
+- **The cursor came back 3 s after it left when the mouse stayed still** (GNOME extension): a capture that got no event in its first 3 s was ended; it now ends only when the real pointer moves while no input reaches it (the input going elsewhere), never because the person waits on the other device
+- Super pressed alone on another device stayed held there and the next key was Super + that key: GNOME keeps the release of its overlay key; the extension sends it when the keyboard no longer holds Super (Super alone opens the menu of the other device, all the apps on a phone)
+- Phone screen: Shift + arrows, Ctrl + Shift + arrows and Shift + Home / End select again in a text field (since 1.0.14 they moved the caret without selecting): Shift, Ctrl and Alt go to the field as key events, the modifiers held are told to it before each key
+- Phone screen: the wheel scrolled nothing from a border of the phone (where a cursor comes in) or turned slowly over a row of a list: its finger now starts inside the borders, with a first step past the touch slop (a list takes the drag on that move and scrolls nothing in it)
+- Phone screen: the pinch of Ctrl + wheel and of the zoom of the touchpad keeps its two fingers on the screen (they went up to 693 px from the cursor)
+- The screen of the phone was not lent again to a computer whose touchpad opened after another one was paired ("xmouse: pair the app with a device first" until the Accessibility service was turned off and on): the touchpad page gives its token back to the app, and the screen goes to that computer at once
+- Android 15+: the app keeps the room of the system bars (its title was under the clock)
+- The hint of the touchpad tells the zoom and the back / forward gestures
+
 ## [v1.0.14-pre] - 2026-11-22
 ### Changed
 - **The phone screen is touched live**: a cursor of a computer is a finger there (continued strokes of a frame): the left button puts it down and lifts it, a drag follows the cursor as it moves instead of being replayed at the release, a long press lasts what the button is held; the wheel moves a finger as it turns, lifted still after the last notch (never flung); the right button is a long press at once
