@@ -26,6 +26,8 @@ Same cause: the portal does not hide the cursor while it is on another device; t
 
 Before 1.0.13, on GNOME with the input capture portal, the cursor also came back by itself after a few seconds without moving: each refresh of the edges ended the capture. Since 1.0.13 the edges are set again only when they change, never under a capture.
 
+Before 1.0.15, with the GNOME extension, the cursor came back 3 seconds after it left when the mouse did not move meanwhile, and on GNOME 50 the moves, the clicks and the wheel did not reach the other device at all (only the keys did). Since 1.0.15 the extension reads every input of a capture on every GNOME version and keeps the capture while you wait; it gives the pointer back only when the input really goes elsewhere. The extension is loaded at the next login: log out and back in once after the update.
+
 ## The others cannot click or type here (Linux Wayland) {#uinput}
 
 The injection needs access to `/dev/uinput`: `scripts/install.sh --uinput` adds the rule (log out and back in), the packages install it.
@@ -45,6 +47,8 @@ Android stopped the Accessibility service (battery saving, the app swiped away) 
 ## The phone screen is not on the map {#phone-screen}
 
 **This screen in the layout** must be on (the notification says it), and the phone must reach the computer it is paired with (same LAN, Tailscale). Update the app: [updates](page:phone#updates).
+
+The screen goes to the computer whose touchpad was opened last. Before 1.0.15, opening the touchpad of a computer already paired after pairing another one left the screen without a computer ("xmouse: pair the app with a device first") until the Accessibility service was turned off and on; it now goes to that computer at once.
 
 ## A foreign cursor asks to use the panel {#panel-access}
 

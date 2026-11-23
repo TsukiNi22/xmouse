@@ -24,6 +24,8 @@ Même cause : le portail ne cache pas le curseur pendant qu'il est sur un autre 
 
 Avant la 1.0.13, sous GNOME avec le portail de capture des entrées, le curseur revenait aussi tout seul après quelques secondes sans bouger : chaque rafraîchissement des bords mettait fin à la capture. Depuis la 1.0.13, les bords ne sont reposés que quand ils changent, jamais pendant une capture.
 
+Avant la 1.0.15, avec l'extension GNOME, le curseur revenait 3 secondes après être parti si la souris ne bougeait pas entre-temps, et sous GNOME 50 les mouvements, les clics et la molette n'arrivaient pas du tout sur l'autre appareil (seules les touches passaient). Depuis la 1.0.15, l'extension lit toutes les entrées d'une capture sur toutes les versions de GNOME et garde la capture pendant que vous attendez ; elle ne rend le pointeur que si les entrées partent vraiment ailleurs. L'extension est chargée à la connexion suivante : déconnectez-vous puis reconnectez-vous une fois après la mise à jour.
+
 ## Les autres ne peuvent ni cliquer ni taper ici (Linux Wayland) {#uinput}
 
 L'injection a besoin d'accéder à `/dev/uinput` : `scripts/install.sh --uinput` ajoute la règle (se déconnecter et se reconnecter), les paquets l'installent.
@@ -43,6 +45,8 @@ Android a arrêté le service d'Accessibilité (économie de batterie, appli bal
 ## L'écran du téléphone n'est pas sur la carte {#phone-screen}
 
 **Cet écran dans la disposition** doit être activé (la notification le dit), et le téléphone doit atteindre l'ordinateur auquel il est associé (même réseau local, Tailscale). Mettez l'appli à jour : [mises à jour](page:phone#updates).
+
+L'écran va à l'ordinateur dont le pavé tactile a été ouvert en dernier. Avant la 1.0.15, rouvrir le pavé d'un ordinateur déjà associé après en avoir associé un autre laissait l'écran sans ordinateur (« xmouse: pair the app with a device first ») jusqu'à ce que le service d'accessibilité soit désactivé puis réactivé ; il va maintenant aussitôt à cet ordinateur.
 
 ## Un curseur étranger demande à utiliser le panneau {#panel-access}
 

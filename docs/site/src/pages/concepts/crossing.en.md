@@ -32,7 +32,7 @@ The layout maps each device to a rectangle of a shared global space (replicated 
 <figure class="stepper" data-steps="4">
   <ol class="captions">
     <li><b>Push.</b> Your cursor reaches the right border of A at <code>x = 1919</code>, and B touches that border on the layout.</li>
-    <li><b>Hold.</b> A holds its real pointer (hidden, frozen at the border): from now on it only reads how far you move.</li>
+    <li><b>Hold.</b> A holds its real pointer (hidden, frozen at the border, or at the middle of its screen with the GNOME extension): from now on it only reads how far you move.</li>
     <li><b>Enter.</b> A tells B <code>enter</code> with the position on B (<code>x = 0</code>): B draws the cursor of A there.</li>
     <li><b>Move.</b> You move 150 px to the right: A sends the new position, B moves the cursor (or its real pointer) to <code>x = 150</code>.</li>
   </ol>
