@@ -5,25 +5,25 @@ Codename: stable
 Architectures: amd64
 Components: main
 Description: xmouse APT repository
-Date: Sun, 22 Nov 2026 22:44:35 +0000
-Date: Sun, 22 Nov 2026 22:44:35 +0000
+Date: Mon, 23 Nov 2026 03:58:17 +0000
+Date: Mon, 23 Nov 2026 03:58:17 +0000
 MD5Sum:
- b52f5abb59d972e0e76a1064a3796d8d              212 Release
- c25a271915b25421d6b78b0f131fe8d1            21510 main/binary-amd64/Packages
- 6e416ad9ddb98e52dde807a99fa52d99             4310 main/binary-amd64/Packages.gz
- bd661cb2d77c141d4da55820a903fb4a             3752 main/binary-amd64/Packages.xz
+ 3e36d2f3338aa3ce20887201b4beecf0              212 Release
+ e1e827104ec02c01022ec0aa7846232b            21510 main/binary-amd64/Packages
+ a97a72d141400d98f9d1a05f853c2718             4311 main/binary-amd64/Packages.gz
+ 221cb002bcb93ede013eac6e49b70a73             3764 main/binary-amd64/Packages.xz
 SHA1:
- 62c8ec47a934c90cfcf293b288f214371b6c0d1a              212 Release
- 50902c2465ddf98de3258b0afcfda847c88a511a            21510 main/binary-amd64/Packages
- 124b681f4b609f25258f5148c5a07c267ca59bf8             4310 main/binary-amd64/Packages.gz
- 9b534b591499134afff4406b7b45fb993aa9d6b2             3752 main/binary-amd64/Packages.xz
+ 695801edab7373f377bf4520551c0757082d0947              212 Release
+ 4fabf1b0aab57b1421a335c4e236bab5ee222ee1            21510 main/binary-amd64/Packages
+ 181ca69000b1f07b52ff9bcbe72e8e3fc5964958             4311 main/binary-amd64/Packages.gz
+ d5729ae5f7bc79fbef83d9270765dbf294158b16             3764 main/binary-amd64/Packages.xz
 SHA256:
- 4627711fe9bff415a841b70e713b752ef39c76f60b91207151eb1da2bed10aa9              212 Release
- 03ade71658db64461d7dc55347c3e21e9d9b99afd7d3e73d294f17fe7c65b7d1            21510 main/binary-amd64/Packages
- 73c4bf3a3720de0cbc81ddb5af775e5e91f662c6c198b62268b0a67f32369ed5             4310 main/binary-amd64/Packages.gz
- 9f93992c048b925869c49f87b7fb2e0f46fe7dcf0cc0767b540d6a6ed02179cc             3752 main/binary-amd64/Packages.xz
+ 087f21408f864a38f82ecf31194caacfb5b40f52fcb6fe68f2cbc2bdb7f9a31e              212 Release
+ 1176d978752ce87d657e5fae0a3d429283074ad3253a3583e5c5faa7d9ab8f62            21510 main/binary-amd64/Packages
+ d9c32bbb57a81f706515765c479bd48b23d99e516774e45dfaa59db96e04d5b4             4311 main/binary-amd64/Packages.gz
+ 3d4bcc7d332ab43b435cf1c77ec0593a0b7d6dda2c235269a919af197763552b             3764 main/binary-amd64/Packages.xz
 SHA512:
- 69fefdf1ba61a15bfac8c6a4e1c4249f0affdab5795cc53c1d053c9684a1932039bad44f81131140ceea52f631232e6db910123b5f86dd7eb99959731401abc6              212 Release
- d4e4dce250ef72c144dfe7d6801aebc2dd0d09ddad392fec0af8398b2fc717bb3481341f49cfbb135e54b0e7ada2de8c1ae96ee90e9e702c7b390ba41a2f4dc7            21510 main/binary-amd64/Packages
- 9074c6d01f9fef39ef498877e2a2c6fb4e58dd93232ec3b0b266b287cd8931245112f8ac75bf40cff0505ccdab971e607136c44abfb7265c159f83a6029c3241             4310 main/binary-amd64/Packages.gz
- 37402548d4a5b67d09d9a9913fd03a149e7ceebe5fa108c8970dedd88f9ea10cfbc906cb8ef4be078d3a6ab17fbc58b6fde0a7572ac314552c13e119f20cba6d             3752 main/binary-amd64/Packages.xz
+ 8b78847f1dd6ae35c4ce48abd7cb6c169401bb5ba3954e9d786d467b3489db9f3f4d9528ebc7872d147719eb145fd528255db7e728c47bbe555b2364a3793da7              212 Release
+ 2ce29542a204158826a51210dcb63cef54c521d6b3bdfa4447a93b6c5356f18a04af4a3bcae5c8dbe27398295e4e63f1e6b9819d9d37202d05a30b14d4c640e8            21510 main/binary-amd64/Packages
+ 2afbe0f623f3a74af625a6acae002d564f2006b8217faf91ae24610e0f0cf37cc190cf36728cfa7ec290b27d1df4605c67cef5097ecd087cdbd34c5b022afffc             4311 main/binary-amd64/Packages.gz
+ 3b563cc95e8a4c7dca8eb0c5ab63ee65748c47e5d9c4f533af452698c315a167e8eb031ea75df4df13ba8ecc2fe9e48fd252caedc7b67f871d311f728b20ad83             3764 main/binary-amd64/Packages.xz
