@@ -37,6 +37,7 @@ import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.SslErrorHandler;
@@ -108,6 +109,14 @@ public class MainActivity extends Activity {
         this._prefs = this.getSharedPreferences(PREFS, MODE_PRIVATE);
         this._root = new FrameLayout(this);
         this._root.setBackgroundColor(BG);
+        // Android 15+ draws the apps under the status and navigation bars (edge to edge): the content keeps their room,
+        // the one of a cutout and of the keyboard (else the title went under the clock)
+        this._root.setOnApplyWindowInsetsListener((view, insets) -> {
+            if (Build.VERSION.SDK_INT < 35) return insets;
+            android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return insets;
+        });
         this.setContentView(this._root);
         if (!this.handleIntent(this.getIntent())) this.startOrSetup();
         this.showLastCrash();
