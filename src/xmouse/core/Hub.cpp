@@ -328,10 +328,12 @@ void xmouse::core::Hub::startCapture_(void)
     this->_capture = platform::create_input_capture(this);
     this->_edgesKnown = false; // a new capture: its edges sent at the first update
     QObject::connect(this->_capture.get(), &platform::IInputCapture::crossed, this, &Hub::onCrossed_);
-    QObject::connect(this->_capture.get(), &platform::IInputCapture::motion, this, &Hub::onMotion_);
-    QObject::connect(this->_capture.get(), &platform::IInputCapture::button, this, &Hub::onButton_);
-    QObject::connect(this->_capture.get(), &platform::IInputCapture::wheel, this, &Hub::onWheel_);
-    QObject::connect(this->_capture.get(), &platform::IInputCapture::key, this, &Hub::onKey_);
+    // What a capture of Linux gives just after an input was injected here for a foreign cursor is its echo (it takes the
+    // injected events too): its presses, moves and wheel are not sent on, the releases always are
+    QObject::connect(this->_capture.get(), &platform::IInputCapture::motion, this, [this](const double dx, const double dy) {if (!this->echoNow()) this->onMotion_(dx, dy);});
+    QObject::connect(this->_capture.get(), &platform::IInputCapture::button, this, [this](const net::MouseButton button, const bool down) {if (!down || !this->echoNow()) this->onButton_(button, down);});
+    QObject::connect(this->_capture.get(), &platform::IInputCapture::wheel, this, [this](const int dx, const int dy) {if (!this->echoNow()) this->onWheel_(dx, dy);});
+    QObject::connect(this->_capture.get(), &platform::IInputCapture::key, this, [this](const QString& code, const bool down) {if (!down || !this->echoNow()) this->onKey_(code, down);});
     QObject::connect(this->_capture.get(), &platform::IInputCapture::windowCrossed, this, &Hub::onWindowCrossed_);
     QObject::connect(this->_capture.get(), &platform::IInputCapture::ready, this, [this]() {
         this->_captureError.clear();

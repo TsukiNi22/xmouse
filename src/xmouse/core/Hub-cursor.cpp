@@ -105,6 +105,7 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
     this->_awayPointer = this->_awayWatch && this->_awayByPad ? this->_capture->pointer() : QPoint();
     this->_awayPointerSet = this->_awayByPad;
     this->_awayLost = 0;
+    this->_injectHeldTold = false;
     this->_global = QPointF(global);
     this->_targetLocal = local;
     this->_keysDown.clear();
@@ -278,6 +279,8 @@ void xmouse::core::Hub::onButton_(const net::MouseButton button, const bool down
     const int bit = 1 << static_cast<int>(button);
 
     if (!this->_away) return;
+    if (!down && !(this->_buttonsDown & bit)) return; // its press was not sent (an echo, a loop cut): its release neither
+    if (down && this->clickLoop_()) return;
     if (down) this->_buttonsDown |= bit;
     else this->_buttonsDown &= ~bit;
     this->flushMove_(); // the click lands where the cursor is drawn
@@ -633,6 +636,13 @@ void xmouse::core::Hub::padButton_(const QString& pad, const net::MouseButton bu
         return;
     }
     if (own) {this->foreignButton_(pad, button, down); return;} // at its own cursor here (private mode: nothing)
+    // The touchpad of the phone my cursor is on presses under my cursor, on that touchpad itself: each tap would press
+    // there again without end (an app without its own guard, before 1.0.16); the log says it once
+    if (down && this->_away && this->_target == pad) {
+        if (!this->_injectHeldTold) this->_log.info("input", pad, "the touchpad of " + this->_layout.device(pad).name + " does not click on its own screen (it would click itself again and again)");
+        this->_injectHeldTold = true;
+        return;
+    }
     if (this->_away) {this->onButton_(button, down); return;}
     if (this->_injector) this->_injector->mouseButton(button, down);
 }

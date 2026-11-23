@@ -290,6 +290,9 @@ class Hub: public QObject {
         bool _panelFocused = false; // the window of xmouse has the focus here
         QList<QRect> _panelRects; // windows of xmouse on screen (local desktop pixels)
         qint64 _lastInject = 0; // ms of the last event injected for a foreign cursor
+        bool _injectHeldTold = false; // told once while my cursor is away: the input of the foreign cursors is not played here
+        QList<qint64> _clicks; // ms of the last presses sent on or played here (a loop of clicks is cut)
+        qint64 _clickLoopTold = 0; // ms the last cut was logged
 
         /* udp */
         QHash<QString, qint64> _udpUp; // member -> ms of its last pong (its moves go by udp while it is fresh)
@@ -384,6 +387,8 @@ class Hub: public QObject {
         void foreignKey_(const QString& id, const QString& code, const bool down);
         void foreignText_(const QString& id, const QString& text);
         _hot _nodiscard bool blocked_(Foreign& f, const QPoint& at); // its input held here (panel), told to the owner
+        _nodiscard bool injectionHeld_(const QString& id); // my cursor away under a capture that takes it: not played here
+        _nodiscard bool clickLoop_(void); // a press past CLICK_LOOP_MAX in a second (two devices clicking each other)
         void restorePointer_(void);
         void predict_(void);
 
@@ -528,6 +533,8 @@ class Hub: public QObject {
 
         /* access */
         _cold _nodiscard inline bool injectingNow(void) const {return QDateTime::currentMSecsSinceEpoch() - this->_lastInject < 150;}; // an input of a foreign cursor was injected in the last 150 ms (not the local person)
+        _cold _nodiscard inline bool echoNow(void) const {return this->injectingNow() && this->_capture && this->_capture->takesInjected();}; // what the capture gives now may be the echo of an injection
+        _cold _nodiscard inline bool injectionEchoes(void) const {return this->_away && !this->_awayByPad && this->_capture && this->_capture->capturing() && this->_capture->takesInjected();}; // an injection here would go where my cursor is
 
         // ---------- Constructor --------- //
         explicit Hub(Config& config, QObject* parent = nullptr);

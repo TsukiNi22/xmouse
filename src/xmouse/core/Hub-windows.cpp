@@ -189,7 +189,10 @@ void xmouse::core::Hub::onStreamMessage_(const QString& id, const QJsonObject& o
     if (type == "winput" && it->outgoing && this->_injector && this->_windows && this->_config.rightsOf(id).windows && !this->_config.settings().privateMode) {
         const std::optional<platform::WindowInfo> info = this->_windows->info(it->window);
         const QString kind = o.value("k").toString();
+        const bool release = (kind == "button" || kind == "key") && !o.value("down").toBool();
         QPoint at;
+
+        if (!release && this->injectionHeld_(id)) return; // my cursor away under a capture: it would take it there
 
         if (!info) {this->stopStream(sid); return;}
         if (!it->activated || kind == "button") {this->_windows->activate(it->window); it->activated = true;}

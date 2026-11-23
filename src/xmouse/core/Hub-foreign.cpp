@@ -33,6 +33,9 @@ File Description:
 #define WHEEL_RESTORE_DELAY 350 // ms after the last wheel step
 #define PREDICT_HORIZON 80 // ms a cursor is drawn ahead of its last packet at most
 #define PREDICT_INTERVAL_GUARD 16 // ms more: the last predicted frame is drawn back on the real position
+#define CLICK_LOOP_BURST 15 // presses in a second at most: more is a loop (no person clicks that fast)
+#define CLICK_LOOP_STEADY 24 // presses in CLICK_LOOP_SPAN at most: a loop clicks on and on (7 a second seen), a person stops
+#define CLICK_LOOP_SPAN 4000 // ms
 
 //----------------------------------------------------------------//
 /* ENTER / LEAVE */
@@ -136,7 +139,7 @@ void xmouse::core::Hub::foreignPointer_(const QString& id, const QPoint& local, 
 
     // Pointer mode: the real pointer is the foreign cursor; phantom mode: it follows only a drag (the button held); a
     // cursor passing over a private device never moves it
-    if (!it->passing && (it->buttons != 0 || this->_config.settings().foreignMode == "pointer") && this->_injector && it->state != ForeignState::Paused && it->state != ForeignState::Asking) {
+    if (!it->passing && (it->buttons != 0 || this->_config.settings().foreignMode == "pointer") && this->_injector && it->state != ForeignState::Paused && it->state != ForeignState::Asking && !this->injectionEchoes()) {
         this->_lastInject = now;
         this->_injector->mouseMove(this->injectPoint_(it->local).x(), this->injectPoint_(it->local).y());
     }
@@ -179,6 +182,7 @@ void xmouse::core::Hub::foreignButton_(const QString& id, const net::MouseButton
     if (!this->_injector || !this->_config.rightsOf(id).mouse) return;
     if (down && this->blocked_(*it, it->local)) return;
     if (!down && !(it->buttons & bit)) return; // the down was held back: its up too
+    if (down && (this->injectionHeld_(id) || this->clickLoop_())) return;
     for (const Foreign& f: this->_foreign)
         if (f.buttons != 0) anyHeld = true;
 
@@ -207,7 +211,7 @@ void xmouse::core::Hub::foreignWheel_(const QString& id, const int dx, const int
     QPoint at;
 
     if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).mouse) return;
-    if (this->blocked_(*it, it->local)) return;
+    if (this->blocked_(*it, it->local) || this->injectionHeld_(id)) return;
     if (!this->_hasSavedPointer && this->_config.settings().foreignMode == "phantom" && this->_config.settings().restorePointer && this->_capture && this->_capture->knowsPointer() && !this->_away) {
         this->_savedPointer = this->_capture->pointer();
         this->_hasSavedPointer = true;
@@ -225,6 +229,7 @@ void xmouse::core::Hub::foreignKey_(const QString& id, const QString& code, cons
 
     if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
     if (down && this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
+    if (down && this->injectionHeld_(id)) return; // a release always goes (a key pressed here before my cursor left)
     this->_keyboardOwner = id;
     this->_lastInject = now_ms();
     this->_injector->key(code, down);
@@ -236,8 +241,43 @@ void xmouse::core::Hub::foreignText_(const QString& id, const QString& text)
 
     if (it == this->_foreign.end() || it->passing || !this->_injector || !this->_config.rightsOf(id).keyboard) return;
     if (this->_panelFocused && it->state != ForeignState::Granted) {(void)this->blocked_(*it, it->local); return;}
+    if (this->injectionHeld_(id)) return;
     this->_lastInject = now_ms();
     this->_injector->text(text);
+}
+
+// My cursor away under a capture that takes what is injected here (Linux): the input of a foreign cursor is not played
+// here, the capture took it and sent it where my cursor is (a click of the touchpad of a phone, with my cursor over that
+// touchpad, came back to it as a tap: the two clicked each other without end); the log says it once
+bool xmouse::core::Hub::injectionHeld_(const QString& id)
+{
+    if (!this->injectionEchoes()) return false;
+    if (!this->_injectHeldTold) {
+        this->_injectHeldTold = true;
+        this->_log.info("input", id, "the clicks and keys of the cursor of " + this->_layout.device(id).name + " are not played here while my cursor is on " + this->_layout.device(this->_target).name + " (the capture of this computer would send them there)");
+    }
+    return true;
+}
+
+// A loop of clicks (two devices clicking each other, whatever the path) is cut: no person clicks CLICK_LOOP_BURST times in
+// a second nor CLICK_LOOP_STEADY times in CLICK_LOOP_SPAN; the press past it is dropped and the chain stops there
+bool xmouse::core::Hub::clickLoop_(void)
+{
+    const qint64 now = now_ms();
+    int burst = 0;
+
+    while (!this->_clicks.isEmpty() && now - this->_clicks.front() > CLICK_LOOP_SPAN) this->_clicks.removeFirst();
+    for (const qint64 at: this->_clicks)
+        if (now - at <= 1000) burst++;
+    if (burst < CLICK_LOOP_BURST && this->_clicks.size() < CLICK_LOOP_STEADY) {
+        this->_clicks.append(now);
+        return false;
+    }
+    if (now - this->_clickLoopTold > CLICK_LOOP_SPAN) {
+        this->_clickLoopTold = now;
+        this->_log.warn("input", "", "a loop of clicks was cut: " + (burst >= CLICK_LOOP_BURST ? QString::number(burst) + " clicks in a second" : QString::number(this->_clicks.size()) + " clicks in " + QString::number(CLICK_LOOP_SPAN / 1000) + " s") + " (two devices clicking each other?)");
+    }
+    return true;
 }
 
 void xmouse::core::Hub::restorePointer_(void)

@@ -81,6 +81,7 @@ class HookCapture final: public IInputCapture {
         _cold _nodiscard QString name(void) const override      {return "hooks";};
         _cold _nodiscard QString error(void) const override     {return this->_error;};
         _cold _nodiscard bool knowsPointer(void) const override {return true;};
+        _cold _nodiscard bool takesInjected(void) const override {return false;}; // the injected events are marked: skipped
 
         // ---------- Constructor --------- //
         explicit HookCapture(QObject* parent = nullptr): IInputCapture(parent) { /* Nothing */ };

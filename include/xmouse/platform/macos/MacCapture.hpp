@@ -71,6 +71,7 @@ class MacCapture final: public IInputCapture {
         _cold _nodiscard QString name(void) const override      {return "event-tap";};
         _cold _nodiscard QString error(void) const override     {return this->_error;};
         _cold _nodiscard bool knowsPointer(void) const override {return true;};
+        _cold _nodiscard bool takesInjected(void) const override {return false;}; // the events posted by xmouse are skipped (their pid)
 
         // ---------- Constructor --------- //
         explicit MacCapture(QObject* parent = nullptr): IInputCapture(parent) { /* Nothing */ };

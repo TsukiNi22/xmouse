@@ -59,8 +59,11 @@ class IInputCapture: public QObject {
         _cold _nodiscard virtual QString error(void) const = 0;
         _cold _nodiscard virtual bool knowsPointer(void) const = 0; // pointer() is reliable (restore after a foreign click)
         _cold _nodiscard virtual QPoint pointer(void) const = 0; // local pointer position when knowsPointer()
-        _cold _nodiscard virtual int heldButtons(void) const {return -1;}; // bits of the buttons held now (MouseButton), -1 = unknown (the drop shelf needs it)
-        _cold virtual void setWindowMove(const bool enabled) {(void)enabled;}; // a window dragged on an edge: windowCrossed (true) or the usual border of the OS (false)
+
+        // ------------ Function ---------- //
+        _cold _nodiscard virtual int heldButtons(void) const    {return -1;}; // bits of the buttons held now (MouseButton), -1 = unknown (the drop shelf needs it)
+        _cold _nodiscard virtual bool takesInjected(void) const {return true;}; // it takes the input xmouse injects here too (Linux: no mark tells it apart)
+        _cold virtual void setWindowMove(const bool enabled)    {(void)enabled;}; // a window dragged on an edge: windowCrossed (true) or the usual border of the OS (false)
 
         // ---------- Constructor --------- //
         explicit IInputCapture(QObject* parent = nullptr): QObject(parent) { /* Nothing */ };
