@@ -81,7 +81,14 @@ final class ScreenLink {
         void launch(String what); // "settings", "search", a category of app (Intent.CATEGORY_APP_*)
     }
 
-    private static final long WHEEL_LIFT = 140; // ms without a notch before the finger of the wheel lifts (still: no fling)
+    private static final long WHEEL_LIFT = 140; // ms without a notch before the finger of the wheel may lift (once arrived)
+    private static final long WHEEL_HOLD = 1200; // ms without a notch: the finger of the wheel lifted wherever it is
+    private static final long WHEEL_FRAME = 16; // ms between two moves of the finger of the wheel
+    private static final float WHEEL_SPRING = 22; // rad/s: the finger glides where the notches take it, eased in and out (critically damped)
+    private static final float WHEEL_SETTLED = 2; // dp from where the notches take it: arrived (lifted still, never thrown)
+    private static final float WHEEL_STILL = 60; // dp/s: slower is still
+    private static final float WHEEL_MAX_SPEED = 2400; // dp/s of the finger of the wheel at most
+    private static final float WHEEL_BACKLOG = 3; // notches the finger may lag behind the wheel (the rest of a hard turn dropped)
     private static final float WHEEL_MARGIN = 24; // dp: the finger of the wheel is put again at the cursor before a border
     private static final Set<String> MODIFIERS = new HashSet<>(Arrays.asList("ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight", "OSLeft", "OSRight"));
     // Keys of the whole phone, never sent to an app as they are (Android acts on them: back, the media, the volume...)
@@ -96,7 +103,7 @@ final class ScreenLink {
             {"Numpad1", "End"}, {"Numpad9", "PageUp"}, {"Numpad3", "PageDown"}, {"Numpad0", "Insert"}, {"NumpadDecimal", "Delete"}};
         for (String[] pair: pairs) NUMPAD_NAVIGATION.put(pair[0], pair[1]);
     }
-    private static final float WHEEL_PIXELS = 0.8f; // px of swipe per 1/120 of a notch
+    private static final float WHEEL_PIXELS = 0.7f; // dp the finger of the wheel goes per 1/120 of a notch (84 dp a notch; 96 before)
     private static final long[] RECONNECT = {1000, 2000, 4000, 8000, 15000}; // ms
     private static final long IDLE_HIDE = 3000; // ms a cursor stays drawn without moving
     private static final long IDLE_FADE = 600; // ms of its fade out (a click alone never brings it back)
@@ -122,9 +129,15 @@ final class ScreenLink {
     private final Set<String> _native = new HashSet<>(); // keys pressed as real key events (released the same way)
     private boolean _metaAlone = false; // Meta pressed, no other key yet: alone it opens all the apps (the start menu)
     private String _wheelBy = null; // the cursor whose wheel holds a finger on the screen
-    private float _wheelX;
+    private float _wheelX; // where the finger of the wheel is
     private float _wheelY;
-    private final Runnable _wheelLift = this::wheelUp;
+    private float _wheelToX; // where the notches take it
+    private float _wheelToY;
+    private float _wheelVX; // its speed (px/s)
+    private float _wheelVY;
+    private long _wheelNotch; // uptime of the last notch
+    private long _wheelFrame; // uptime of its last move
+    private final Runnable _wheelTick = this::wheelTick;
     private static volatile ScreenLink _active; // the screen lent now (the node gives it its events)
 
     // A foreign cursor on this screen
@@ -431,49 +444,109 @@ final class ScreenLink {
         else this._actions.pinch(cx, y, far, base, 220);
     }
 
-    // The wheel: a finger put at the cursor that follows the notches as they come, lifted still WHEEL_LIFT after the last
-    // one (the content stops there, never flung), put again at the cursor before it leaves the screen
+    // The wheel: a finger put at the cursor glides where the notches take it, eased in and out (each notch was a jump of
+    // a frame: no smooth scroll, and a finger lifted just after a jump was thrown thousands of pixels down), lifted once
+    // arrived and still after the last notch (the content stops with the wheel), put again at the cursor before a border
     private void onWheel(String id, int dx, int dy) {
         Cursor c = this._cursors.get(id);
-        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
-        float margin = WHEEL_MARGIN * this._density;
         float mx = dx * WHEEL_PIXELS * this._density;
         float my = dy * WHEEL_PIXELS * this._density; // wheel up (dy > 0) shows what is above: the finger goes down
-        float x0;
-        float y0;
+        float backlog = WHEEL_BACKLOG * 120 * WHEEL_PIXELS * this._density;
 
         if (c == null || this.actions() == null) return;
         if (this.ctrl() && dy != 0) {this.wheelUp(); this.zoom(c.x, c.y, dy > 0 ? 1 : -1, Math.abs(dy)); return;}
         if (c.down) return; // a button holds the finger: never a second one
-        if (!id.equals(this._wheelBy) || outside(this._wheelX + mx, this._wheelY + my, m, margin)) {
+        if (!id.equals(this._wheelBy)) {
             this.wheelUp();
-            // At the cursor, moved back from the border it goes to: the content under the cursor follows it
-            x0 = mx > 0 ? Math.min(c.x, m.widthPixels * 0.75f) : (mx < 0 ? Math.max(c.x, m.widthPixels * 0.25f) : c.x);
-            y0 = my > 0 ? Math.min(c.y, m.heightPixels * 0.75f) : (my < 0 ? Math.max(c.y, m.heightPixels * 0.25f) : c.y);
-            // Never in the margin itself: a cursor at a border (where it came in) put the finger again at each notch
-            x0 = Math.max(margin * 2, Math.min(m.widthPixels - margin * 2, x0));
-            y0 = Math.max(margin * 2, Math.min(m.heightPixels - margin * 2, y0));
             this._wheelBy = id;
-            this._actions.touch(Actions.TOUCH_DOWN, x0, y0);
-            // A first step just past the touch slop, alone: a list takes the drag from the row under the finger on the
-            // move that crosses the slop, and that move scrolls nothing (a whole notch in it: a slow wheel scrolled none)
-            this._wheelX = x0 + Math.signum(mx) * (ViewConfiguration.get(this._context).getScaledTouchSlop() + 2);
-            this._wheelY = y0 + Math.signum(my) * (ViewConfiguration.get(this._context).getScaledTouchSlop() + 2);
-            this._actions.touch(Actions.TOUCH_STEP, this._wheelX, this._wheelY);
+            this._wheelVX = 0;
+            this._wheelVY = 0;
+            this.wheelDown(c.x, c.y, mx, my, 0, 0);
+            this._wheelFrame = SystemClock.uptimeMillis();
+            this._ui.postDelayed(this._wheelTick, WHEEL_FRAME);
         }
-        this._wheelX = Math.max(0, Math.min(m.widthPixels - 1, this._wheelX + mx));
-        this._wheelY = Math.max(0, Math.min(m.heightPixels - 1, this._wheelY + my));
-        this._actions.touch(Actions.TOUCH_MOVE, this._wheelX, this._wheelY);
-        this._ui.removeCallbacks(this._wheelLift);
-        this._ui.postDelayed(this._wheelLift, WHEEL_LIFT);
+        // Never far behind the wheel: a hard turn scrolls fast and stops soon after the wheel
+        this._wheelToX = this._wheelX + Math.max(-backlog, Math.min(backlog, this._wheelToX + mx - this._wheelX));
+        this._wheelToY = this._wheelY + Math.max(-backlog, Math.min(backlog, this._wheelToY + my - this._wheelY));
+        this._wheelNotch = SystemClock.uptimeMillis();
+    }
+
+    // The finger of the wheel put at (x, y), moved back from the border it goes to (sx, sy), then a first step just past
+    // the touch slop, alone: a list takes the drag from the row under the finger on the move that crosses the slop, and
+    // that move scrolls nothing; (leftX, leftY): what it has still to go
+    private void wheelDown(float x, float y, float sx, float sy, float leftX, float leftY) {
+        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
+        float margin = WHEEL_MARGIN * this._density;
+        float slop = ViewConfiguration.get(this._context).getScaledTouchSlop() + 2;
+        float x0 = sx > 0 ? Math.min(x, m.widthPixels * 0.75f) : (sx < 0 ? Math.max(x, m.widthPixels * 0.25f) : x);
+        float y0 = sy > 0 ? Math.min(y, m.heightPixels * 0.75f) : (sy < 0 ? Math.max(y, m.heightPixels * 0.25f) : y);
+
+        // Never in the margin itself: a cursor at a border (where it came in) put the finger again at each notch
+        x0 = Math.max(margin * 2, Math.min(m.widthPixels - margin * 2, x0));
+        y0 = Math.max(margin * 2, Math.min(m.heightPixels - margin * 2, y0));
+        this._actions.touch(Actions.TOUCH_DOWN, x0, y0);
+        this._wheelX = x0 + Math.signum(sx) * slop;
+        this._wheelY = y0 + Math.signum(sy) * slop;
+        this._actions.touch(Actions.TOUCH_STEP, this._wheelX, this._wheelY);
+        this._wheelToX = this._wheelX + leftX;
+        this._wheelToY = this._wheelY + leftY;
+    }
+
+    // A frame of the finger of the wheel: a critically damped spring toward where the notches take it, solved exactly over
+    // the frame (it speeds up then slows down, never a jump); after the last notch it lifts once arrived and still (lifted
+    // at full speed, the content was thrown far)
+    private void wheelTick() {
+        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
+        long now = SystemClock.uptimeMillis();
+        long quiet = now - this._wheelNotch;
+        float dt = Math.max(0.008f, Math.min(0.04f, (now - this._wheelFrame) / 1000f));
+        float decay = (float) Math.exp(-WHEEL_SPRING * dt);
+        float ex = this._wheelX - this._wheelToX;
+        float ey = this._wheelY - this._wheelToY;
+        float cx = this._wheelVX + WHEEL_SPRING * ex;
+        float cy = this._wheelVY + WHEEL_SPRING * ey;
+        float max = WHEEL_MAX_SPEED * this._density * dt;
+        Cursor c;
+        float x;
+        float y;
+
+        if (this._wheelBy == null || this._actions == null) return;
+        this._wheelFrame = now;
+        // e(t) = (e0 + (v0 + w e0) t) exp(-w t), v(t) = (v0 - w (v0 + w e0) t) exp(-w t): exact for any frame
+        ex = (ex + cx * dt) * decay;
+        ey = (ey + cy * dt) * decay;
+        this._wheelVX = (this._wheelVX - WHEEL_SPRING * cx * dt) * decay;
+        this._wheelVY = (this._wheelVY - WHEEL_SPRING * cy * dt) * decay;
+        x = this._wheelX + Math.max(-max, Math.min(max, this._wheelToX + ex - this._wheelX));
+        y = this._wheelY + Math.max(-max, Math.min(max, this._wheelToY + ey - this._wheelY));
+        x = Math.max(0, Math.min(m.widthPixels - 1, x));
+        y = Math.max(0, Math.min(m.heightPixels - 1, y));
+        if (quiet >= WHEEL_HOLD || (quiet >= WHEEL_LIFT && Math.hypot(this._wheelToX - x, this._wheelToY - y) < WHEEL_SETTLED * this._density
+            && Math.hypot(this._wheelVX, this._wheelVY) < WHEEL_STILL * this._density)) {
+            this._wheelBy = null;
+            this._actions.touch(Actions.TOUCH_UP, x, y); // arrived and still: the content stops there
+            return;
+        }
+        if (outside(x, y, m, WHEEL_MARGIN * this._density)) {
+            // A border: lifted there, put again at the cursor with what it has still to go, at its speed
+            c = this._cursors.get(this._wheelBy);
+            this._actions.touch(Actions.TOUCH_UP, this._wheelX, this._wheelY);
+            this.wheelDown(c != null ? c.x : this._wheelX, c != null ? c.y : this._wheelY, this._wheelVX, this._wheelVY, this._wheelToX - this._wheelX, this._wheelToY - this._wheelY);
+        } else if (x != this._wheelX || y != this._wheelY) {
+            this._wheelX = x;
+            this._wheelY = y;
+            this._actions.touch(Actions.TOUCH_MOVE, x, y);
+        }
+        this._ui.postDelayed(this._wheelTick, WHEEL_FRAME);
     }
 
     private static boolean outside(float x, float y, DisplayMetrics m, float margin) {
         return x < margin || y < margin || x > m.widthPixels - margin || y > m.heightPixels - margin;
     }
 
+    // The finger of the wheel lifted where it is, at once (a button, the cursor gone, a zoom, the link stopped)
     private void wheelUp() {
-        this._ui.removeCallbacks(this._wheelLift);
+        this._ui.removeCallbacks(this._wheelTick);
         if (this._wheelBy == null) return;
         this._wheelBy = null;
         if (this._actions != null) this._actions.touch(Actions.TOUCH_UP, this._wheelX, this._wheelY);
