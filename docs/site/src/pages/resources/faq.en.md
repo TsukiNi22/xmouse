@@ -44,6 +44,10 @@ Its screen is in **Show the cursors** mode: Android lets an app click in the oth
 
 Android stopped the Accessibility service (battery saving, the app swiped away) and the screen was lent without it for a while. Set App info > **Battery** > **Unrestricted** for xmouse; since 1.0.12 the app never lends the screen without the service while it is turned on.
 
+## The clicks went on by themselves {#click-loop}
+
+Before 1.0.16, with the cursor of a computer on the phone over the touchpad page of the app, a click there could start a loop: the tap on the touchpad clicked the computer again, which clicked under its cursor again, without end (quit xmouse to stop it). On Linux the clicks of the touchpad of a phone on the computer also came back to the phone through the capture of the pointer while the mouse of the computer was on the phone. Since 1.0.16 a cursor never taps the touchpad page of the app, the computer drops the clicks of a touchpad on its own screen and does not play the clicks and keys of the other cursors while its mouse is on another device (the log says it once), and any loop of clicks is cut (more than 15 clicks in a second or 24 in 4 seconds: the log says it).
+
 ## The phone screen is not on the map {#phone-screen}
 
 **This screen in the layout** must be on (the notification says it), and the phone must reach the computer it is paired with (same LAN, Tailscale). Update the app: [updates](page:phone#updates).

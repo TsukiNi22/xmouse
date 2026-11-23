@@ -48,7 +48,7 @@ The keyboard of the touchpad has sticky modifiers that add up (<kbd>Ctrl</kbd>, 
 > [!IMPORTANT]
 > Android lets an app click in the others **only through an Accessibility service**. **Let them touch** opens the steps: Accessibility > Installed apps > xmouse screen > on. Greyed out ("Restricted setting")? App info > the menu at the top right > **Allow restricted settings**, then again. Then App info > **Battery** > **Unrestricted**: else Android stops the service now and then, and the clicks do nothing until it comes back.
 
-With **Let them touch**, a cursor of a computer **is a finger** on the phone: the left button puts it down and lifts it, a drag follows the cursor as it moves (never replayed at the end), a long press lasts what the button is held; the wheel moves the content as it turns, the right button is a long press (the menu of Android). The clipboard of the computer is sent to the phone when it changes.
+With **Let them touch**, a cursor of a computer **is a finger** on the phone: the left button puts it down and lifts it, a drag follows the cursor as it moves (never replayed at the end), a long press lasts what the button is held; the wheel glides the content as it turns, speeding up then slowing down (84 dp a notch, it stops with the wheel), the right button is a long press (the menu of Android). A cursor never clicks the touchpad page of the app: it may be the cursor that touchpad drives, each tap would click there again. The clipboard of the computer is sent to the phone when it changes.
 
 ## Keys on the phone screen {#keys}
 
@@ -57,7 +57,9 @@ In a focused text field (Android 13+), the keys arrive as the **real key events*
 | Keys of the computer | On the phone |
 | -------------------- | ------------ |
 | Arrows (<kbd>Ctrl</kbd>: by word, <kbd>Shift</kbd>: select), <kbd>Home</kbd> / <kbd>End</kbd> (<kbd>Ctrl</kbd>: the whole text) | Move in the text; outside a field the arrows move the focus (Android 13+), <kbd>Home</kbd> / <kbd>End</kbd> go to the top / bottom of the list under the cursor |
-| <kbd>Backspace</kbd> / <kbd>Delete</kbd> (<kbd>Ctrl</kbd>: a word), <kbd>Enter</kbd> (<kbd>Shift</kbd>: a new line), <kbd>Tab</kbd> (<kbd>Shift</kbd>: back) | Delete, the action of the field (send, search, next), the next field |
+| <kbd>Backspace</kbd> / <kbd>Delete</kbd> (<kbd>Ctrl</kbd>: a word), <kbd>Tab</kbd> (<kbd>Shift</kbd>: back) | Delete, the next field |
+| <kbd>Enter</kbd> | As the keyboard of the phone: the action its <kbd>Enter</kbd> key shows for the field (send, search, go, next), else a new line (a note, a chat without a send key) |
+| <kbd>Shift</kbd>+<kbd>Enter</kbd>, <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | A new line, never the send (a field of one line has none: its action) |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd>, <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+<kbd>Insert</kbd>, <kbd>Shift</kbd>+<kbd>Delete</kbd> | Select all, copy, cut, paste |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo, redo (what the computers typed there) |
 | <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | The list under the cursor by a page |
