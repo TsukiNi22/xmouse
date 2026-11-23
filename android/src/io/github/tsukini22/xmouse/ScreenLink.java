@@ -392,12 +392,16 @@ final class ScreenLink {
     }
 
     // Page Up / Down: a swipe of most of the screen at the cursor (or the middle of the screen)
-    // A zoom where the cursor is (Ctrl + wheel, Ctrl + plus / minus): two fingers apart (in) or together (out)
+    // A zoom where the cursor is (Ctrl + wheel, Ctrl + plus / minus): two fingers apart (in) or together (out), both
+    // inside the screen (a finger off the screen is no finger): narrower near a border, centred inward at the edges
     private void zoom(float x, float y, int direction, int amount) {
-        float base = 48 * this._density;
-        float span = Math.min(260 * this._density, Math.max(40, amount) * 0.6f * this._density);
-        if (direction > 0) this._actions.pinch(x, y, base, base + span, 220);
-        else this._actions.pinch(x, y, base + span, base, 220);
+        DisplayMetrics m = this._context.getResources().getDisplayMetrics();
+        float margin = 8 * this._density;
+        float base = 32 * this._density;
+        float far = Math.min(base + Math.min(220 * this._density, Math.max(40, amount) * 0.5f * this._density), m.widthPixels / 2f - margin);
+        float cx = Math.max(far + margin, Math.min(m.widthPixels - far - margin, x));
+        if (direction > 0) this._actions.pinch(cx, y, base, far, 220);
+        else this._actions.pinch(cx, y, far, base, 220);
     }
 
     // The wheel: a finger put at the cursor that follows the notches as they come, lifted still WHEEL_LIFT after the last
@@ -473,7 +477,12 @@ final class ScreenLink {
         String key = NUMPAD_NAVIGATION.containsKey(code) ? NUMPAD_NAVIGATION.get(code) : code;
 
         if (key.startsWith("OS")) key = "Meta" + key.substring(2);
-        if (MODIFIERS.contains(key)) {this.onModifier(key, down); return;}
+        if (MODIFIERS.contains(key)) {
+            this.onModifier(key, down);
+            // A text field sees Shift, Ctrl and Alt themselves (it selects with Shift + arrows only then); Meta never
+            if (!key.startsWith("Meta") && this.actions() != null) this._actions.key(key, "", down, this.metaState());
+            return;
+        }
         if (this.actions() == null) return;
         if (!down) {
             if (this._native.remove(key)) this._actions.key(key, character, false, this.metaState());

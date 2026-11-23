@@ -27,10 +27,13 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
+import android.view.inputmethod.EditorInfo;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class ScreenService extends AccessibilityService implements ScreenLink.Actions {
     private static final long TOUCH_PIECE = 16; // ms of a piece of the path of a live finger (a frame)
@@ -47,6 +50,8 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
     private final ArrayDeque<Edit> _undo = new ArrayDeque<>(); // the edits made from the computers (fields without key events)
     private final ArrayDeque<Edit> _redo = new ArrayDeque<>();
     private final Map<Integer, Long> _keysDown = new HashMap<>(); // key code -> time of its press (its release and its repeats say it)
+    private final Set<Integer> _fieldModifiers = new HashSet<>(); // the modifier keys the text field of the keys saw pressed
+    private String _field = ""; // that field (its app and its id): another one starts with no modifier seen
     private ScreenLink _link;
     private GestureDescription.StrokeDescription _finger; // the live finger down now (null: none)
     private float _fingerX;
@@ -269,23 +274,24 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
         this._ui.postDelayed(() -> {if (list.refresh() && list.performAction(action)) this.scrollOn(list, action, left - 1);}, EDGE_SCROLL_DELAY);
     }
 
-    // The deepest list that scrolls under (x, y), in the windows from the top one down
-    private AccessibilityNodeInfo scrollableAt(int x, int y) {
+    // The root of the window a touch at (x, y) goes to: the top one there (the overlays of the cursors let it through)
+    private AccessibilityNodeInfo windowAt(int x, int y) {
         Rect bounds = new Rect();
-        AccessibilityNodeInfo found;
 
         try {
             for (AccessibilityWindowInfo window: this.getWindows()) {
                 window.getBoundsInScreen(bounds);
-                if (!bounds.contains(x, y)) continue;
-                found = scrollableIn(window.getRoot(), x, y, 0);
-                if (found != null) return found;
+                if (window.getType() == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY || !bounds.contains(x, y)) continue;
+                return window.getRoot();
             }
-            return scrollableIn(this.getRootInActiveWindow(), x, y, 0);
+            return this.getRootInActiveWindow();
         } catch (Exception e) {
             return null; // a window gone meanwhile
         }
     }
+
+    // The deepest list that scrolls under (x, y)
+    private AccessibilityNodeInfo scrollableAt(int x, int y) {return scrollableIn(this.windowAt(x, y), x, y, 0);}
 
     private static AccessibilityNodeInfo scrollableIn(AccessibilityNodeInfo node, int x, int y, int depth) {
         Rect bounds = new Rect();
@@ -397,23 +403,58 @@ public class ScreenService extends AccessibilityService implements ScreenLink.Ac
             return method == null ? null : method.getCurrentInputConnection();
         }
 
+        // The modifier keys a text field is told about, with their bit in the meta state: a field of Android selects with
+        // Shift + arrows (Home, End, Ctrl + arrows...) only when it saw the Shift key itself, its key listener keeps it
+        private static final int[][] MODIFIERS = {
+            {KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.META_SHIFT_LEFT_ON}, {KeyEvent.KEYCODE_SHIFT_RIGHT, KeyEvent.META_SHIFT_RIGHT_ON},
+            {KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.META_CTRL_LEFT_ON}, {KeyEvent.KEYCODE_CTRL_RIGHT, KeyEvent.META_CTRL_RIGHT_ON},
+            {KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.META_ALT_LEFT_ON}, {KeyEvent.KEYCODE_ALT_RIGHT, KeyEvent.META_ALT_RIGHT_ON},
+        };
+
         static boolean key(ScreenService service, String code, String character, boolean down, int meta) {
             android.accessibilityservice.InputMethod.AccessibilityInputConnection input = input(service);
             int keyCode = KeyCodes.of(code, character);
             long now = SystemClock.uptimeMillis();
-            Long pressed = service._keysDown.get(keyCode);
+            Long pressed;
 
             if (keyCode == KeyEvent.KEYCODE_UNKNOWN) return false;
+            if (input != null) sync(service, input, meta, now);
+            if (KeyEvent.isModifierKey(keyCode)) return input != null; // its press / release went with the sync
+            pressed = service._keysDown.get(keyCode);
             if (!down) {
                 service._keysDown.remove(keyCode);
                 if (input == null || pressed == null) return true; // the field is gone: nothing to release there
-                input.sendKeyEvent(new KeyEvent(pressed, now, KeyEvent.ACTION_UP, keyCode, 0, meta, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, KeyEvent.FLAG_SOFT_KEYBOARD | KeyEvent.FLAG_KEEP_TOUCH_MODE, InputDevice.SOURCE_KEYBOARD));
+                send(input, keyCode, false, 0, meta, pressed, now);
                 return true;
             }
             if (input == null) return false; // no text field: the keys are actions of the phone
             if (pressed == null) service._keysDown.put(keyCode, now);
-            input.sendKeyEvent(new KeyEvent(pressed == null ? now : pressed, now, KeyEvent.ACTION_DOWN, keyCode, pressed == null ? 0 : 1, meta, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, KeyEvent.FLAG_SOFT_KEYBOARD | KeyEvent.FLAG_KEEP_TOUCH_MODE, InputDevice.SOURCE_KEYBOARD));
+            send(input, keyCode, true, pressed == null ? 0 : 1, meta, pressed == null ? now : pressed, now);
             return true;
+        }
+
+        // The field of the keys sees the modifiers held and only them: a Shift pressed before it had the focus is pressed
+        // there, one released while another field had it is released; another field starts clean (no Shift left on it)
+        private static void sync(ScreenService service, android.accessibilityservice.InputMethod.AccessibilityInputConnection input, int meta, long now) {
+            android.accessibilityservice.InputMethod method = service.getInputMethod();
+            EditorInfo info = method == null ? null : method.getCurrentInputEditorInfo();
+            String field = info == null ? "" : info.packageName + "/" + info.fieldId;
+            boolean held;
+
+            if (!field.equals(service._field)) {
+                service._field = field;
+                service._fieldModifiers.clear();
+                input.clearMetaKeyStates(KeyEvent.META_SHIFT_ON | KeyEvent.META_ALT_ON | KeyEvent.META_SYM_ON);
+            }
+            for (int[] modifier: MODIFIERS) {
+                held = (meta & modifier[1]) != 0;
+                if (held && service._fieldModifiers.add(modifier[0])) send(input, modifier[0], true, 0, meta, now, now);
+                else if (!held && service._fieldModifiers.remove(modifier[0])) send(input, modifier[0], false, 0, meta, now, now);
+            }
+        }
+
+        private static void send(android.accessibilityservice.InputMethod.AccessibilityInputConnection input, int keyCode, boolean down, int repeat, int meta, long downTime, long now) {
+            input.sendKeyEvent(new KeyEvent(downTime, now, down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP, keyCode, repeat, meta, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, KeyEvent.FLAG_SOFT_KEYBOARD | KeyEvent.FLAG_KEEP_TOUCH_MODE, InputDevice.SOURCE_KEYBOARD));
         }
 
         static boolean commit(ScreenService service, String text) {

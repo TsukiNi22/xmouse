@@ -41,6 +41,13 @@ final class KeyCodes {
         CODES.put("PrintScreen", KeyEvent.KEYCODE_SYSRQ);
         CODES.put("Pause", KeyEvent.KEYCODE_BREAK);
         CODES.put("ContextMenu", KeyEvent.KEYCODE_MENU);
+        /* modifiers (Meta never: the keys of the whole phone) */
+        CODES.put("ShiftLeft", KeyEvent.KEYCODE_SHIFT_LEFT);
+        CODES.put("ShiftRight", KeyEvent.KEYCODE_SHIFT_RIGHT);
+        CODES.put("ControlLeft", KeyEvent.KEYCODE_CTRL_LEFT);
+        CODES.put("ControlRight", KeyEvent.KEYCODE_CTRL_RIGHT);
+        CODES.put("AltLeft", KeyEvent.KEYCODE_ALT_LEFT);
+        CODES.put("AltRight", KeyEvent.KEYCODE_ALT_RIGHT);
         /* signs */
         CODES.put("Minus", KeyEvent.KEYCODE_MINUS);
         CODES.put("Equal", KeyEvent.KEYCODE_EQUALS);
