@@ -42,6 +42,10 @@ Son écran est en mode **Afficher les curseurs** : Android ne laisse une appli c
 
 Android a arrêté le service d'Accessibilité (économie de batterie, appli balayée des récentes) et l'écran a été prêté sans lui un moment. Mettez Infos de l'appli > **Batterie** > **Sans restriction** pour xmouse ; depuis la 1.0.12, l'appli ne prête jamais l'écran sans le service tant qu'il est activé.
 
+## Les clics continuaient tout seuls {#click-loop}
+
+Avant la 1.0.16, avec le curseur d'un ordinateur sur le téléphone au-dessus de la page du pavé de l'appli, un clic à cet endroit pouvait lancer une boucle : le tap sur le pavé cliquait de nouveau sur l'ordinateur, qui recliquait sous son curseur, sans fin (quitter xmouse pour l'arrêter). Sous Linux, les clics du pavé d'un téléphone sur l'ordinateur revenaient aussi au téléphone par la capture du pointeur pendant que la souris de l'ordinateur était sur le téléphone. Depuis la 1.0.16, un curseur ne tape jamais la page du pavé de l'appli, l'ordinateur ignore les clics d'un pavé sur son propre écran et ne joue pas les clics et touches des autres curseurs pendant que sa souris est sur un autre appareil (le journal le dit une fois), et toute boucle de clics est coupée (plus de 15 clics en une seconde ou 24 en 4 secondes : le journal le dit).
+
 ## L'écran du téléphone n'est pas sur la carte {#phone-screen}
 
 **Cet écran dans la disposition** doit être activé (la notification le dit), et le téléphone doit atteindre l'ordinateur auquel il est associé (même réseau local, Tailscale). Mettez l'appli à jour : [mises à jour](page:phone#updates).

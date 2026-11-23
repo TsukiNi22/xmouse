@@ -46,7 +46,7 @@ Le clavier du touchpad a des modificateurs maintenus qui s'additionnent (<kbd>Ct
 > [!IMPORTANT]
 > Android ne laisse une appli cliquer dans les autres **que par un service d'Accessibilité**. **Les laisser toucher** ouvre les étapes : Accessibilité > Applications installées > xmouse screen > activé. Grisé (« Paramètre restreint ») ? Infos de l'appli > le menu en haut à droite > **Autoriser les paramètres restreints**, puis à nouveau. Ensuite Infos de l'appli > **Batterie** > **Sans restriction** : sinon Android arrête le service de temps en temps, et les clics ne font rien jusqu'à son retour.
 
-Avec **Les laisser toucher**, un curseur d'ordinateur **est un doigt** sur le téléphone : le bouton gauche le pose et le lève, un glisser suit le curseur pendant qu'il bouge (jamais rejoué à la fin), un appui long dure le temps où le bouton est tenu ; la molette fait défiler le contenu pendant qu'elle tourne, le bouton droit est un appui long (le menu d'Android). Le presse-papiers de l'ordinateur est envoyé au téléphone quand il change.
+Avec **Les laisser toucher**, un curseur d'ordinateur **est un doigt** sur le téléphone : le bouton gauche le pose et le lève, un glisser suit le curseur pendant qu'il bouge (jamais rejoué à la fin), un appui long dure le temps où le bouton est tenu ; la molette fait glisser le contenu pendant qu'elle tourne, en accélérant puis en ralentissant (84 dp par cran, il s'arrête avec la molette), le bouton droit est un appui long (le menu d'Android). Un curseur ne clique jamais sur la page du pavé de l'appli : ce peut être le curseur que ce pavé pilote, chaque tap y cliquerait encore. Le presse-papiers de l'ordinateur est envoyé au téléphone quand il change.
 
 ## Les touches sur l'écran du téléphone {#keys}
 
@@ -55,7 +55,9 @@ Dans un champ de texte actif (Android 13+), les touches arrivent comme les **vra
 | Touches de l'ordinateur | Sur le téléphone |
 | ----------------------- | ---------------- |
 | Flèches (<kbd>Ctrl</kbd> : par mot, <kbd>Maj</kbd> : sélection), <kbd>Début</kbd> / <kbd>Fin</kbd> (<kbd>Ctrl</kbd> : tout le texte) | Se déplacer dans le texte ; hors d'un champ les flèches déplacent le focus (Android 13+), <kbd>Début</kbd> / <kbd>Fin</kbd> vont en haut / en bas de la liste sous le curseur |
-| <kbd>Retour arrière</kbd> / <kbd>Suppr</kbd> (<kbd>Ctrl</kbd> : un mot), <kbd>Entrée</kbd> (<kbd>Maj</kbd> : retour à la ligne), <kbd>Tab</kbd> (<kbd>Maj</kbd> : en arrière) | Effacer, l'action du champ (envoyer, rechercher, suivant), le champ suivant |
+| <kbd>Retour arrière</kbd> / <kbd>Suppr</kbd> (<kbd>Ctrl</kbd> : un mot), <kbd>Tab</kbd> (<kbd>Maj</kbd> : en arrière) | Effacer, le champ suivant |
+| <kbd>Entrée</kbd> | Comme le clavier du téléphone : l'action que sa touche <kbd>Entrée</kbd> montre pour le champ (envoyer, rechercher, aller, suivant), sinon un retour à la ligne (une note, une discussion sans touche d'envoi) |
+| <kbd>Maj</kbd>+<kbd>Entrée</kbd>, <kbd>Ctrl</kbd>+<kbd>Entrée</kbd> | Un retour à la ligne, jamais l'envoi (un champ d'une seule ligne n'en a pas : son action) |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>C</kbd> / <kbd>X</kbd> / <kbd>V</kbd>, <kbd>Ctrl</kbd>/<kbd>Maj</kbd>+<kbd>Inser</kbd>, <kbd>Maj</kbd>+<kbd>Suppr</kbd> | Tout sélectionner, copier, couper, coller |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Y</kbd> ou <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd> | Annuler, rétablir (ce que les ordinateurs y ont tapé) |
 | <kbd>Page préc.</kbd> / <kbd>Page suiv.</kbd> | La liste sous le curseur d'une page |
