@@ -256,6 +256,7 @@ class Hub: public QObject {
         int _presenceTick = 0; // ticks of the presence timer (the home pointer is read every other one)
         QPoint _lastHomePointer; // last local pointer told at home
         QPoint _awayPointer; // the real pointer of this device when the cursor left (it moves while away: the cursor comes back)
+        bool _awayPointerSet = false; // captured: the held point read at the first check (the capture puts the pointer there)
         bool _awayWatch = false; // _awayPointer known (a capture that tells the pointer)
         int _awayTick = 0; // ticks of the presence timer while away (the real pointer is read every 4th one)
         int _awayLost = 0; // reads in a row where a held pointer was found elsewhere

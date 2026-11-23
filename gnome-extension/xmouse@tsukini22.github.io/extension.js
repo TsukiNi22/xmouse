@@ -32,7 +32,34 @@ const INTERFACE_NAME = "io.github.tsukini22.xmouse.Shell1";
 const CALLER_NAME = "xmouse"; // only this program may arm the edges (basename of /proc/<pid>/exe)
 const EVDEV_OFFSET = 8; // X / Clutter key code = evdev code + 8
 const WHEEL_NOTCH = 120; // 1/120 of a notch, like Qt angleDelta
-const WATCHDOG_SECONDS = 3; // a capture that receives no event at all is given back (the input is never lost)
+const WATCHDOG_MS = 500; // a capture checked this often until it gets its first event (the input is never lost)
+const DRIFT = 8; // px the real pointer may drift from the held point before a capture that gets nothing is given back
+
+// The seat of the pointer (its API moved: GNOME 47+ through the context of the stage, older through the backend);
+// global.backend.get_default_seat() is gone on GNOME 50: the warps failed and a capture ended without telling xmouse
+// The input a capture takes (the rest - crossings, devices, input method - stays with GNOME)
+const CAPTURED = new Set([
+    Clutter.EventType.MOTION, Clutter.EventType.BUTTON_PRESS, Clutter.EventType.BUTTON_RELEASE, Clutter.EventType.SCROLL,
+    Clutter.EventType.KEY_PRESS, Clutter.EventType.KEY_RELEASE, Clutter.EventType.TOUCH_BEGIN, Clutter.EventType.TOUCH_UPDATE,
+    Clutter.EventType.TOUCH_END, Clutter.EventType.TOUCH_CANCEL, Clutter.EventType.TOUCHPAD_PINCH, Clutter.EventType.TOUCHPAD_SWIPE,
+    Clutter.EventType.TOUCHPAD_HOLD,
+].filter((type) => type !== undefined));
+
+// The middle of the screen a point is on (its border included)
+function centerOf(point) {
+    for (const m of Main.layoutManager.monitors) {
+        if (point[0] >= m.x - 1 && point[0] <= m.x + m.width && point[1] >= m.y - 1 && point[1] <= m.y + m.height)
+            return [Math.round(m.x + m.width / 2), Math.round(m.y + m.height / 2)];
+    }
+    const p = Main.layoutManager.primaryMonitor;
+    return [Math.round(p.x + p.width / 2), Math.round(p.y + p.height / 2)];
+}
+
+function defaultSeat() {
+    if (global.stage.context?.get_backend) return global.stage.context.get_backend().get_default_seat();
+    if (Clutter.get_default_backend) return Clutter.get_default_backend().get_default_seat();
+    return global.backend.get_default_seat();
+}
 
 const SIDE_LEFT = 0;
 const SIDE_RIGHT = 1;
@@ -119,7 +146,9 @@ class XmouseService {
         this._barriers = []; // [{barrier, side, hitId}]
         this._actor = null; // invisible actor holding the grab
         this._grab = null;
+        this._filter = 0; // event filter of the capture: every event of the seat, the grab never sees the pointer ones
         this._origin = [0, 0]; // where the pointer is held during a capture
+        this._hit = [0, 0]; // where it crossed
         this._cursorHidden = false;
         this._events = 0; // events received by the current capture
         this._watchdog = 0;
@@ -322,25 +351,41 @@ class XmouseService {
         }
         // A button held (a file / a selection dragged): no crossing, xmouse shows its drop shelf at this edge instead
         if (global.get_pointer()[2] & Clutter.ModifierType.BUTTON1_MASK) return;
-        this._origin = [Math.round(event.x), Math.round(event.y)];
+        this._hit = [Math.round(event.x), Math.round(event.y)]; // told to xmouse; the pointer back there when the capture ends here
+        this._origin = centerOf(this._hit); // the pointer held there, hidden: room in every direction, away from the barrier
         this._actor = new St.Widget({reactive: true, can_focus: true, opacity: 0, x: 0, y: 0, width: global.stage.width, height: global.stage.height});
         Main.uiGroup.add_child(this._actor);
-        this._grab = Main.pushModal(this._actor, {actionMode: Shell.ActionMode.NONE}); // a stage grab always succeeds (GNOME 50): the watchdog below covers a grab that gets no event
-        this._actor.connect("event", (actor, ev) => this._onEvent(ev));
+        // The modal keeps the windows and the shortcuts of GNOME off the input (its stage grab: Mutter gives the events to
+        // no window); the input itself is read by an event filter of every stage: on GNOME 50 a pointer event under a grab
+        // has no actor (Clutter picks none for the pointer), so neither the grab actor nor a filter of the stage got the
+        // moves, the buttons and the wheel - only the keys - and the cursor on the other device did not move
+        this._grab = Main.pushModal(this._actor, {actionMode: Shell.ActionMode.NONE});
+        this._filter = Clutter.Event.add_filter(null, (ev) => this._onEvent(ev));
         global.backend.get_cursor_tracker().inhibit_cursor_visibility();
         this._cursorHidden = true;
+        // Held at the middle of its screen: a device without relative motions (a virtual pointer, a tablet) moved
+        // nothing towards the other device while held against the barrier
+        defaultSeat().warp_pointer(this._origin[0], this._origin[1]);
         this._events = 0;
-        this._watchdog = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, WATCHDOG_SECONDS, () => {
+        // A grab that gets no event while the real pointer moves (each motion it gets puts the pointer back on the held
+        // point: a pointer that drifts is moved by events that go elsewhere) is given back; a pointer that stays is a
+        // person who waits on the other device: the capture goes on (it ended after 3 s without a move before)
+        this._watchdog = GLib.timeout_add(GLib.PRIORITY_DEFAULT, WATCHDOG_MS, () => {
+            const [x, y] = global.get_pointer();
+
+            if (this._grab === null || this._events > 0) {this._watchdog = 0; return GLib.SOURCE_REMOVE;}
+            if (Math.abs(x - this._origin[0]) <= DRIFT && Math.abs(y - this._origin[1]) <= DRIFT) return GLib.SOURCE_CONTINUE;
             this._watchdog = 0;
-            if (this._events === 0) this._end(); // the events do not reach the grab: the pointer and the keyboard come back
+            this._end(); // the events do not reach the grab: the pointer and the keyboard come back
             return GLib.SOURCE_REMOVE;
         });
-        this._emit("Crossed", "(iiii)", [this._origin[0], this._origin[1], push[0], push[1]]);
+        this._emit("Crossed", "(iiii)", [this._hit[0], this._hit[1], push[0], push[1]]);
     }
 
     _onEvent(ev) {
         const type = ev.type();
 
+        if (this._grab === null || !CAPTURED.has(type)) return Clutter.EVENT_PROPAGATE;
         this._events += 1;
         switch (type) {
             case Clutter.EventType.MOTION: this._onMotion(ev); break;
@@ -371,7 +416,7 @@ class XmouseService {
             // older Clutter: the absolute distance is used
         }
         if (dx !== 0 || dy !== 0) this._emit("Motion", "(dd)", [dx, dy]);
-        if (x !== this._origin[0] || y !== this._origin[1]) global.backend.get_default_seat().warp_pointer(this._origin[0], this._origin[1]);
+        if (x !== this._origin[0] || y !== this._origin[1]) defaultSeat().warp_pointer(this._origin[0], this._origin[1]);
     }
 
     _onScroll(ev) {
@@ -407,6 +452,8 @@ class XmouseService {
     _release(x, y) {
         if (this._watchdog !== 0) GLib.source_remove(this._watchdog);
         this._watchdog = 0;
+        if (this._filter !== 0) Clutter.Event.remove_filter(this._filter);
+        this._filter = 0;
         // The pointer is shown again first, whatever happens next: never a hidden pointer left behind
         if (this._cursorHidden) global.backend.get_cursor_tracker().uninhibit_cursor_visibility();
         this._cursorHidden = false;
@@ -419,13 +466,13 @@ class XmouseService {
         this._grab = null;
         if (this._actor !== null) this._actor.destroy();
         this._actor = null;
-        global.backend.get_default_seat().warp_pointer(x, y);
+        defaultSeat().warp_pointer(x, y);
     }
 
     // Capture ended here (lock screen, escape, xmouse gone): xmouse is told
     _end() {
         if (this._grab === null) return;
-        this._release(this._origin[0], this._origin[1]);
+        this._release(this._hit[0], this._hit[1]);
         this._emit("Ended", null, null);
     }
 }

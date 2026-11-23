@@ -78,7 +78,7 @@ void xmouse::core::Hub::onCrossed_(const QPoint& local, const QPoint& push)
     // Away with a pad, the real mouse pushes an edge now: it drives the cursor from where it is
     if (this->_away) {
         this->_awayByPad = false;
-        this->_awayPointer = local;
+        this->_awayPointerSet = false; // the point the capture holds, read at the next check (not where it was pushed)
         this->_awayWatch = this->_capture->knowsPointer();
         this->_awayLost = 0;
         return;
@@ -100,7 +100,10 @@ void xmouse::core::Hub::leaveTo_(const QPoint& global, const QString& device, co
     }
     this->_repeat.stop();
     this->_awayWatch = this->_capture && this->_capture->knowsPointer();
-    this->_awayPointer = this->_awayWatch ? this->_capture->pointer() : QPoint();
+    // Left with a pad: the real pointer now (the person may take the mouse); captured: read at the first check, once the
+    // capture holds it (the extension puts it at the middle of its screen: read now, it was taken for a lost capture)
+    this->_awayPointer = this->_awayWatch && this->_awayByPad ? this->_capture->pointer() : QPoint();
+    this->_awayPointerSet = this->_awayByPad;
     this->_awayLost = 0;
     this->_global = QPointF(global);
     this->_targetLocal = local;
@@ -216,6 +219,7 @@ void xmouse::core::Hub::checkAway_(void)
     }
     if (!this->_awayWatch) return;
     now = this->_capture->pointer();
+    if (!this->_awayPointerSet) {this->_awayPointer = now; this->_awayPointerSet = true; return;} // the point the capture holds
     if (this->injectingNow()) {this->_awayPointer = now; return;} // a foreign cursor moved it (pointer mode)
     moved = (now - this->_awayPointer).manhattanLength();
     if (moved < (this->_awayByPad ? AWAY_PAD_MOVE : AWAY_LOST_MOVE)) {this->_awayLost = 0; return;}
